@@ -17,4 +17,6 @@
   Keep `.env.local` out of git. It is already ignored by `.gitignore`.
 
   Run `npm run dev` to start the development server.
+
+  Run `npm run build` before deploy checks if you want to validate locally.
   
