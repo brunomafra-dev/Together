@@ -7,5 +7,14 @@
 
   Run `npm i` to install the dependencies.
 
+  ## Environment variables
+
+  Copy `.env.example` to `.env.local` and fill in your Supabase values:
+
+  - `VITE_SUPABASE_URL`
+  - `VITE_SUPABASE_ANON_KEY`
+
+  Keep `.env.local` out of git. It is already ignored by `.gitignore`.
+
   Run `npm run dev` to start the development server.
   

@@ -17,7 +17,7 @@ import {
 import { ptBR } from "date-fns/locale";
 
 export function Dashboard() {
-  const { expenses, installments, fixedExpenses, settings } = useFinance();
+  const { expenses, installments, fixedExpenses, settings, loading, error } = useFinance();
   const [showAddExpense, setShowAddExpense] = useState(false);
 
   const now = new Date();
@@ -98,6 +98,16 @@ export function Dashboard() {
 
   return (
     <Layout>
+      {error && (
+        <div className="mb-6 rounded-2xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800">
+          {error}
+        </div>
+      )}
+      {loading && (
+        <div className="mb-6 rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-600">
+          Carregando dados do Supabase...
+        </div>
+      )}
       <div className="space-y-6">
         <div className="flex items-end justify-between">
           <div>
@@ -105,7 +115,8 @@ export function Dashboard() {
               {monthLabel}
             </p>
             <h1 className="text-2xl font-semibold text-stone-900 mt-1">
-              Oi, {settings.partnerNames[0]} e {settings.partnerNames[1]} 👋
+              Oi, {settings.partnerNames[0] || "vocês"} e{" "}
+              {settings.partnerNames[1] || "vocês"} 👋
             </h1>
           </div>
           <button

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useFinance } from "../context/FinanceContext";
 import { X } from "lucide-react";
 
@@ -6,27 +6,25 @@ interface AddExpenseModalProps {
   onClose: () => void;
 }
 
-const CATEGORIES = [
-  "Mercado",
-  "Restaurante",
-  "Transporte",
-  "Lazer",
-  "Compras",
-  "Saúde",
-  "Casa",
-  "Outros",
-];
-
 const INSTALLMENT_OPTIONS = [1, 2, 3, 6, 10, 12];
 
 export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
   const { addExpense, addInstallment, settings } = useFinance();
   const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState("Mercado");
-  const [card, setCard] = useState(settings.cards[0] || "Nubank");
+  const [category, setCategory] = useState("");
+  const [card, setCard] = useState(settings.cards[0] || "");
   const [installments, setInstallments] = useState(1);
-  const [paidBy, setPaidBy] = useState(settings.partnerNames[0]);
+  const [paidBy, setPaidBy] = useState(settings.partnerNames[0] || "");
   const [description, setDescription] = useState("");
+
+  useEffect(() => {
+    if (!card && settings.cards[0]) {
+      setCard(settings.cards[0]);
+    }
+    if (!paidBy && settings.partnerNames[0]) {
+      setPaidBy(settings.partnerNames[0]);
+    }
+  }, [settings.cards, settings.partnerNames, card, paidBy]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -113,22 +111,13 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
               Categoria
             </label>
-            <div className="grid grid-cols-4 gap-2">
-              {CATEGORIES.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(cat)}
-                  className={`px-2 py-2.5 rounded-lg text-sm transition-colors ${
-                    category === cat
-                      ? "bg-stone-900 text-white"
-                      : "bg-stone-50 text-stone-700 hover:bg-stone-100"
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
+            <input
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+              className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Digite uma categoria real"
+            />
           </div>
 
           <div>
@@ -136,20 +125,13 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
               Cartão
             </label>
             <div className="flex gap-2 flex-wrap">
-              {settings.cards.map((c) => (
-                <button
-                  key={c}
-                  type="button"
-                  onClick={() => setCard(c)}
-                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                    card === c
-                      ? "bg-stone-900 text-white"
-                      : "bg-stone-50 text-stone-700 hover:bg-stone-100"
-                  }`}
-                >
-                  {c}
-                </button>
-              ))}
+              <input
+                type="text"
+                value={card}
+                onChange={(e) => setCard(e.target.value)}
+                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                placeholder="Digite o cartão usado"
+              />
             </div>
           </div>
 
@@ -188,22 +170,13 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
               Quem pagou
             </label>
-            <div className="grid grid-cols-2 gap-2">
-              {settings.partnerNames.map((name) => (
-                <button
-                  key={name}
-                  type="button"
-                  onClick={() => setPaidBy(name)}
-                  className={`px-4 py-3 rounded-lg transition-colors ${
-                    paidBy === name
-                      ? "bg-stone-900 text-white"
-                      : "bg-stone-50 text-stone-700 hover:bg-stone-100"
-                  }`}
-                >
-                  {name}
-                </button>
-              ))}
-            </div>
+            <input
+              type="text"
+              value={paidBy}
+              onChange={(e) => setPaidBy(e.target.value)}
+              className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Digite quem pagou"
+            />
           </div>
 
           <div>

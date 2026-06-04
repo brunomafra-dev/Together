@@ -11,9 +11,7 @@ export function Settings() {
     updateSettings,
   } = useFinance();
 
-  const [monthlyIncome, setMonthlyIncome] = useState(
-    settings.monthlyIncome.toString()
-  );
+  const [monthlyIncome, setMonthlyIncome] = useState(settings.monthlyIncome ? settings.monthlyIncome.toString() : "");
   const [partner1, setPartner1] = useState(settings.partnerNames[0]);
   const [partner2, setPartner2] = useState(settings.partnerNames[1]);
   const [cards, setCards] = useState<string[]>(settings.cards);
@@ -104,6 +102,7 @@ export function Settings() {
                   >
                     {c}
                     <button
+                      type="button"
                       onClick={() => removeCard(c)}
                       className="text-stone-400 hover:text-rose-600"
                     >
@@ -113,14 +112,14 @@ export function Settings() {
                 ))}
               </div>
               <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={newCard}
-                  onChange={(e) => setNewCard(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCard())}
-                  className="flex-1 px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
-                  placeholder="ex: Nubank"
-                />
+              <input
+                type="text"
+                value={newCard}
+                onChange={(e) => setNewCard(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addCard())}
+                className="flex-1 px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 text-sm"
+                placeholder="Digite um cartão real"
+              />
                 <button
                   type="button"
                   onClick={addCard}
@@ -183,7 +182,7 @@ export function Settings() {
 
             {fixedExpenses.length === 0 && (
               <p className="text-center py-8 text-stone-400 text-sm">
-                Nenhuma conta fixa cadastrada
+                Nenhuma conta fixa cadastrada.
               </p>
             )}
           </div>
@@ -205,8 +204,8 @@ function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
   const { addFixedExpense } = useFinance();
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState("Moradia");
-  const [dueDate, setDueDate] = useState("1");
+  const [category, setCategory] = useState("");
+  const [dueDate, setDueDate] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -281,19 +280,12 @@ function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
               Categoria
             </label>
-            <select
+            <input
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option>Moradia</option>
-              <option>Contas</option>
-              <option>Seguros</option>
-              <option>Assinaturas</option>
-              <option>Saúde</option>
-              <option>Lazer</option>
-              <option>Outros</option>
-            </select>
+              placeholder="Digite uma categoria real"
+            />
           </div>
 
           <div className="flex gap-3 pt-2">

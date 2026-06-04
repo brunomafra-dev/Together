@@ -185,7 +185,7 @@ function AddInstallmentModal({ onClose }: AddInstallmentModalProps) {
   const [name, setName] = useState("");
   const [monthlyAmount, setMonthlyAmount] = useState("");
   const [remainingMonths, setRemainingMonths] = useState("");
-  const [category, setCategory] = useState("Eletrônicos");
+  const [category, setCategory] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -263,18 +263,13 @@ function AddInstallmentModal({ onClose }: AddInstallmentModalProps) {
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
               Categoria
             </label>
-            <select
+            <input
+              type="text"
               value={category}
               onChange={(e) => setCategory(e.target.value)}
               className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            >
-              <option>Eletrônicos</option>
-              <option>Casa</option>
-              <option>Veículo</option>
-              <option>Educação</option>
-              <option>Viagem</option>
-              <option>Outros</option>
-            </select>
+              placeholder="Digite uma categoria real"
+            />
           </div>
 
           <div className="flex gap-3 pt-2">
