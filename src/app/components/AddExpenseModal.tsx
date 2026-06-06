@@ -9,12 +9,13 @@ interface AddExpenseModalProps {
 }
 
 export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
-  const { addExpense, settings, categories, paymentMethods } = useFinance();
+  const { addExpense, settings, categories, paymentMethods, loading } = useFinance();
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [methodId, setMethodId] = useState("");
   const [paidBy, setPaidBy] = useState(settings.partnerNames[0] || "");
   const [description, setDescription] = useState("");
+  const [formError, setFormError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!paidBy && settings.partnerNames[0]) {
@@ -31,21 +32,48 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = parseFloat(amount.replace(",", "."));
-    if (!value || value <= 0) return;
+    if (!value || value <= 0) {
+      setFormError("Informe um valor válido.");
+      return;
+    }
+
+    if (loading || categories.length === 0 || paymentMethods.length === 0) {
+      setFormError("Aguarde o carregamento das categorias e formas de pagamento.");
+      return;
+    }
+
+    if (!categoryId || !categories.some((c) => c.id === categoryId)) {
+      setFormError("Selecione uma categoria válida.");
+      return;
+    }
+
+    if (!methodId || !paymentMethods.some((m) => m.id === methodId)) {
+      setFormError("Selecione uma forma de pagamento válida.");
+      return;
+    }
+
+    if (!paidBy.trim()) {
+      setFormError("Informe quem pagou.");
+      return;
+    }
 
     const selectedCategory = categories.find((c) => c.id === categoryId);
     const categoryName = selectedCategory?.name || "";
 
-    await addExpense({
-      amount: value,
-      category: categoryName,
-      description,
-      date: new Date().toISOString().split("T")[0],
-      paidBy,
-      card: methodId,
-    });
-
-    onClose();
+    try {
+      setFormError(null);
+      await addExpense({
+        amount: value,
+        category: categoryName,
+        description,
+        date: new Date().toISOString().split("T")[0],
+        paidBy: paidBy.trim(),
+        card: methodId,
+      });
+      onClose();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Não foi possível salvar o gasto.");
+    }
   };
 
   return (
@@ -115,6 +143,12 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
               placeholder="Para que foi esse gasto?"
             />
           </div>
+
+          {formError && (
+            <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {formError}
+            </p>
+          )}
 
           <div className="flex gap-3 pt-2">
             <button

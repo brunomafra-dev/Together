@@ -129,27 +129,12 @@ export async function getUserHouseholdId(): Promise<string | null> {
     toString(user.email) ||
     "Household";
 
-  const { data: createdHousehold, error: createHouseholdError } = await supabase
-    .from("households")
-    .insert({
-      name: fallbackHouseholdName,
-      limit_amount: 0,
-    })
-    .select("id")
-    .single();
-
-  throwIfError(createHouseholdError);
-
-  const householdId = toString(createdHousehold?.id);
-  if (!householdId) return null;
-
-  const { error: memberInsertError } = await supabase.from("household_members").insert({
-    household_id: householdId,
-    profile_id: user.id,
+  const { data: bootstrapHouseholdId, error: bootstrapError } = await supabase.rpc("bootstrap_current_user_household", {
+    p_household_name: fallbackHouseholdName,
   });
-  throwIfError(memberInsertError);
 
-  return householdId;
+  throwIfError(bootstrapError);
+  return typeof bootstrapHouseholdId === "string" ? bootstrapHouseholdId : null;
 }
 
 const mapExpenseRow = (row: any): ExpenseModel => ({
