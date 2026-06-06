@@ -37,6 +37,55 @@ create table if not exists public.fixed_expenses (
 -- STEP 3: Enable Row Level Security (RLS) on all tables
 -- ============================================================
 
+-- ============================================================
+-- STEP 2.5: Bootstrap household for first login
+-- ============================================================
+
+create or replace function public.bootstrap_current_user_household(p_household_name text default null)
+returns uuid
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_user_id uuid := auth.uid();
+  v_user_email text := coalesce(auth.jwt() ->> 'email', '');
+  v_household_id uuid;
+  v_household_name text := coalesce(nullif(trim(p_household_name), ''), nullif(trim(coalesce(auth.jwt() ->> 'name', '')), ''), nullif(trim(v_user_email), ''), 'Household');
+begin
+  if v_user_id is null then
+    raise exception 'not authenticated';
+  end if;
+
+  select hm.household_id
+    into v_household_id
+  from public.household_members hm
+  where hm.profile_id = v_user_id
+  limit 1;
+
+  if v_household_id is not null then
+    return v_household_id;
+  end if;
+
+  insert into public.profiles (id, name, email, created_at)
+  values (v_user_id, v_household_name, v_user_email, now())
+  on conflict (id) do update
+    set name = coalesce(nullif(excluded.name, ''), public.profiles.name),
+        email = coalesce(nullif(excluded.email, ''), public.profiles.email);
+
+  insert into public.households (name, limit_amount)
+  values (v_household_name, 0)
+  returning id into v_household_id;
+
+  insert into public.household_members (household_id, profile_id)
+  values (v_household_id, v_user_id);
+
+  return v_household_id;
+end;
+$$;
+
+grant execute on function public.bootstrap_current_user_household(text) to authenticated;
+
 -- Profiles RLS
 alter table public.profiles enable row level security;
 

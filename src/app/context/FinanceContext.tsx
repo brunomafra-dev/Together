@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { useAuth } from "./AuthContext";
 import * as financeService from "../../services/financeService";
 import type {
   CategoryModel,
@@ -88,6 +89,7 @@ const loadErrorMessage = "Não foi possível carregar os dados do Supabase.";
  * FinanceProvider manages the global financial state and Supabase synchronization.
  */
 export function FinanceProvider({ children }: { children: ReactNode }) {
+  const { user: authUser, loading: authLoading } = useAuth();
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [household, setHousehold] = useState<HouseholdModel | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -99,8 +101,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Obter household_id na primeira renderização
   useEffect(() => {
+    if (authLoading) return;
+
     const getHouseholdId = async () => {
       try {
         const id = await financeService.getUserHouseholdId();
@@ -108,10 +111,16 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       } catch (err) {
         console.error("Erro ao obter household_id:", err);
         setError("Erro ao carregar dados do usuário");
+        setHouseholdId(null);
       }
     };
+    if (!authUser) {
+      setHouseholdId(null);
+      setLoading(false);
+      return;
+    }
     void getHouseholdId();
-  }, []);
+  }, [authUser?.id, authLoading]);
 
   const refreshData = async () => {
     if (!householdId) {
