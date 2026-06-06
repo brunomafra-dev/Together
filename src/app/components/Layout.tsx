@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router";
-import { Home, CreditCard, Calendar, Settings, Heart } from "lucide-react";
+import { Home, CreditCard, Calendar, Settings, Heart, Target } from "lucide-react";
 
 interface LayoutProps {
   children: ReactNode;
@@ -12,6 +12,7 @@ export function Layout({ children }: LayoutProps) {
 
   const navItems = [
     { to: "/", label: "Hoje", icon: Home },
+    { to: "/goals", label: "Metas", icon: Target },
     { to: "/installments", label: "Parcelas", icon: CreditCard },
     { to: "/future", label: "Impacto futuro", icon: Calendar },
     { to: "/settings", label: "Ajustes", icon: Settings },
