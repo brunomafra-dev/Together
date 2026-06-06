@@ -1,6 +1,13 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
-import { supabase } from "../../lib/supabase";
-import type { TableInsert, TableRow } from "../../lib/database.types";
+import * as financeService from "../../services/financeService";
+import type {
+  CategoryModel,
+  FixedExpenseModel,
+  HouseholdModel,
+  PaymentMethodModel,
+} from "../../services/financeService";
+
+export type { CategoryModel, HouseholdModel, PaymentMethodModel };
 
 export interface Expense {
   id: string;
@@ -11,6 +18,7 @@ export interface Expense {
   paidBy: string;
   card?: string | null;
   installments?: number | null;
+  notes?: string;
 }
 
 export interface Installment {
@@ -34,23 +42,34 @@ export interface FixedExpense {
 export interface BudgetSettings {
   monthlyIncome: number;
   partnerNames: [string, string];
-  cards: string[];
 }
 
 interface FinanceContextType {
+  household: HouseholdModel | null;
   expenses: Expense[];
   installments: Installment[];
   fixedExpenses: FixedExpense[];
+  categories: CategoryModel[];
+  paymentMethods: PaymentMethodModel[];
   settings: BudgetSettings;
   loading: boolean;
   error: string | null;
   addExpense: (expense: Omit<Expense, "id">) => Promise<void>;
-  addInstallment: (installment: Omit<Installment, "id">) => Promise<void>;
-  addFixedExpense: (expense: Omit<FixedExpense, "id">) => Promise<void>;
-  updateSettings: (settings: BudgetSettings) => Promise<void>;
+  updateExpense: (id: string, changes: Partial<Omit<Expense, "id">>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
+  addInstallment: (installment: Omit<Installment, "id">) => Promise<void>;
+  updateInstallment: (id: string, changes: Partial<Omit<Installment, "id">>) => Promise<void>;
   deleteInstallment: (id: string) => Promise<void>;
+  addFixedExpense: (expense: Omit<FixedExpense, "id">) => Promise<void>;
+  updateFixedExpense: (id: string, changes: Partial<Omit<FixedExpense, "id">>) => Promise<void>;
   deleteFixedExpense: (id: string) => Promise<void>;
+  updateSettings: (settings: BudgetSettings) => Promise<void>;
+  addPaymentMethod: (name: string) => Promise<void>;
+  updatePaymentMethod: (id: string, name: string) => Promise<void>;
+  deletePaymentMethod: (id: string) => Promise<void>;
+  addCategory: (name: string) => Promise<void>;
+  updateCategory: (id: string, changes: Partial<Omit<CategoryModel, "id">>) => Promise<void>;
+  deleteCategory: (id: string) => Promise<void>;
 }
 
 const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
@@ -58,154 +77,301 @@ const FinanceContext = createContext<FinanceContextType | undefined>(undefined);
 const EMPTY_SETTINGS: BudgetSettings = {
   monthlyIncome: 0,
   partnerNames: ["", ""],
-  cards: [],
 };
-
-const mapExpenseRow = (row: TableRow<"expenses">): Expense => ({
-  id: row.id,
-  amount: row.amount,
-  category: row.category_id ?? "",
-  description: row.description,
-  date: row.spent_at,
-  paidBy: row.profile_id ?? "",
-  card: row.card_id,
-  installments: row.installments_count,
-});
-
-const mapInstallmentRow = (row: TableRow<"installments">): Installment => ({
-  id: row.id,
-  name: row.description,
-  totalAmount: row.total_amount,
-  monthlyAmount: row.monthly_amount,
-  remainingMonths: row.remaining_months,
-  currentMonth: row.total_months - row.remaining_months,
-  category: row.category_id ?? "",
-});
 
 const loadErrorMessage = "Não foi possível carregar os dados do Supabase.";
 
+/**
+ * FinanceProvider manages the global financial state and Supabase synchronization.
+ */
 export function FinanceProvider({ children }: { children: ReactNode }) {
+  const [householdId, setHouseholdId] = useState<string | null>(null);
+  const [household, setHousehold] = useState<HouseholdModel | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [installments, setInstallments] = useState<Installment[]>([]);
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([]);
+  const [categories, setCategories] = useState<CategoryModel[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodModel[]>([]);
   const [settings, setSettings] = useState<BudgetSettings>(EMPTY_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Obter household_id na primeira renderização
+  useEffect(() => {
+    const getHouseholdId = async () => {
+      try {
+        const id = await financeService.getUserHouseholdId();
+        setHouseholdId(id);
+      } catch (err) {
+        console.error("Erro ao obter household_id:", err);
+        setError("Erro ao carregar dados do usuário");
+      }
+    };
+    void getHouseholdId();
+  }, []);
+
   const refreshData = async () => {
+    if (!householdId) {
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
-    const [expensesRes, installmentsRes] = await Promise.all([
-      supabase.from("expenses").select("*").order("spent_at", { ascending: false }),
-      supabase.from("installments").select("*").order("created_at", { ascending: false }),
-    ]);
+    try {
+      const [
+        expensesRes,
+        installmentsRes,
+        categoriesRes,
+        paymentMethodsRes,
+        fixedExpensesRes,
+        householdRes,
+      ] = await Promise.all([
+        financeService.fetchExpenses(householdId),
+        financeService.fetchInstallments(householdId),
+        financeService.fetchCategories(householdId),
+        financeService.fetchPaymentMethods(householdId),
+        financeService.fetchFixedExpenses(householdId),
+        financeService.fetchHousehold(householdId),
+      ]);
 
-    if (expensesRes.error || installmentsRes.error) {
-      setError(
-        expensesRes.error?.message ||
-          installmentsRes.error?.message ||
-          loadErrorMessage,
+      setExpenses(expensesRes.map((e) => ({
+        id: e.id,
+        amount: e.amount,
+        category: e.categoryId,
+        description: e.description,
+        date: e.date,
+        paidBy: e.createdBy,
+        card: e.cardId,
+        notes: e.notes,
+      })));
+      setInstallments(installmentsRes.map((i) => ({
+        id: i.id,
+        name: i.name,
+        totalAmount: i.totalAmount,
+        monthlyAmount: i.monthlyAmount,
+        remainingMonths: i.remainingMonths,
+        currentMonth: i.totalMonths - i.remainingMonths,
+        category: i.categoryId,
+      })));
+      setCategories(categoriesRes);
+      setPaymentMethods(paymentMethodsRes);
+      setFixedExpenses(
+        fixedExpensesRes.map((expense: FixedExpenseModel) => ({
+          id: expense.id,
+          name: expense.name,
+          amount: expense.amount,
+          category: expense.category,
+          dueDate: expense.dueDate,
+        })),
       );
+      setHousehold(householdRes);
+      setSettings({
+        monthlyIncome: householdRes?.monthlyIncome ?? 0,
+        partnerNames: [
+          householdRes?.partnerNames[0] ?? "",
+          householdRes?.partnerNames[1] ?? "",
+        ],
+      });
+    } catch (err) {
+      setError((err as Error)?.message ?? loadErrorMessage);
+    } finally {
+      setLoading(false);
     }
-
-    setExpenses((expensesRes.data ?? []).map(mapExpenseRow));
-    setInstallments((installmentsRes.data ?? []).map(mapInstallmentRow));
-    setFixedExpenses([]);
-    setLoading(false);
   };
 
+  // Recarregar quando householdId muda
   useEffect(() => {
     void refreshData();
-  }, []);
+  }, [householdId]);
 
   const updateSettings = async (newSettings: BudgetSettings) => {
+    if (household) {
+      const updated = await financeService.updateHouseholdSettings(
+        household.id,
+        newSettings.monthlyIncome,
+        newSettings.partnerNames,
+      );
+      setHousehold(updated);
+    }
     setSettings(newSettings);
   };
 
   const addExpense = async (expense: Omit<Expense, "id">) => {
-    const payload: TableInsert<"expenses"> = {
-      amount: expense.amount,
-      category_id: expense.category || null,
-      description: expense.description,
-      spent_at: expense.date,
-      profile_id: expense.paidBy || null,
-      card_id: expense.card || null,
-      installments_count: expense.installments ?? null,
+    const data = await financeService.addExpense({
+      ...expense,
+      categoryId: expense.category,
+      cardId: expense.card || null,
+      createdBy: expense.paidBy,
+      householdId: household?.id || "",
+    });
+    const newExpense: Expense = {
+      id: data.id,
+      amount: data.amount,
+      category: data.categoryId,
+      description: data.description,
+      date: data.date,
+      paidBy: data.createdBy,
+      card: data.cardId,
+      notes: data.notes,
     };
-
-    const { data, error } = await supabase.from("expenses").insert(payload).select("*").single();
-    if (error || !data) {
-      throw new Error(error?.message || "Falha ao salvar gasto.");
-    }
-    setExpenses((prev) => [mapExpenseRow(data), ...prev]);
+    setExpenses((prev) => [newExpense, ...prev]);
   };
 
   const addInstallment = async (installment: Omit<Installment, "id">) => {
-    const payload: TableInsert<"installments"> = {
-      description: installment.name,
-      total_amount: installment.totalAmount,
-      monthly_amount: installment.monthlyAmount,
-      remaining_months: installment.remainingMonths,
-      total_months: installment.currentMonth + installment.remainingMonths,
-      starts_at: new Date().toISOString().slice(0, 10),
-      household_id: "",
-      category_id: installment.category || null,
-      expense_id: null,
-      ends_at: null,
+    const data = await financeService.addInstallment({
+      ...installment,
+      totalMonths: installment.remainingMonths + installment.currentMonth,
+      categoryId: installment.category,
+      expenseId: null,
+      householdId: household?.id || "",
+    });
+    const newInstallment: Installment = {
+      id: data.id,
+      name: data.name,
+      totalAmount: data.totalAmount,
+      monthlyAmount: data.monthlyAmount,
+      remainingMonths: data.remainingMonths,
+      currentMonth: data.totalMonths - data.remainingMonths,
+      category: data.categoryId,
     };
-
-    const { data, error } = await supabase.from("installments").insert(payload).select("*").single();
-    if (error || !data) {
-      throw new Error(error?.message || "Falha ao salvar parcela.");
-    }
-    setInstallments((prev) => [mapInstallmentRow(data), ...prev]);
+    setInstallments((prev) => [newInstallment, ...prev]);
   };
 
   const addFixedExpense = async (expense: Omit<FixedExpense, "id">) => {
+    const data = await financeService.addFixedExpense({
+      ...expense,
+      householdId: household?.id || "",
+    });
     setFixedExpenses((prev) => [
       ...prev,
-      { ...expense, id: crypto.randomUUID() },
+      { id: data.id, name: data.name, amount: data.amount, category: data.category, dueDate: data.dueDate },
     ]);
   };
 
-  const deleteExpense = async (id: string) => {
-    const { error } = await supabase.from("expenses").delete().eq("id", id);
-    if (error) {
-      throw new Error(error.message);
-    }
-    setExpenses((prev) => prev.filter((e) => e.id !== id));
-  };
-
-  const deleteInstallment = async (id: string) => {
-    const { error } = await supabase.from("installments").delete().eq("id", id);
-    if (error) {
-      throw new Error(error.message);
-    }
-    setInstallments((prev) => prev.filter((i) => i.id !== id));
+  const updateFixedExpense = async (id: string, changes: Partial<Omit<FixedExpense, "id">>) => {
+    const updated = await financeService.updateFixedExpense(id, changes);
+    setFixedExpenses((prev) => prev.map((f) => (f.id === id ? {
+      id: updated.id,
+      name: updated.name,
+      amount: updated.amount,
+      category: updated.category,
+      dueDate: updated.dueDate,
+    } : f)));
   };
 
   const deleteFixedExpense = async (id: string) => {
+    await financeService.deleteFixedExpense(id);
     setFixedExpenses((prev) => prev.filter((f) => f.id !== id));
+  };
+
+  const updateExpense = async (id: string, changes: Partial<Omit<Expense, "id">>) => {
+    const updated = await financeService.updateExpense(id, {
+      amount: changes.amount,
+      description: changes.description,
+      date: changes.date,
+      categoryId: changes.category,
+      createdBy: changes.paidBy,
+      cardId: changes.card
+    });
+    
+    setExpenses((prev) => prev.map((e) => (e.id === id ? {
+      ...e,
+      amount: updated.amount,
+      category: updated.categoryId,
+      description: updated.description,
+      date: updated.date,
+      paidBy: updated.createdBy,
+      card: updated.cardId,
+      notes: updated.notes
+    } : e)));
+  };
+
+  const deleteExpense = async (id: string) => {
+    await financeService.deleteExpense(id);
+    setExpenses((prev) => prev.filter((e) => e.id !== id));
+  };
+
+  const updateInstallment = async (id: string, changes: Partial<Omit<Installment, "id">>) => {
+    const updated = await financeService.updateInstallment(id, changes);
+    setInstallments((prev) => prev.map((i) => (i.id === id ? {
+      ...i,
+      name: updated.name,
+      totalAmount: updated.totalAmount,
+      monthlyAmount: updated.monthlyAmount,
+      remainingMonths: updated.remainingMonths,
+      currentMonth: updated.totalMonths - updated.remainingMonths,
+      category: updated.categoryId
+    } : i)));
+  };
+
+  const deleteInstallment = async (id: string) => {
+    await financeService.deleteInstallment(id);
+    setInstallments((prev) => prev.filter((i) => i.id !== id));
+  };
+
+  const addCategoryCtx = async (name: string) => {
+    if (!householdId) throw new Error("Household ID não encontrado");
+    const newCat = await financeService.addCategory(name, householdId);
+    setCategories((prev) => [...prev, newCat]);
+  };
+
+  const updateCategoryCtx = async (id: string, changes: Partial<Omit<CategoryModel, "id">>) => {
+    const updated = await financeService.updateCategory(id, changes);
+    setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
+  };
+
+  const deleteCategoryCtx = async (id: string) => {
+    await financeService.deleteCategory(id);
+    setCategories((prev) => prev.filter((c) => c.id !== id));
+  };
+
+  const addPaymentMethodCtx = async (name: string) => {
+    if (!householdId) throw new Error("Household ID não encontrado");
+    const newMethod = await financeService.addPaymentMethod(name, undefined, householdId);
+    setPaymentMethods((prev) => [...prev, newMethod]);
+  };
+
+  const updatePaymentMethodCtx = async (id: string, name: string) => {
+    const updated = await financeService.updatePaymentMethod(id, name);
+    setPaymentMethods((prev) => prev.map((m) => (m.id === id ? updated : m)));
+  };
+
+  const deletePaymentMethodCtx = async (id: string) => {
+    await financeService.deletePaymentMethod(id);
+    setPaymentMethods((prev) => prev.filter((m) => m.id !== id));
   };
 
   const value = useMemo(
     () => ({
       expenses,
+      household,
       installments,
       fixedExpenses,
+      categories,
+      paymentMethods,
       settings,
       loading,
       error,
       addExpense,
-      addInstallment,
-      addFixedExpense,
-      updateSettings,
+      updateExpense,
       deleteExpense,
+      addInstallment,
+      updateInstallment,
       deleteInstallment,
+      addFixedExpense,
+      updateFixedExpense,
       deleteFixedExpense,
+      updateSettings,
+      addPaymentMethod: addPaymentMethodCtx,
+      updatePaymentMethod: updatePaymentMethodCtx,
+      deletePaymentMethod: deletePaymentMethodCtx,
+      addCategory: addCategoryCtx,
+      updateCategory: updateCategoryCtx,
+      deleteCategory: deleteCategoryCtx,
     }),
-    [expenses, installments, fixedExpenses, settings, loading, error],
+    [household, expenses, installments, fixedExpenses, categories, paymentMethods, settings, loading, error],
   );
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;

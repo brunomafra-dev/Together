@@ -4,6 +4,8 @@ import { useFinance, formatBRL } from "../context/FinanceContext";
 import { Plus, Trash2, TrendingDown, CalendarCheck, Sparkles } from "lucide-react";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { CategorySelect } from "./CategorySelect";
+import { PaymentMethodSelect } from "./PaymentMethodSelect";
 
 export function Installments() {
   const { installments, deleteInstallment } = useFinance();
@@ -181,11 +183,12 @@ interface AddInstallmentModalProps {
 }
 
 function AddInstallmentModal({ onClose }: AddInstallmentModalProps) {
-  const { addInstallment } = useFinance();
+  const { addInstallment, categories, paymentMethods } = useFinance();
   const [name, setName] = useState("");
   const [monthlyAmount, setMonthlyAmount] = useState("");
   const [remainingMonths, setRemainingMonths] = useState("");
-  const [category, setCategory] = useState("");
+  const [categoryId, setCategoryId] = useState("");
+  const [methodId, setMethodId] = useState("");
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -197,9 +200,9 @@ function AddInstallmentModal({ onClose }: AddInstallmentModalProps) {
       name,
       totalAmount: monthly * months,
       monthlyAmount: monthly,
-      remainingMonths: months,
-      currentMonth: 0,
-      category,
+      remainingMonths: months - 1,
+      currentMonth: 1,
+      category: categoryId,
     });
     onClose();
   };
@@ -263,12 +266,21 @@ function AddInstallmentModal({ onClose }: AddInstallmentModalProps) {
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
               Categoria
             </label>
-            <input
-              type="text"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="Digite uma categoria real"
+            <CategorySelect
+              value={categoryId}
+              onChange={setCategoryId}
+              placeholder="Selecione a categoria"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+              Forma de Pagamento
+            </label>
+            <PaymentMethodSelect
+              value={methodId}
+              onChange={setMethodId}
+              placeholder="Selecione a forma de pagamento"
             />
           </div>
 

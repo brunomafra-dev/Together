@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { useFinance } from "../context/FinanceContext";
 import { X } from "lucide-react";
+import { CategorySelect } from "./CategorySelect";
+import { PaymentMethodSelect } from "./PaymentMethodSelect";
 
 interface AddExpenseModalProps {
   onClose: () => void;
@@ -9,46 +11,48 @@ interface AddExpenseModalProps {
 const INSTALLMENT_OPTIONS = [1, 2, 3, 6, 10, 12];
 
 export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
-  const { addExpense, addInstallment, settings } = useFinance();
+  const { addExpense, addInstallment, settings, categories, paymentMethods } = useFinance();
   const [amount, setAmount] = useState("");
-  const [category, setCategory] = useState("");
-  const [card, setCard] = useState(settings.cards[0] || "");
+  const [categoryId, setCategoryId] = useState("");
+  const [methodId, setMethodId] = useState("");
   const [installments, setInstallments] = useState(1);
   const [paidBy, setPaidBy] = useState(settings.partnerNames[0] || "");
   const [description, setDescription] = useState("");
 
   useEffect(() => {
-    if (!card && settings.cards[0]) {
-      setCard(settings.cards[0]);
-    }
     if (!paidBy && settings.partnerNames[0]) {
       setPaidBy(settings.partnerNames[0]);
     }
-  }, [settings.cards, settings.partnerNames, card, paidBy]);
+    if (!methodId && paymentMethods.length > 0) {
+      setMethodId(paymentMethods[0].id);
+    }
+  }, [settings.partnerNames, paymentMethods, paidBy, methodId]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     const value = parseFloat(amount.replace(",", "."));
     if (!value || value <= 0) return;
 
+    const selectedCategory = categories.find((c) => c.id === categoryId);
+    const categoryName = selectedCategory?.name || "";
     addExpense({
       amount: value,
-      category,
+      category: categoryName,
       description,
       date: new Date().toISOString().split("T")[0],
       paidBy,
-      card,
+      card: methodId,
       installments,
     });
 
     if (installments > 1) {
       addInstallment({
-        name: description || category,
+        name: description || categoryName,
         totalAmount: value,
         monthlyAmount: value / installments,
         remainingMonths: installments - 1,
         currentMonth: 1,
-        category,
+        category: categoryName,
       });
     }
 
@@ -111,28 +115,22 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
               Categoria
             </label>
-            <input
-              type="text"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="Digite uma categoria real"
+            <CategorySelect
+              value={categoryId}
+              onChange={setCategoryId}
+              placeholder="Selecione a categoria"
             />
           </div>
 
           <div>
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
-              Cartão
+              Forma de Pagamento
             </label>
-            <div className="flex gap-2 flex-wrap">
-              <input
-                type="text"
-                value={card}
-                onChange={(e) => setCard(e.target.value)}
-                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                placeholder="Digite o cartão usado"
-              />
-            </div>
+            <PaymentMethodSelect
+              value={methodId}
+              onChange={setMethodId}
+              placeholder="Selecione a forma de pagamento"
+            />
           </div>
 
           <div>
