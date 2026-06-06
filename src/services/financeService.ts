@@ -507,10 +507,66 @@ export async function fetchGoalPlanItems(goalId: string): Promise<GoalPlanItemMo
   return (data ?? []).map(mapGoalPlanItemRow);
 }
 
+export async function addGoalPlanItem(goalId: string, item: Omit<GoalPlanItemModel, "id" | "goalId">): Promise<GoalPlanItemModel> {
+  const { data, error } = await supabase.from("goal_plan_items").insert({
+    goal_id: goalId,
+    name: item.name,
+    share: item.share,
+    amount: item.amount,
+    tone: item.tone,
+  }).select("*").single();
+  throwIfError(error);
+  return mapGoalPlanItemRow(data as GoalPlanItemRow);
+}
+
+export async function updateGoalPlanItem(id: string, changes: Partial<Omit<GoalPlanItemModel, "id" | "goalId">>): Promise<GoalPlanItemModel> {
+  const { data, error } = await supabase.from("goal_plan_items").update({
+    name: changes.name,
+    share: changes.share,
+    amount: changes.amount,
+    tone: changes.tone,
+  }).eq("id", id).select("*").single();
+  throwIfError(error);
+  return mapGoalPlanItemRow(data as GoalPlanItemRow);
+}
+
+export async function deleteGoalPlanItem(id: string): Promise<void> {
+  const { error } = await supabase.from("goal_plan_items").delete().eq("id", id);
+  throwIfError(error);
+}
+
 export async function fetchGoalProgressRows(goalId: string): Promise<GoalProgressRowModel[]> {
   const { data, error } = await supabase.from("goal_progress_rows").select("*").eq("goal_id", goalId).order("created_at", { ascending: true });
   throwIfError(error);
   return (data ?? []).map(mapGoalProgressRow);
+}
+
+export async function addGoalProgressRow(goalId: string, row: Omit<GoalProgressRowModel, "id" | "goalId">): Promise<GoalProgressRowModel> {
+  const { data, error } = await supabase.from("goal_progress_rows").insert({
+    goal_id: goalId,
+    name: row.name,
+    planned: row.planned,
+    realized: row.realized,
+    status: row.status,
+  }).select("*").single();
+  throwIfError(error);
+  return mapGoalProgressRow(data as GoalProgressRow);
+}
+
+export async function updateGoalProgressRow(id: string, changes: Partial<Omit<GoalProgressRowModel, "id" | "goalId">>): Promise<GoalProgressRowModel> {
+  const { data, error } = await supabase.from("goal_progress_rows").update({
+    name: changes.name,
+    planned: changes.planned,
+    realized: changes.realized,
+    status: changes.status,
+  }).eq("id", id).select("*").single();
+  throwIfError(error);
+  return mapGoalProgressRow(data as GoalProgressRow);
+}
+
+export async function deleteGoalProgressRow(id: string): Promise<void> {
+  const { error } = await supabase.from("goal_progress_rows").delete().eq("id", id);
+  throwIfError(error);
 }
 
 export async function fetchFinancialCommitments(householdId: string): Promise<FinancialCommitmentModel[]> {

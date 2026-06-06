@@ -334,32 +334,38 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     if (!householdId) throw new Error("Household ID não encontrado");
     const newCat = await financeService.addCategory(name, householdId);
     setCategories((prev) => [...prev, newCat]);
+    await refreshData();
   };
 
   const updateCategoryCtx = async (id: string, changes: Partial<Omit<CategoryModel, "id">>) => {
     const updated = await financeService.updateCategory(id, changes);
     setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
+    await refreshData();
   };
 
   const deleteCategoryCtx = async (id: string) => {
     await financeService.deleteCategory(id);
     setCategories((prev) => prev.filter((c) => c.id !== id));
+    await refreshData();
   };
 
   const addPaymentMethodCtx = async (name: string) => {
     if (!householdId) throw new Error("Household ID não encontrado");
     const newMethod = await financeService.addPaymentMethod(name, undefined, householdId);
     setPaymentMethods((prev) => [...prev, newMethod]);
+    await refreshData();
   };
 
   const updatePaymentMethodCtx = async (id: string, name: string) => {
     const updated = await financeService.updatePaymentMethod(id, name);
     setPaymentMethods((prev) => prev.map((m) => (m.id === id ? updated : m)));
+    await refreshData();
   };
 
   const deletePaymentMethodCtx = async (id: string) => {
     await financeService.deletePaymentMethod(id);
     setPaymentMethods((prev) => prev.filter((m) => m.id !== id));
+    await refreshData();
   };
 
   const value = useMemo(

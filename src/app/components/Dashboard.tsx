@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { endOfMonth, format, getDate, getDaysInMonth, isWithinInterval, parseISO, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Plus, Sparkles, TrendingDown, Users, Wallet } from "lucide-react";
@@ -7,12 +7,12 @@ import { CategoryBreakdown } from "./CategoryBreakdown";
 import { Layout } from "./Layout";
 import { RecentExpenses } from "./RecentExpenses";
 import { formatBRL, useFinance } from "../context/FinanceContext";
+import * as financeService from "../../services/financeService";
 
 export function Dashboard() {
   const {
     household,
     expenses,
-    installments,
     fixedExpenses,
     categories,
     paymentMethods,
@@ -21,6 +21,35 @@ export function Dashboard() {
     error,
   } = useFinance();
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [financialCommitments, setFinancialCommitments] = useState<
+    Array<{
+      id: string;
+      installmentValue: number;
+      currentInstallment: number;
+      totalInstallments: number;
+      status: "active" | "finished" | "late";
+    }>
+  >([]);
+
+  useEffect(() => {
+    const load = async () => {
+      const householdId = await financeService.getUserHouseholdId();
+      if (!householdId) return;
+
+      const rows = await financeService.fetchFinancialCommitments(householdId).catch(() => []);
+      setFinancialCommitments(
+        rows.map((row) => ({
+          id: row.id,
+          installmentValue: row.installmentValue,
+          currentInstallment: row.currentInstallment,
+          totalInstallments: row.totalInstallments,
+          status: row.status,
+        })),
+      );
+    };
+
+    void load();
+  }, []);
 
   const now = new Date();
   const currentMonth = useMemo(
@@ -46,8 +75,10 @@ export function Dashboard() {
 
     const variableSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const fixedTotal = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const installmentsTotal = installments.reduce((sum, installment) => sum + installment.monthlyAmount, 0);
-    const committed = fixedTotal + installmentsTotal;
+    const commitmentsTotal = financialCommitments
+      .filter((commitment) => commitment.status !== "finished")
+      .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
+    const committed = fixedTotal + commitmentsTotal;
     const totalSpent = committed + variableSpent;
     const income = settings.monthlyIncome;
     const available = income - totalSpent;
@@ -71,7 +102,7 @@ export function Dashboard() {
     return {
       income,
       fixedTotal,
-      installmentsTotal,
+      installmentsTotal: commitmentsTotal,
       variableSpent,
       committed,
       totalSpent,
@@ -82,7 +113,7 @@ export function Dashboard() {
       projectedLeftover,
       dailyPace,
     };
-  }, [categories, currentMonth, expenses, fixedExpenses, household?.partnerNames, installments, paymentMethods, settings.monthlyIncome, settings.partnerNames]);
+  }, [categories, currentMonth, expenses, fixedExpenses, financialCommitments, household?.partnerNames, paymentMethods, settings.monthlyIncome, settings.partnerNames]);
 
   const monthLabel = format(now, "MMMM 'de' yyyy", { locale: ptBR });
   const availableColor =
@@ -122,11 +153,9 @@ export function Dashboard() {
       <div className="space-y-6">
         <div className="flex items-end justify-between">
           <div>
-            <p className="text-xs uppercase tracking-wider text-stone-500">
-              {monthLabel}
-            </p>
+            <p className="text-xs uppercase tracking-wider text-stone-500">{monthLabel}</p>
             <h1 className="mt-1 text-2xl font-semibold text-stone-900">
-              {greetingNames.length > 0 ? `Oi, ${greetingNames.join(" e ")}` : "Oi"} 
+              {greetingNames.length > 0 ? `Oi, ${greetingNames.join(" e ")}` : "Oi"}
             </h1>
           </div>
           <button
@@ -140,11 +169,9 @@ export function Dashboard() {
 
         <div className="rounded-3xl border border-stone-200 bg-gradient-to-br from-white to-stone-50 p-8">
           <p className="mb-2 text-sm text-stone-600">Livre para gastar</p>
-          <h2 className={`text-6xl font-semibold ${availableColor}`}>
-            {formatBRL(data.available)}
-          </h2>
+          <h2 className={`text-6xl font-semibold ${availableColor}`}>{formatBRL(data.available)}</h2>
           <p className="mt-3 text-sm text-stone-500">
-            Calculado com renda do household, contas fixas, parcelas e gastos reais do mes.
+            Calculado com renda do household, contas fixas, compromissos e gastos reais do mes.
           </p>
 
           <div className="mt-6">
@@ -153,29 +180,14 @@ export function Dashboard() {
               <span>{data.income > 0 ? `${((data.totalSpent / data.income) * 100).toFixed(0)}%` : "0%"}</span>
             </div>
             <div className="flex h-2.5 overflow-hidden rounded-full bg-stone-100">
-              <div
-                className="bg-stone-400"
-                style={{ width: `${data.income > 0 ? (data.fixedTotal / data.income) * 100 : 0}%` }}
-              />
-              <div
-                className="bg-indigo-400"
-                style={{ width: `${data.income > 0 ? (data.installmentsTotal / data.income) * 100 : 0}%` }}
-              />
-              <div
-                className="bg-emerald-400"
-                style={{ width: `${data.income > 0 ? (data.variableSpent / data.income) * 100 : 0}%` }}
-              />
+              <div className="bg-stone-400" style={{ width: `${data.income > 0 ? (data.fixedTotal / data.income) * 100 : 0}%` }} />
+              <div className="bg-indigo-400" style={{ width: `${data.income > 0 ? (data.installmentsTotal / data.income) * 100 : 0}%` }} />
+              <div className="bg-emerald-400" style={{ width: `${data.income > 0 ? (data.variableSpent / data.income) * 100 : 0}%` }} />
             </div>
             <div className="mt-3 flex flex-wrap gap-4 text-xs text-stone-600">
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-stone-400" /> Fixas
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-indigo-400" /> Parcelas
-              </span>
-              <span className="flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" /> Variaveis
-              </span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-stone-400" /> Fixas</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-indigo-400" /> Compromissos</span>
+              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" /> Variaveis</span>
             </div>
           </div>
         </div>
@@ -198,20 +210,16 @@ export function Dashboard() {
               <Wallet className="h-4 w-4" />
               Renda do household
             </div>
-            <p className="text-xl font-semibold text-stone-900">
-              {formatBRL(data.income)}
-            </p>
+            <p className="text-xl font-semibold text-stone-900">{formatBRL(data.income)}</p>
           </div>
           <div className="rounded-2xl border border-stone-200 bg-white p-5">
             <div className="mb-2 flex items-center gap-2 text-xs text-stone-500">
               <TrendingDown className="h-4 w-4" />
               Comprometimento
             </div>
-            <p className="text-xl font-semibold text-stone-900">
-              {formatBRL(data.committed)}
-            </p>
+            <p className="text-xl font-semibold text-stone-900">{formatBRL(data.committed)}</p>
             <p className="mt-1 text-xs text-stone-500">
-              {formatBRL(data.fixedTotal)} fixas - {formatBRL(data.installmentsTotal)} parcelas
+              {formatBRL(data.fixedTotal)} fixas - {formatBRL(data.installmentsTotal)} compromissos
             </p>
           </div>
           <div className="rounded-2xl border border-stone-200 bg-white p-5">
@@ -219,9 +227,7 @@ export function Dashboard() {
               <Plus className="h-4 w-4" />
               Gastos do mes
             </div>
-            <p className="text-xl font-semibold text-stone-900">
-              {formatBRL(data.variableSpent)}
-            </p>
+            <p className="text-xl font-semibold text-stone-900">{formatBRL(data.variableSpent)}</p>
           </div>
         </div>
 
@@ -243,9 +249,7 @@ export function Dashboard() {
               ))}
             </div>
           ) : (
-            <p className="text-sm text-stone-500">
-              Nenhum gasto real encontrado para mostrar este card.
-            </p>
+            <p className="text-sm text-stone-500">Nenhum gasto real encontrado para mostrar este card.</p>
           )}
         </div>
 
@@ -283,14 +287,9 @@ function PartnerCard({
         <p className="text-sm font-medium text-stone-800">{name}</p>
         <p className="text-xs text-stone-500">{pct.toFixed(0)}%</p>
       </div>
-      <p className="mb-3 text-2xl font-semibold text-stone-900">
-        {formatBRL(amount)}
-      </p>
+      <p className="mb-3 text-2xl font-semibold text-stone-900">{formatBRL(amount)}</p>
       <div className="h-1.5 overflow-hidden rounded-full bg-white/60">
-        <div
-          className={`h-full rounded-full transition-all ${toneMap[tone].bar}`}
-          style={{ width: `${pct}%` }}
-        />
+        <div className={`h-full rounded-full transition-all ${toneMap[tone].bar}`} style={{ width: `${pct}%` }} />
       </div>
     </div>
   );
