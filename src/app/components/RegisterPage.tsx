@@ -17,7 +17,7 @@ export function RegisterPage() {
 
   if (user) return <Navigate to="/" replace />;
 
-  const passwordsMatch = password === confirmPassword || confirmPassword.length === 0;
+  const passwordsMatch = password.length > 0 && password === confirmPassword;
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -160,4 +160,3 @@ export function RegisterPage() {
     </AuthLayout>
   );
 }
-

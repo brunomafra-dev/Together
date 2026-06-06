@@ -7,6 +7,10 @@ type CardRow = TableRow<"cards">;
 type HouseholdRow = TableRow<"households">;
 type FixedExpenseRow = TableRow<"fixed_expenses">;
 type ProfileRow = TableRow<"profiles">;
+type GoalRow = TableRow<"goals">;
+type GoalPlanItemRow = TableRow<"goal_plan_items">;
+type GoalProgressRow = TableRow<"goal_progress_rows">;
+type FinancialCommitmentRow = TableRow<"financial_commitments">;
 
 export interface ExpenseModel {
   id: string;
@@ -54,6 +58,47 @@ export interface HouseholdModel {
   name: string;
   monthlyIncome: number;
   partnerNames: [string, string];
+}
+
+export interface GoalModel {
+  id: string;
+  householdId: string;
+  title: string;
+  label: string;
+  currentAmount: number;
+  targetAmount: number;
+}
+
+export interface GoalPlanItemModel {
+  id: string;
+  goalId: string;
+  name: string;
+  share: string;
+  amount: number;
+  tone: "stone" | "emerald" | "cyan" | "amber" | "indigo";
+}
+
+export interface GoalProgressRowModel {
+  id: string;
+  goalId: string;
+  name: string;
+  planned: number;
+  realized: number;
+  status: string;
+}
+
+export interface FinancialCommitmentModel {
+  id: string;
+  householdId: string;
+  paymentMethodId: string;
+  itemName: string;
+  installmentValue: number;
+  currentInstallment: number;
+  totalInstallments: number;
+  responsiblePerson: string;
+  notes: string;
+  startedAt: string;
+  status: "active" | "finished" | "late";
 }
 
 const toNumber = (value: unknown) => (typeof value === "number" ? value : Number(value ?? 0) || 0);
@@ -125,6 +170,47 @@ const mapHouseholdRow = (row: HouseholdRow, partnerNames: [string, string]): Hou
   name: toString(row.name),
   monthlyIncome: toNumber(row.limit_amount),
   partnerNames,
+});
+
+const mapGoalRow = (row: GoalRow): GoalModel => ({
+  id: row.id,
+  householdId: toString(row.household_id),
+  title: toString(row.title),
+  label: toString(row.label),
+  currentAmount: toNumber(row.current_amount),
+  targetAmount: toNumber(row.target_amount),
+});
+
+const mapGoalPlanItemRow = (row: GoalPlanItemRow): GoalPlanItemModel => ({
+  id: row.id,
+  goalId: toString(row.goal_id),
+  name: toString(row.name),
+  share: toString(row.share),
+  amount: toNumber(row.amount),
+  tone: (toString(row.tone) as GoalPlanItemModel["tone"]) || "stone",
+});
+
+const mapGoalProgressRow = (row: GoalProgressRow): GoalProgressRowModel => ({
+  id: row.id,
+  goalId: toString(row.goal_id),
+  name: toString(row.name),
+  planned: toNumber(row.planned),
+  realized: toNumber(row.realized),
+  status: toString(row.status),
+});
+
+const mapFinancialCommitmentRow = (row: FinancialCommitmentRow): FinancialCommitmentModel => ({
+  id: row.id,
+  householdId: toString(row.household_id),
+  paymentMethodId: toString(row.payment_method_id),
+  itemName: toString(row.item_name),
+  installmentValue: toNumber(row.installment_value),
+  currentInstallment: toNumber(row.current_installment),
+  totalInstallments: toNumber(row.total_installments),
+  responsiblePerson: toString(row.responsible_person),
+  notes: toString(row.notes),
+  startedAt: toString(row.started_at),
+  status: (toString(row.status) as FinancialCommitmentModel["status"]) || "active",
 });
 
 export async function fetchExpenses(householdId: string): Promise<ExpenseModel[]> {
@@ -379,4 +465,94 @@ export async function updateHouseholdSettings(householdId: string, monthlyIncome
     .single();
   throwIfError(error);
   return mapHouseholdRow(data as HouseholdRow, partnerNames);
+}
+
+export async function fetchGoals(householdId: string): Promise<GoalModel[]> {
+  const { data, error } = await supabase.from("goals").select("*").eq("household_id", householdId).order("created_at", { ascending: false });
+  throwIfError(error);
+  return (data ?? []).map(mapGoalRow);
+}
+
+export async function addGoal(goal: Omit<GoalModel, "id">): Promise<GoalModel> {
+  const { data, error } = await supabase.from("goals").insert({
+    household_id: goal.householdId,
+    title: goal.title,
+    label: goal.label,
+    current_amount: goal.currentAmount,
+    target_amount: goal.targetAmount,
+  }).select("*").single();
+  throwIfError(error);
+  return mapGoalRow(data as GoalRow);
+}
+
+export async function updateGoal(id: string, changes: Partial<Omit<GoalModel, "id" | "householdId">>): Promise<GoalModel> {
+  const { data, error } = await supabase.from("goals").update({
+    title: changes.title,
+    label: changes.label,
+    current_amount: changes.currentAmount,
+    target_amount: changes.targetAmount,
+  }).eq("id", id).select("*").single();
+  throwIfError(error);
+  return mapGoalRow(data as GoalRow);
+}
+
+export async function deleteGoal(id: string): Promise<void> {
+  const { error } = await supabase.from("goals").delete().eq("id", id);
+  throwIfError(error);
+}
+
+export async function fetchGoalPlanItems(goalId: string): Promise<GoalPlanItemModel[]> {
+  const { data, error } = await supabase.from("goal_plan_items").select("*").eq("goal_id", goalId).order("created_at", { ascending: true });
+  throwIfError(error);
+  return (data ?? []).map(mapGoalPlanItemRow);
+}
+
+export async function fetchGoalProgressRows(goalId: string): Promise<GoalProgressRowModel[]> {
+  const { data, error } = await supabase.from("goal_progress_rows").select("*").eq("goal_id", goalId).order("created_at", { ascending: true });
+  throwIfError(error);
+  return (data ?? []).map(mapGoalProgressRow);
+}
+
+export async function fetchFinancialCommitments(householdId: string): Promise<FinancialCommitmentModel[]> {
+  const { data, error } = await supabase.from("financial_commitments").select("*").eq("household_id", householdId).order("created_at", { ascending: false });
+  throwIfError(error);
+  return (data ?? []).map(mapFinancialCommitmentRow);
+}
+
+export async function addFinancialCommitment(commitment: Omit<FinancialCommitmentModel, "id">): Promise<FinancialCommitmentModel> {
+  const { data, error } = await supabase.from("financial_commitments").insert({
+    household_id: commitment.householdId,
+    payment_method_id: commitment.paymentMethodId,
+    item_name: commitment.itemName,
+    installment_value: commitment.installmentValue,
+    current_installment: commitment.currentInstallment,
+    total_installments: commitment.totalInstallments,
+    responsible_person: commitment.responsiblePerson,
+    notes: commitment.notes,
+    started_at: commitment.startedAt,
+    status: commitment.status,
+  }).select("*").single();
+  throwIfError(error);
+  return mapFinancialCommitmentRow(data as FinancialCommitmentRow);
+}
+
+export async function updateFinancialCommitment(id: string, changes: Partial<Omit<FinancialCommitmentModel, "id" | "householdId">>): Promise<FinancialCommitmentModel> {
+  const { data, error } = await supabase.from("financial_commitments").update({
+    payment_method_id: changes.paymentMethodId,
+    item_name: changes.itemName,
+    installment_value: changes.installmentValue,
+    current_installment: changes.currentInstallment,
+    total_installments: changes.totalInstallments,
+    responsible_person: changes.responsiblePerson,
+    notes: changes.notes,
+    started_at: changes.startedAt,
+    status: changes.status,
+  }).eq("id", id).select("*").single();
+  throwIfError(error);
+  return mapFinancialCommitmentRow(data as FinancialCommitmentRow);
+}
+
+export async function deleteFinancialCommitment(id: string): Promise<void> {
+  const { error } = await supabase.from("financial_commitments").delete().eq("id", id);
+  throwIfError(error);
 }

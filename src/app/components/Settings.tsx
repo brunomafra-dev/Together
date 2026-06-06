@@ -97,6 +97,9 @@ export function Settings() {
                   >
                     <div className="flex-1">
                       <p className="text-sm font-medium text-stone-900">{method.name}</p>
+                      <p className="text-xs text-stone-500">
+                        Limite: {method.limitAmount !== null ? formatBRL(method.limitAmount) : "sem limite definido"}
+                      </p>
                     </div>
                     <div className="flex gap-2">
                       <button
@@ -221,6 +224,11 @@ function AddPaymentMethodModal({
     ? paymentMethods.find((m) => m.id === editingId)
     : null;
   const [name, setName] = useState(editingMethod?.name || "");
+  const [limitAmount, setLimitAmount] = useState(
+    editingMethod?.limitAmount !== null && editingMethod?.limitAmount !== undefined
+      ? editingMethod.limitAmount.toString()
+      : "",
+  );
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -228,9 +236,9 @@ function AddPaymentMethodModal({
     if (!trimmed) return;
 
     if (editingId && editingMethod) {
-      void updatePaymentMethod(editingId, trimmed);
+      void updatePaymentMethod(editingId, trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined);
     } else {
-      void addPaymentMethod(trimmed);
+      void addPaymentMethod(trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined);
     }
     onClose();
   };
@@ -251,6 +259,20 @@ function AddPaymentMethodModal({
               value={name}
               onChange={(e) => setName(e.target.value)}
               placeholder="Ex: Nubank Bruno"
+              className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            />
+          </div>
+
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+              Limite total
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={limitAmount}
+              onChange={(e) => setLimitAmount(e.target.value)}
+              placeholder="0,00"
               className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
             />
           </div>
