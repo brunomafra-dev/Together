@@ -132,7 +132,7 @@ export function Settings() {
                 className="w-full bg-stone-900 hover:bg-stone-800 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
               >
                 <Plus className="w-4 h-4" />
-                Adicionar Forma de Pagamento
+                Adicionar cartão
               </button>
             </div>
 
@@ -253,7 +253,7 @@ function AddPaymentMethodModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-white rounded-2xl p-6 w-96 shadow-lg">
         <h2 className="text-lg font-semibold text-stone-900 mb-4">
-          {editingId ? "Editar" : "Adicionar"} Forma de Pagamento
+          {editingId ? "Editar cartão" : "Adicionar cartão"}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>

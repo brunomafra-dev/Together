@@ -118,10 +118,38 @@ export async function getUserHouseholdId(): Promise<string | null> {
     .from("household_members")
     .select("household_id")
     .eq("profile_id", user.id)
-    .single();
-  
+    .maybeSingle();
+
   throwIfError(error);
-  return members?.household_id || null;
+  if (members?.household_id) return members.household_id;
+
+  const fallbackHouseholdName =
+    toString(user.user_metadata?.name) ||
+    toString(user.user_metadata?.full_name) ||
+    toString(user.email) ||
+    "Household";
+
+  const { data: createdHousehold, error: createHouseholdError } = await supabase
+    .from("households")
+    .insert({
+      name: fallbackHouseholdName,
+      limit_amount: 0,
+    })
+    .select("id")
+    .single();
+
+  throwIfError(createHouseholdError);
+
+  const householdId = toString(createdHousehold?.id);
+  if (!householdId) return null;
+
+  const { error: memberInsertError } = await supabase.from("household_members").insert({
+    household_id: householdId,
+    profile_id: user.id,
+  });
+  throwIfError(memberInsertError);
+
+  return householdId;
 }
 
 const mapExpenseRow = (row: any): ExpenseModel => ({

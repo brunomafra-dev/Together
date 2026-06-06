@@ -64,8 +64,8 @@ interface FinanceContextType {
   updateFixedExpense: (id: string, changes: Partial<Omit<FixedExpense, "id">>) => Promise<void>;
   deleteFixedExpense: (id: string) => Promise<void>;
   updateSettings: (settings: BudgetSettings) => Promise<void>;
-  addPaymentMethod: (name: string) => Promise<void>;
-  updatePaymentMethod: (id: string, name: string) => Promise<void>;
+  addPaymentMethod: (name: string, limitAmount?: number) => Promise<void>;
+  updatePaymentMethod: (id: string, name: string, limitAmount?: number) => Promise<void>;
   deletePaymentMethod: (id: string) => Promise<void>;
   addCategory: (name: string) => Promise<void>;
   updateCategory: (id: string, changes: Partial<Omit<CategoryModel, "id">>) => Promise<void>;
@@ -349,15 +349,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     await refreshData();
   };
 
-  const addPaymentMethodCtx = async (name: string) => {
+  const addPaymentMethodCtx = async (name: string, limitAmount?: number) => {
     if (!householdId) throw new Error("Household ID não encontrado");
-    const newMethod = await financeService.addPaymentMethod(name, undefined, householdId);
+    const newMethod = await financeService.addPaymentMethod(name, limitAmount, householdId);
     setPaymentMethods((prev) => [...prev, newMethod]);
     await refreshData();
   };
 
-  const updatePaymentMethodCtx = async (id: string, name: string) => {
-    const updated = await financeService.updatePaymentMethod(id, name);
+  const updatePaymentMethodCtx = async (id: string, name: string, limitAmount?: number) => {
+    const updated = await financeService.updatePaymentMethod(id, name, limitAmount);
     setPaymentMethods((prev) => prev.map((m) => (m.id === id ? updated : m)));
     await refreshData();
   };
