@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useFinance } from "../context/FinanceContext";
 import { X } from "lucide-react";
 import { CategorySelect } from "./CategorySelect";
@@ -8,14 +8,11 @@ interface AddExpenseModalProps {
   onClose: () => void;
 }
 
-const INSTALLMENT_OPTIONS = [1, 2, 3, 6, 10, 12];
-
 export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
-  const { addExpense, addInstallment, settings, categories, paymentMethods } = useFinance();
+  const { addExpense, settings, categories, paymentMethods } = useFinance();
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [methodId, setMethodId] = useState("");
-  const [installments, setInstallments] = useState(1);
   const [paidBy, setPaidBy] = useState(settings.partnerNames[0] || "");
   const [description, setDescription] = useState("");
 
@@ -26,43 +23,30 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
     if (!methodId && paymentMethods.length > 0) {
       setMethodId(paymentMethods[0].id);
     }
-  }, [settings.partnerNames, paymentMethods, paidBy, methodId]);
+    if (!categoryId && categories.length > 0) {
+      setCategoryId(categories[0].id);
+    }
+  }, [settings.partnerNames, paymentMethods, categories, paidBy, methodId, categoryId]);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = parseFloat(amount.replace(",", "."));
     if (!value || value <= 0) return;
 
     const selectedCategory = categories.find((c) => c.id === categoryId);
     const categoryName = selectedCategory?.name || "";
-    addExpense({
+
+    await addExpense({
       amount: value,
       category: categoryName,
       description,
       date: new Date().toISOString().split("T")[0],
       paidBy,
       card: methodId,
-      installments,
     });
-
-    if (installments > 1) {
-      addInstallment({
-        name: description || categoryName,
-        totalAmount: value,
-        monthlyAmount: value / installments,
-        remainingMonths: installments - 1,
-        currentMonth: 1,
-        category: categoryName,
-      });
-    }
 
     onClose();
   };
-
-  const installmentValue =
-    installments > 1 && parseFloat(amount.replace(",", "."))
-      ? parseFloat(amount.replace(",", ".")) / installments
-      : 0;
 
   return (
     <div
@@ -75,30 +59,19 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
       >
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-xl font-semibold text-stone-900">
-              Novo gasto
-            </h2>
-            <p className="text-xs text-stone-500 mt-0.5">
-              Adicione rápido, ajustes depois.
-            </p>
+            <h2 className="text-xl font-semibold text-stone-900">Novo gasto</h2>
+            <p className="text-xs text-stone-500 mt-0.5">Adicione rápido, ajustes depois.</p>
           </div>
-          <button
-            onClick={onClose}
-            className="text-stone-400 hover:text-stone-600 transition-colors"
-          >
+          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
-              Valor
-            </label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Valor</label>
             <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400">
-                R$
-              </span>
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400">R$</span>
               <input
                 type="text"
                 inputMode="decimal"
@@ -112,62 +85,17 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
-              Categoria
-            </label>
-            <CategorySelect
-              value={categoryId}
-              onChange={setCategoryId}
-              placeholder="Selecione a categoria"
-            />
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Categoria</label>
+            <CategorySelect value={categoryId} onChange={setCategoryId} placeholder="Selecione a categoria" />
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
-              Forma de Pagamento
-            </label>
-            <PaymentMethodSelect
-              value={methodId}
-              onChange={setMethodId}
-              placeholder="Selecione a forma de pagamento"
-            />
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Forma de pagamento</label>
+            <PaymentMethodSelect value={methodId} onChange={setMethodId} placeholder="Selecione a forma de pagamento" />
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
-              Parcelas
-            </label>
-            <div className="flex gap-2 flex-wrap">
-              {INSTALLMENT_OPTIONS.map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setInstallments(n)}
-                  className={`px-4 py-2 rounded-lg text-sm transition-colors ${
-                    installments === n
-                      ? "bg-stone-900 text-white"
-                      : "bg-stone-50 text-stone-700 hover:bg-stone-100"
-                  }`}
-                >
-                  {n === 1 ? "À vista" : `${n}x`}
-                </button>
-              ))}
-            </div>
-            {installmentValue > 0 && (
-              <p className="text-xs text-stone-500 mt-2">
-                {installments}x de R${" "}
-                {installmentValue.toLocaleString("pt-BR", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </p>
-            )}
-          </div>
-
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
-              Quem pagou
-            </label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Quem pagou</label>
             <input
               type="text"
               value={paidBy}
@@ -178,9 +106,7 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
-              Descrição (opcional)
-            </label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Descrição (opcional)</label>
             <input
               type="text"
               value={description}
