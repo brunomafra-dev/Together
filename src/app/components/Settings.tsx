@@ -23,6 +23,7 @@ export function Settings() {
   const [showAddFixed, setShowAddFixed] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editingMethodId, setEditingMethodId] = useState<string | null>(null);
+  const defaultPaymentMethodNames = new Set(["Pix", "Dinheiro", "Débito"]);
 
   const handleSaveSettings = () => {
     updateSettings({
@@ -111,8 +112,13 @@ export function Settings() {
                       </button>
                       <button
                         type="button"
-                        onClick={() => void deletePaymentMethod(method.id)}
-                        className="text-stone-400 hover:text-rose-600 transition-colors"
+                        onClick={() => {
+                          if (!defaultPaymentMethodNames.has(method.name)) {
+                            void deletePaymentMethod(method.id);
+                          }
+                        }}
+                        disabled={defaultPaymentMethodNames.has(method.name)}
+                        className="text-stone-400 hover:text-rose-600 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -230,15 +236,15 @@ function AddPaymentMethodModal({
       : "",
   );
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
 
     if (editingId && editingMethod) {
-      void updatePaymentMethod(editingId, trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined);
+      await updatePaymentMethod(editingId, trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined);
     } else {
-      void addPaymentMethod(trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined);
+      await addPaymentMethod(trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined);
     }
     onClose();
   };

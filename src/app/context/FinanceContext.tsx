@@ -79,6 +79,9 @@ const EMPTY_SETTINGS: BudgetSettings = {
   partnerNames: ["", ""],
 };
 
+const DEFAULT_PAYMENT_METHOD_NAMES = ["Pix", "Dinheiro", "Débito"];
+const DEFAULT_CATEGORY_NAMES = ["Moradia", "Alimentação", "Gasolina", "Lazer", "Saúde", "Investimentos", "Outros"];
+
 const loadErrorMessage = "Não foi possível carregar os dados do Supabase.";
 
 /**
@@ -174,6 +177,22 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           householdRes?.partnerNames[1] ?? "",
         ],
       });
+
+      if (householdId) {
+        if (categoriesRes.length === 0) {
+          const seededCategories = await Promise.all(
+            DEFAULT_CATEGORY_NAMES.map((name) => financeService.addCategory(name, householdId)),
+          );
+          setCategories(seededCategories);
+        }
+
+        if (paymentMethodsRes.length === 0) {
+          const seededMethods = await Promise.all(
+            DEFAULT_PAYMENT_METHOD_NAMES.map((name) => financeService.addPaymentMethod(name, 0, householdId)),
+          );
+          setPaymentMethods(seededMethods);
+        }
+      }
     } catch (err) {
       setError((err as Error)?.message ?? loadErrorMessage);
     } finally {
