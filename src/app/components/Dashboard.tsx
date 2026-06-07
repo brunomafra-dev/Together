@@ -14,6 +14,7 @@ export function Dashboard() {
     household,
     expenses,
     fixedExpenses,
+    financialCommitments,
     categories,
     paymentMethods,
     settings,
@@ -21,15 +22,6 @@ export function Dashboard() {
     error,
   } = useFinance();
   const [showAddExpense, setShowAddExpense] = useState(false);
-  const [financialCommitments, setFinancialCommitments] = useState<
-    Array<{
-      id: string;
-      installmentValue: number;
-      currentInstallment: number;
-      totalInstallments: number;
-      status: "active" | "finished" | "late";
-    }>
-  >([]);
   const [goalSummary, setGoalSummary] = useState<{
     title: string;
     label: string;
@@ -41,19 +33,7 @@ export function Dashboard() {
       const householdId = household?.id;
       if (!householdId) return;
 
-      const [rows, goals] = await Promise.all([
-        financeService.fetchFinancialCommitments(householdId).catch(() => []),
-        financeService.fetchGoals(householdId).catch(() => []),
-      ]);
-      setFinancialCommitments(
-        rows.map((row) => ({
-          id: row.id,
-          installmentValue: row.installmentValue,
-          currentInstallment: row.currentInstallment,
-          totalInstallments: row.totalInstallments,
-          status: row.status,
-        })),
-      );
+      const goals = await financeService.fetchGoals(householdId).catch(() => []);
 
       const currentGoal = goals[0];
       if (!currentGoal) {
@@ -61,11 +41,11 @@ export function Dashboard() {
         return;
       }
 
-      const planItems = await financeService.fetchGoalPlanItems(currentGoal.id).catch(() => []);
+      const subGoals = await financeService.fetchGoalProgressRows(currentGoal.id).catch(() => []);
       setGoalSummary({
         title: currentGoal.title,
         label: currentGoal.label,
-        planNames: planItems.map((item) => item.name).filter(Boolean),
+        planNames: subGoals.map((item) => item.name).filter(Boolean),
       });
     };
 
@@ -98,9 +78,18 @@ export function Dashboard() {
     const monthExpenses = resolvedExpenses.filter((expense) =>
       isWithinInterval(parseISO(expense.date), currentMonth),
     );
+    const fixedCategoryExpenses = fixedExpenses.map((expense) => ({
+      category: expense.category || "Sem categoria",
+      amount: expense.amount,
+    }));
+    const categoryExpenses = [
+      ...monthExpenses.map((expense) => ({ category: expense.category, amount: expense.amount })),
+      ...fixedCategoryExpenses,
+    ];
 
     const variableSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const fixedTotal = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const categorySpent = categoryExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const commitmentsTotal = financialCommitments
       .filter((commitment) => commitment.status !== "finished")
       .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
@@ -134,6 +123,8 @@ export function Dashboard() {
       totalSpent,
       available,
       monthExpenses,
+      categoryExpenses,
+      categorySpent,
       peopleTotals,
       daysLeft,
       projectedLeftover,
@@ -177,31 +168,31 @@ export function Dashboard() {
       )}
 
       <div className="space-y-6">
-        <div className="flex items-end justify-between">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
             <p className="text-xs uppercase tracking-wider text-stone-500">{monthLabel}</p>
-            <h1 className="mt-1 text-2xl font-semibold text-stone-900">
+            <h1 className="mt-1 break-words text-2xl font-semibold text-stone-900">
               {greetingNames.length > 0 ? `Oi, ${greetingNames.join(" e ")}` : "Oi"}
             </h1>
           </div>
           <button
             onClick={() => setShowAddExpense(true)}
-            className="flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-white shadow-sm transition-colors hover:bg-stone-800"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-white shadow-sm transition-colors hover:bg-stone-800 sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             Novo gasto
           </button>
         </div>
 
-        <div className="rounded-3xl border border-stone-200 bg-gradient-to-br from-white to-stone-50 p-8">
+        <div className="rounded-3xl border border-stone-200 bg-gradient-to-br from-white to-stone-50 p-5 sm:p-8">
           <p className="mb-2 text-sm text-stone-600">Livre para gastar</p>
-          <h2 className={`text-6xl font-semibold ${availableColor}`}>{formatBRL(data.available)}</h2>
+          <h2 className={`break-words text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl ${availableColor}`}>{formatBRL(data.available)}</h2>
           <p className="mt-3 text-sm text-stone-500">
             Calculado com renda do household, contas fixas, compromissos e gastos reais do mes.
           </p>
 
           <div className="mt-6">
-            <div className="mb-2 flex justify-between text-xs text-stone-500">
+            <div className="mb-2 flex flex-wrap justify-between gap-2 text-xs text-stone-500">
               <span>Uso do orcamento</span>
               <span>{data.income > 0 ? `${((data.totalSpent / data.income) * 100).toFixed(0)}%` : "0%"}</span>
             </div>
@@ -236,14 +227,14 @@ export function Dashboard() {
               <Wallet className="h-4 w-4" />
               Renda do household
             </div>
-            <p className="text-xl font-semibold text-stone-900">{formatBRL(data.income)}</p>
+            <p className="break-words text-lg font-semibold text-stone-900 sm:text-xl">{formatBRL(data.income)}</p>
           </div>
           <div className="rounded-2xl border border-stone-200 bg-white p-5">
             <div className="mb-2 flex items-center gap-2 text-xs text-stone-500">
               <TrendingDown className="h-4 w-4" />
               Comprometimento
             </div>
-            <p className="text-xl font-semibold text-stone-900">{formatBRL(data.committed)}</p>
+            <p className="break-words text-lg font-semibold text-stone-900 sm:text-xl">{formatBRL(data.committed)}</p>
             <p className="mt-1 text-xs text-stone-500">
               {formatBRL(data.fixedTotal)} fixas - {formatBRL(data.installmentsTotal)} compromissos
             </p>
@@ -253,7 +244,7 @@ export function Dashboard() {
               <Plus className="h-4 w-4" />
               Gastos do mes
             </div>
-            <p className="text-xl font-semibold text-stone-900">{formatBRL(data.variableSpent)}</p>
+            <p className="break-words text-lg font-semibold text-stone-900 sm:text-xl">{formatBRL(data.categorySpent)}</p>
           </div>
         </div>
 
@@ -264,12 +255,12 @@ export function Dashboard() {
           </div>
           {goalSummary ? (
             <div className="space-y-2">
-              <p className="text-sm font-medium text-stone-900">{goalSummary.title}</p>
+              <p className="break-words text-sm font-medium text-stone-900">{goalSummary.title}</p>
               <p className="text-xs text-stone-500">{goalSummary.label}</p>
               <div className="flex flex-wrap gap-2 pt-1">
                 {goalSummary.planNames.length > 0 ? (
                   goalSummary.planNames.map((name) => (
-                    <span key={name} className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
+                    <span key={name} className="max-w-full break-words rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
                       {name}
                     </span>
                   ))
@@ -306,7 +297,7 @@ export function Dashboard() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <CategoryBreakdown expenses={data.monthExpenses} />
+          <CategoryBreakdown expenses={data.categoryExpenses} />
           <RecentExpenses expenses={data.monthExpenses} />
         </div>
       </div>
@@ -335,11 +326,11 @@ function PartnerCard({
 
   return (
     <div className={`${toneMap[tone].bg} rounded-xl p-4`}>
-      <div className="mb-2 flex items-center justify-between">
-        <p className="text-sm font-medium text-stone-800">{name}</p>
+      <div className="mb-2 flex items-center justify-between gap-2">
+        <p className="min-w-0 break-words text-sm font-medium text-stone-800">{name}</p>
         <p className="text-xs text-stone-500">{pct.toFixed(0)}%</p>
       </div>
-      <p className="mb-3 text-2xl font-semibold text-stone-900">{formatBRL(amount)}</p>
+      <p className="mb-3 break-words text-xl font-semibold text-stone-900 sm:text-2xl">{formatBRL(amount)}</p>
       <div className="h-1.5 overflow-hidden rounded-full bg-white/60">
         <div className={`h-full rounded-full transition-all ${toneMap[tone].bar}`} style={{ width: `${pct}%` }} />
       </div>

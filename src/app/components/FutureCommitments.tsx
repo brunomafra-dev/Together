@@ -1,40 +1,12 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useMemo } from "react";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar, TrendingDown, TrendingUp } from "lucide-react";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
-import * as financeService from "../../services/financeService";
 
 export function FutureCommitments() {
-  const { fixedExpenses, settings, household } = useFinance();
-  const [commitments, setCommitments] = useState<
-    Array<{
-      installmentValue: number;
-      currentInstallment: number;
-      totalInstallments: number;
-      status: "active" | "finished" | "late";
-    }>
-  >([]);
-
-  useEffect(() => {
-    const load = async () => {
-      const householdId = household?.id;
-      if (!householdId) return;
-
-      const rows = await financeService.fetchFinancialCommitments(householdId).catch(() => []);
-      setCommitments(
-        rows.map((row) => ({
-          installmentValue: row.installmentValue,
-          currentInstallment: row.currentInstallment,
-          totalInstallments: row.totalInstallments,
-          status: row.status,
-        })),
-      );
-    };
-
-    void load();
-  }, [household?.id]);
+  const { fixedExpenses, financialCommitments: commitments, settings } = useFinance();
 
   const futureMonths = useMemo(() => {
     const months = [];
@@ -83,10 +55,10 @@ export function FutureCommitments() {
 
             return (
               <div key={index} className="bg-white rounded-2xl p-5 border border-stone-200">
-                <div className="flex items-center justify-between mb-4">
-                  <div className="flex items-center gap-2">
+                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-2">
                     <Calendar className="w-4 h-4 text-stone-500" />
-                    <h3 className="font-medium text-stone-900 capitalize">{month.label}</h3>
+                    <h3 className="min-w-0 break-words font-medium capitalize text-stone-900">{month.label}</h3>
                   </div>
                   {isRelief && (
                     <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full flex items-center gap-1">
@@ -96,18 +68,18 @@ export function FutureCommitments() {
                   )}
                 </div>
 
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid gap-3 sm:grid-cols-3">
                   <div className="bg-stone-50 rounded-xl p-3">
                     <p className="text-xs text-stone-500 mb-1">Contas fixas</p>
-                    <p className="font-semibold text-stone-900">{formatBRL(month.fixed)}</p>
+                    <p className="break-words font-semibold text-stone-900">{formatBRL(month.fixed)}</p>
                   </div>
                   <div className="bg-indigo-50 rounded-xl p-3">
                     <p className="text-xs text-indigo-700 mb-1">Compromissos</p>
-                    <p className="font-semibold text-indigo-900">{formatBRL(month.commitments)}</p>
+                    <p className="break-words font-semibold text-indigo-900">{formatBRL(month.commitments)}</p>
                   </div>
                   <div className="bg-emerald-50 rounded-xl p-3">
                     <p className="text-xs text-emerald-700 mb-1">Sobra estimada</p>
-                    <p className="font-semibold text-emerald-900">{formatBRL(month.free)}</p>
+                    <p className="break-words font-semibold text-emerald-900">{formatBRL(month.free)}</p>
                   </div>
                 </div>
               </div>
@@ -122,14 +94,14 @@ export function FutureCommitments() {
           </div>
           <div className="space-y-2">
             {fixedExpenses.map((expense) => (
-              <div key={expense.id} className="flex items-center justify-between py-2.5 border-b border-stone-100 last:border-0">
-                <div>
-                  <p className="text-sm font-medium text-stone-900">{expense.name}</p>
+              <div key={expense.id} className="flex flex-col gap-2 border-b border-stone-100 py-2.5 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-medium text-stone-900">{expense.name}</p>
                   <p className="text-xs text-stone-500">
                     {expense.category} · vence dia {expense.dueDate}
                   </p>
                 </div>
-                <p className="text-sm font-medium text-stone-900">{formatBRL(expense.amount)}</p>
+                <p className="break-words text-sm font-medium text-stone-900 sm:text-right">{formatBRL(expense.amount)}</p>
               </div>
             ))}
           </div>

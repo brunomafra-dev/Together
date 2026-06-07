@@ -2,6 +2,7 @@
   "name": "TogetherBr",
   "short_name": "TogetherBr",
   "description": "Shared financial management for couples and families.",
+  "id": "/",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -19,7 +20,7 @@
       "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "any"
+      "purpose": "any maskable"
     },
     {
       "src": "/icon-maskable-512.png",

@@ -2,12 +2,16 @@ import { createContext, useContext, useEffect, useMemo, useState, ReactNode } fr
 import * as financeService from "../../services/financeService";
 import type {
   CategoryModel,
+  FinancialCommitmentModel,
   FixedExpenseModel,
   HouseholdModel,
+  MonthlySnapshotModel,
   PaymentMethodModel,
 } from "../../services/financeService";
 
 export type { CategoryModel, HouseholdModel, PaymentMethodModel };
+export type { FinancialCommitmentModel };
+export type { MonthlySnapshotModel };
 
 export interface Expense {
   id: string;
@@ -48,9 +52,11 @@ interface FinanceContextType {
   household: HouseholdModel | null;
   expenses: Expense[];
   installments: Installment[];
+  financialCommitments: FinancialCommitmentModel[];
   fixedExpenses: FixedExpense[];
   categories: CategoryModel[];
   paymentMethods: PaymentMethodModel[];
+  monthlySnapshots: MonthlySnapshotModel[];
   settings: BudgetSettings;
   loading: boolean;
   error: string | null;
@@ -60,13 +66,17 @@ interface FinanceContextType {
   addInstallment: (installment: Omit<Installment, "id">) => Promise<void>;
   updateInstallment: (id: string, changes: Partial<Omit<Installment, "id">>) => Promise<void>;
   deleteInstallment: (id: string) => Promise<void>;
+  addFinancialCommitment: (commitment: Omit<FinancialCommitmentModel, "id" | "householdId">) => Promise<FinancialCommitmentModel>;
+  deleteFinancialCommitment: (id: string) => Promise<void>;
   addFixedExpense: (expense: Omit<FixedExpense, "id">) => Promise<void>;
   updateFixedExpense: (id: string, changes: Partial<Omit<FixedExpense, "id">>) => Promise<void>;
   deleteFixedExpense: (id: string) => Promise<void>;
   updateSettings: (settings: BudgetSettings) => Promise<void>;
-  addPaymentMethod: (name: string, limitAmount?: number) => Promise<void>;
-  updatePaymentMethod: (id: string, name: string, limitAmount?: number) => Promise<void>;
+  addPaymentMethod: (name: string, limitAmount?: number, type?: PaymentMethodModel["type"], closingDay?: number | null, dueDay?: number | null) => Promise<void>;
+  updatePaymentMethod: (id: string, name: string, limitAmount?: number, type?: PaymentMethodModel["type"], closingDay?: number | null, dueDay?: number | null) => Promise<void>;
   deletePaymentMethod: (id: string) => Promise<void>;
+  closeMonth: (date?: Date) => Promise<MonthlySnapshotModel>;
+  deleteMonthlySnapshot: (id: string) => Promise<void>;
   addCategory: (name: string) => Promise<void>;
   updateCategory: (id: string, changes: Partial<Omit<CategoryModel, "id">>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
@@ -79,7 +89,11 @@ const EMPTY_SETTINGS: BudgetSettings = {
   partnerNames: ["", ""],
 };
 
-const DEFAULT_PAYMENT_METHOD_NAMES = ["Pix", "Dinheiro", "Débito"];
+const DEFAULT_PAYMENT_METHODS: Array<{ name: string; type: PaymentMethodModel["type"] }> = [
+  { name: "Pix", type: "pix" },
+  { name: "Dinheiro", type: "cash" },
+  { name: "Débito", type: "debit" },
+];
 const DEFAULT_CATEGORY_NAMES = ["Moradia", "Alimentação", "Gasolina", "Lazer", "Saúde", "Investimentos", "Outros"];
 
 const loadErrorMessage = "Não foi possível carregar os dados do Supabase.";
@@ -92,9 +106,11 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const [household, setHousehold] = useState<HouseholdModel | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [installments, setInstallments] = useState<Installment[]>([]);
+  const [financialCommitments, setFinancialCommitments] = useState<FinancialCommitmentModel[]>([]);
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([]);
   const [categories, setCategories] = useState<CategoryModel[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodModel[]>([]);
+  const [monthlySnapshots, setMonthlySnapshots] = useState<MonthlySnapshotModel[]>([]);
   const [settings, setSettings] = useState<BudgetSettings>(EMPTY_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -126,17 +142,21 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       const [
         expensesRes,
         installmentsRes,
+        financialCommitmentsRes,
         categoriesRes,
         paymentMethodsRes,
         fixedExpensesRes,
         householdRes,
+        monthlySnapshotsRes,
       ] = await Promise.all([
         financeService.fetchExpenses(householdId),
         financeService.fetchInstallments(householdId),
+        financeService.fetchFinancialCommitments(householdId),
         financeService.fetchCategories(householdId),
         financeService.fetchPaymentMethods(householdId),
         financeService.fetchFixedExpenses(householdId),
         financeService.fetchHousehold(householdId),
+        financeService.fetchMonthlySnapshots(householdId).catch(() => []),
       ]);
 
       setExpenses(expensesRes.map((e) => ({
@@ -159,7 +179,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         category: i.categoryId,
       })));
       setCategories(categoriesRes);
+      setFinancialCommitments(financialCommitmentsRes);
       setPaymentMethods(paymentMethodsRes);
+      setMonthlySnapshots(monthlySnapshotsRes);
       setFixedExpenses(
         fixedExpensesRes.map((expense: FixedExpenseModel) => ({
           id: expense.id,
@@ -188,7 +210,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
         if (paymentMethodsRes.length === 0) {
           const seededMethods = await Promise.all(
-            DEFAULT_PAYMENT_METHOD_NAMES.map((name) => financeService.addPaymentMethod(name, 0, householdId)),
+            DEFAULT_PAYMENT_METHODS.map((method) => financeService.addPaymentMethod(method.name, undefined, householdId, method.type)),
           );
           setPaymentMethods(seededMethods);
         }
@@ -330,6 +352,21 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setInstallments((prev) => prev.filter((i) => i.id !== id));
   };
 
+  const addFinancialCommitmentCtx = async (commitment: Omit<FinancialCommitmentModel, "id" | "householdId">) => {
+    if (!household?.id) throw new Error("Household ID nÃ£o encontrado");
+    const data = await financeService.addFinancialCommitment({
+      ...commitment,
+      householdId: household.id,
+    });
+    setFinancialCommitments((prev) => [data, ...prev]);
+    return data;
+  };
+
+  const deleteFinancialCommitmentCtx = async (id: string) => {
+    await financeService.deleteFinancialCommitment(id);
+    setFinancialCommitments((prev) => prev.filter((commitment) => commitment.id !== id));
+  };
+
   const addCategoryCtx = async (name: string) => {
     if (!householdId) throw new Error("Household ID não encontrado");
     const newCat = await financeService.addCategory(name, householdId);
@@ -349,15 +386,15 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     await refreshData();
   };
 
-  const addPaymentMethodCtx = async (name: string, limitAmount?: number) => {
+  const addPaymentMethodCtx = async (name: string, limitAmount?: number, type: PaymentMethodModel["type"] = "credit_card", closingDay?: number | null, dueDay?: number | null) => {
     if (!householdId) throw new Error("Household ID não encontrado");
-    const newMethod = await financeService.addPaymentMethod(name, limitAmount, householdId);
+    const newMethod = await financeService.addPaymentMethod(name, limitAmount, householdId, type, closingDay, dueDay);
     setPaymentMethods((prev) => [...prev, newMethod]);
     await refreshData();
   };
 
-  const updatePaymentMethodCtx = async (id: string, name: string, limitAmount?: number) => {
-    const updated = await financeService.updatePaymentMethod(id, name, limitAmount);
+  const updatePaymentMethodCtx = async (id: string, name: string, limitAmount?: number, type: PaymentMethodModel["type"] = "credit_card", closingDay?: number | null, dueDay?: number | null) => {
+    const updated = await financeService.updatePaymentMethod(id, name, limitAmount, type, closingDay, dueDay);
     setPaymentMethods((prev) => prev.map((m) => (m.id === id ? updated : m)));
     await refreshData();
   };
@@ -368,14 +405,105 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     await refreshData();
   };
 
+  const closeMonthCtx = async (date = new Date()) => {
+    if (!household?.id) throw new Error("Household ID não encontrado");
+    const month = date.getMonth() + 1;
+    const year = date.getFullYear();
+    const start = new Date(year, month - 1, 1);
+    const end = new Date(year, month, 0, 23, 59, 59, 999);
+    const monthExpenses = expenses.filter((expense) => {
+      const expenseDate = new Date(`${expense.date}T00:00:00`);
+      return expenseDate >= start && expenseDate <= end;
+    });
+    const billingKey = `${year}-${String(month).padStart(2, "0")}`;
+    const billingKeyForPurchase = (date: string, closingDay?: number | null) => {
+      const purchaseDate = new Date(`${date}T00:00:00`);
+      const billDate = purchaseDate.getDate() > (closingDay || 31)
+        ? new Date(purchaseDate.getFullYear(), purchaseDate.getMonth() + 1, purchaseDate.getDate())
+        : purchaseDate;
+      return `${billDate.getFullYear()}-${String(billDate.getMonth() + 1).padStart(2, "0")}`;
+    };
+    const categoryTotals = new Map<string, number>();
+    const cardTotals = new Map<string, number>();
+    const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
+    const cardNames = new Map(paymentMethods.map((method) => [method.id, method.name]));
+
+    for (const expense of monthExpenses) {
+      const categoryName = categoryNames.get(expense.category) || expense.category || "Sem categoria";
+      categoryTotals.set(categoryName, (categoryTotals.get(categoryName) || 0) + expense.amount);
+    }
+
+    for (const expense of fixedExpenses) {
+      const categoryName = expense.category || "Sem categoria";
+      categoryTotals.set(categoryName, (categoryTotals.get(categoryName) || 0) + expense.amount);
+    }
+
+    for (const installment of installments) {
+      const categoryName = categoryNames.get(installment.category) || installment.category || "Parcelas";
+      categoryTotals.set(categoryName, (categoryTotals.get(categoryName) || 0) + installment.monthlyAmount);
+    }
+
+    const fixedTotal = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const variableTotal = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const installmentTotal = financialCommitments
+      .filter((commitment) => commitment.status !== "finished")
+      .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
+    const totalExpenses = variableTotal + fixedTotal + installmentTotal;
+    const goalRows = await financeService.fetchGoals(household.id).catch(() => []);
+
+    const snapshot = await financeService.addMonthlySnapshot({
+      householdId: household.id,
+      month,
+      year,
+      monthlyIncome: settings.monthlyIncome,
+      totalExpenses,
+      fixedExpensesTotal: fixedTotal,
+      installmentExpensesTotal: installmentTotal,
+      remainingBalance: settings.monthlyIncome - totalExpenses,
+      categoryTotals: Array.from(categoryTotals.entries()).map(([name, amount]) => ({ name, amount })),
+      cardTotals: paymentMethods
+        .filter((method) => method.type === "credit_card")
+        .map((method) => {
+          const amount = expenses
+            .filter((expense) => expense.card === method.id && billingKeyForPurchase(expense.date, method.closingDay) === billingKey)
+            .reduce((sum, expense) => sum + expense.amount, 0);
+          return {
+            name: cardNames.get(method.id) || method.name,
+            amount,
+            limitAmount: method.limitAmount,
+            availableLimit: method.limitAmount === null ? null : method.limitAmount - amount,
+          };
+        }),
+      goalProgress: goalRows.map((goal) => ({
+        title: goal.title,
+        currentAmount: goal.currentAmount,
+        targetAmount: goal.targetAmount,
+        percent: goal.targetAmount > 0 ? Math.round((goal.currentAmount / goal.targetAmount) * 100) : 0,
+      })),
+      financialHealth: {
+        availablePercent: settings.monthlyIncome > 0 ? Math.round(((settings.monthlyIncome - totalExpenses) / settings.monthlyIncome) * 100) : 0,
+        totalSpentPercent: settings.monthlyIncome > 0 ? Math.round((totalExpenses / settings.monthlyIncome) * 100) : 0,
+      },
+    });
+    setMonthlySnapshots((prev) => [snapshot, ...prev]);
+    return snapshot;
+  };
+
+  const deleteMonthlySnapshotCtx = async (id: string) => {
+    await financeService.deleteMonthlySnapshot(id);
+    setMonthlySnapshots((prev) => prev.filter((snapshot) => snapshot.id !== id));
+  };
+
   const value = useMemo(
     () => ({
       expenses,
       household,
       installments,
+      financialCommitments,
       fixedExpenses,
       categories,
       paymentMethods,
+      monthlySnapshots,
       settings,
       loading,
       error,
@@ -385,6 +513,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       addInstallment,
       updateInstallment,
       deleteInstallment,
+      addFinancialCommitment: addFinancialCommitmentCtx,
+      deleteFinancialCommitment: deleteFinancialCommitmentCtx,
       addFixedExpense,
       updateFixedExpense,
       deleteFixedExpense,
@@ -392,11 +522,13 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       addPaymentMethod: addPaymentMethodCtx,
       updatePaymentMethod: updatePaymentMethodCtx,
       deletePaymentMethod: deletePaymentMethodCtx,
+      closeMonth: closeMonthCtx,
+      deleteMonthlySnapshot: deleteMonthlySnapshotCtx,
       addCategory: addCategoryCtx,
       updateCategory: updateCategoryCtx,
       deleteCategory: deleteCategoryCtx,
     }),
-    [household, expenses, installments, fixedExpenses, categories, paymentMethods, settings, loading, error],
+    [household, expenses, installments, financialCommitments, fixedExpenses, categories, paymentMethods, monthlySnapshots, settings, loading, error],
   );
 
   return <FinanceContext.Provider value={value}>{children}</FinanceContext.Provider>;

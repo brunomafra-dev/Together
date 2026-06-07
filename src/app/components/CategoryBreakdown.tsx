@@ -2,7 +2,7 @@ import { useMemo } from "react";
 import { Expense, formatBRL } from "../context/FinanceContext";
 
 interface CategoryBreakdownProps {
-  expenses: Expense[];
+  expenses: Array<Pick<Expense, "category" | "amount">>;
 }
 
 const COLORS = [
@@ -47,16 +47,16 @@ export function CategoryBreakdown({ expenses }: CategoryBreakdownProps) {
             const color = COLORS[index % COLORS.length];
             return (
               <div key={item.name}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <div className="flex items-center gap-2">
+                <div className="mb-1.5 flex flex-col gap-1.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex min-w-0 items-center gap-2">
                     <span
-                      className="w-2.5 h-2.5 rounded-sm"
+                      className="h-2.5 w-2.5 shrink-0 rounded-sm"
                       style={{ backgroundColor: color }}
                     />
-                    <span className="text-sm text-stone-700">{item.name}</span>
+                    <span className="min-w-0 break-words text-sm text-stone-700">{item.name}</span>
                   </div>
-                  <div className="text-sm">
-                    <span className="font-medium text-stone-900">
+                  <div className="text-sm sm:text-right">
+                    <span className="break-words font-medium text-stone-900">
                       {formatBRL(item.value)}
                     </span>
                     <span className="text-xs text-stone-500 ml-2">

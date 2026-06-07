@@ -11,6 +11,7 @@ type GoalRow = TableRow<"goals">;
 type GoalPlanItemRow = TableRow<"goal_plan_items">;
 type GoalProgressRow = TableRow<"goal_progress_rows">;
 type FinancialCommitmentRow = TableRow<"financial_commitments">;
+type MonthlySnapshotRow = TableRow<"monthly_snapshots">;
 
 export interface ExpenseModel {
   id: string;
@@ -50,7 +51,10 @@ export interface FixedExpenseModel {
 export interface PaymentMethodModel {
   id: string;
   name: string;
+  type: "credit_card" | "debit" | "pix" | "cash";
   limitAmount: number | null;
+  closingDay: number | null;
+  dueDay: number | null;
 }
 
 export interface HouseholdModel {
@@ -73,24 +77,18 @@ export interface GoalModel {
 export interface GoalPlanItemModel {
   id: string;
   goalId: string;
-  householdId: string;
   name: string;
   share: string;
   amount: number;
-  targetAmount: number;
-  currentAmount: number;
   tone: "stone" | "emerald" | "cyan" | "amber" | "indigo";
 }
 
 export interface GoalProgressRowModel {
   id: string;
   goalId: string;
-  householdId: string;
   name: string;
   planned: number;
   realized: number;
-  targetAmount: number;
-  currentAmount: number;
   status: string;
 }
 
@@ -107,6 +105,25 @@ export interface FinancialCommitmentModel {
   startedAt: string;
   status: "active" | "finished" | "late";
 }
+
+export interface MonthlySnapshotModel {
+  id: string;
+  householdId: string;
+  month: number;
+  year: number;
+  monthlyIncome: number;
+  totalExpenses: number;
+  fixedExpensesTotal: number;
+  installmentExpensesTotal: number;
+  remainingBalance: number;
+  categoryTotals: Array<{ name: string; amount: number }>;
+  cardTotals: Array<{ name: string; amount: number; limitAmount: number | null; availableLimit: number | null }>;
+  goalProgress: Array<{ title: string; currentAmount: number; targetAmount: number; percent: number }>;
+  financialHealth: { availablePercent: number; totalSpentPercent: number };
+  closedAt: string;
+}
+
+export type NewMonthlySnapshot = Omit<MonthlySnapshotModel, "id" | "closedAt">;
 
 const toNumber = (value: unknown) => (typeof value === "number" ? value : Number(value ?? 0) || 0);
 const toString = (value: unknown) => (typeof value === "string" ? value : "");
@@ -193,8 +210,20 @@ const mapCategoryRow = (row: TableRow<"categories">): CategoryModel => ({
 const mapPaymentMethodRow = (row: CardRow): PaymentMethodModel => ({
   id: row.id,
   name: toString(row.name),
+  type: normalizePaymentMethodType(row.type, toString(row.name)),
   limitAmount: row.limit_amount ?? null,
+  closingDay: row.closing_day ?? null,
+  dueDay: row.due_day ?? null,
 });
+
+const normalizePaymentMethodType = (type: unknown, name = ""): PaymentMethodModel["type"] => {
+  if (type === "credit_card" || type === "debit" || type === "pix" || type === "cash") return type;
+  const normalizedName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  if (normalizedName === "pix") return "pix";
+  if (normalizedName === "dinheiro") return "cash";
+  if (normalizedName === "debito") return "debit";
+  return "credit_card";
+};
 
 const mapFixedExpenseRow = (row: FixedExpenseRow): FixedExpenseModel => ({
   id: row.id,
@@ -231,24 +260,18 @@ const mapGoalRow = (row: GoalRow): GoalModel => ({
 const mapGoalPlanItemRow = (row: GoalPlanItemRow): GoalPlanItemModel => ({
   id: row.id,
   goalId: toString(row.goal_id),
-  householdId: toString(row.household_id),
   name: toString(row.name),
   share: toString(row.share),
   amount: toNumber(row.amount),
-  targetAmount: toNumber(row.target_amount ?? row.amount),
-  currentAmount: toNumber(row.current_amount),
   tone: (toString(row.tone) as GoalPlanItemModel["tone"]) || "stone",
 });
 
 const mapGoalProgressRow = (row: GoalProgressRow): GoalProgressRowModel => ({
   id: row.id,
   goalId: toString(row.goal_id),
-  householdId: toString(row.household_id),
   name: toString(row.name),
   planned: toNumber(row.planned),
   realized: toNumber(row.realized),
-  targetAmount: toNumber(row.target_amount ?? row.planned),
-  currentAmount: toNumber(row.current_amount ?? row.realized),
   status: toString(row.status),
 });
 
@@ -264,6 +287,25 @@ const mapFinancialCommitmentRow = (row: FinancialCommitmentRow): FinancialCommit
   notes: toString(row.notes),
   startedAt: toString(row.started_at),
   status: (toString(row.status) as FinancialCommitmentModel["status"]) || "active",
+});
+
+const mapMonthlySnapshotRow = (row: MonthlySnapshotRow): MonthlySnapshotModel => ({
+  id: row.id,
+  householdId: toString(row.household_id),
+  month: toNumber(row.month),
+  year: toNumber(row.year),
+  monthlyIncome: toNumber(row.monthly_income),
+  totalExpenses: toNumber(row.total_expenses),
+  fixedExpensesTotal: toNumber(row.fixed_expenses_total),
+  installmentExpensesTotal: toNumber(row.installment_expenses_total),
+  remainingBalance: toNumber(row.remaining_balance),
+  categoryTotals: Array.isArray(row.category_totals) ? row.category_totals as MonthlySnapshotModel["categoryTotals"] : [],
+  cardTotals: Array.isArray(row.card_totals) ? row.card_totals as MonthlySnapshotModel["cardTotals"] : [],
+  goalProgress: Array.isArray(row.goal_progress) ? row.goal_progress as MonthlySnapshotModel["goalProgress"] : [],
+  financialHealth: row.financial_health && typeof row.financial_health === "object"
+    ? row.financial_health as MonthlySnapshotModel["financialHealth"]
+    : { availablePercent: 0, totalSpentPercent: 0 },
+  closedAt: toString(row.closed_at || row.created_at),
 });
 
 export async function fetchExpenses(householdId: string): Promise<ExpenseModel[]> {
@@ -483,8 +525,14 @@ export async function deleteCategory(id: string): Promise<void> {
   throwIfError(error);
 }
 
-export async function addPaymentMethod(name: string, limitAmount?: number, householdId?: string): Promise<PaymentMethodModel> {
-  const payload: any = { name, limit_amount: limitAmount ?? null };
+export async function addPaymentMethod(name: string, limitAmount?: number, householdId?: string, type: PaymentMethodModel["type"] = "credit_card", closingDay?: number | null, dueDay?: number | null): Promise<PaymentMethodModel> {
+  const payload: any = {
+    name,
+    type,
+    limit_amount: type === "credit_card" ? limitAmount ?? null : null,
+    closing_day: type === "credit_card" ? closingDay ?? null : null,
+    due_day: type === "credit_card" ? dueDay ?? null : null,
+  };
   if (householdId) payload.household_id = householdId;
   const { data, error } = await supabase
     .from("cards")
@@ -495,10 +543,16 @@ export async function addPaymentMethod(name: string, limitAmount?: number, house
   return mapPaymentMethodRow(data as CardRow);
 }
 
-export async function updatePaymentMethod(id: string, name: string, limitAmount?: number): Promise<PaymentMethodModel> {
+export async function updatePaymentMethod(id: string, name: string, limitAmount?: number, type: PaymentMethodModel["type"] = "credit_card", closingDay?: number | null, dueDay?: number | null): Promise<PaymentMethodModel> {
   const { data, error } = await supabase
     .from("cards")
-    .update({ name, limit_amount: limitAmount ?? null })
+    .update({
+      name,
+      type,
+      limit_amount: type === "credit_card" ? limitAmount ?? null : null,
+      closing_day: type === "credit_card" ? closingDay ?? null : null,
+      due_day: type === "credit_card" ? dueDay ?? null : null,
+    })
     .eq("id", id)
     .select("*")
     .single();
@@ -570,12 +624,9 @@ export async function fetchGoalPlanItems(goalId: string): Promise<GoalPlanItemMo
 export async function addGoalPlanItem(goalId: string, item: Omit<GoalPlanItemModel, "id" | "goalId">): Promise<GoalPlanItemModel> {
   const { data, error } = await supabase.from("goal_plan_items").insert({
     goal_id: goalId,
-    household_id: item.householdId,
     name: item.name,
     share: item.share,
     amount: item.amount,
-    target_amount: item.targetAmount,
-    current_amount: item.currentAmount,
     tone: item.tone,
   }).select("*").single();
   throwIfError(error);
@@ -584,12 +635,9 @@ export async function addGoalPlanItem(goalId: string, item: Omit<GoalPlanItemMod
 
 export async function updateGoalPlanItem(id: string, changes: Partial<Omit<GoalPlanItemModel, "id" | "goalId">>): Promise<GoalPlanItemModel> {
   const { data, error } = await supabase.from("goal_plan_items").update({
-    household_id: changes.householdId,
     name: changes.name,
     share: changes.share,
     amount: changes.amount,
-    target_amount: changes.targetAmount,
-    current_amount: changes.currentAmount,
     tone: changes.tone,
   }).eq("id", id).select("*").single();
   throwIfError(error);
@@ -610,12 +658,9 @@ export async function fetchGoalProgressRows(goalId: string): Promise<GoalProgres
 export async function addGoalProgressRow(goalId: string, row: Omit<GoalProgressRowModel, "id" | "goalId">): Promise<GoalProgressRowModel> {
   const { data, error } = await supabase.from("goal_progress_rows").insert({
     goal_id: goalId,
-    household_id: row.householdId,
     name: row.name,
     planned: row.planned,
     realized: row.realized,
-    target_amount: row.targetAmount,
-    current_amount: row.currentAmount,
     status: row.status,
   }).select("*").single();
   throwIfError(error);
@@ -624,12 +669,9 @@ export async function addGoalProgressRow(goalId: string, row: Omit<GoalProgressR
 
 export async function updateGoalProgressRow(id: string, changes: Partial<Omit<GoalProgressRowModel, "id" | "goalId">>): Promise<GoalProgressRowModel> {
   const { data, error } = await supabase.from("goal_progress_rows").update({
-    household_id: changes.householdId,
     name: changes.name,
     planned: changes.planned,
     realized: changes.realized,
-    target_amount: changes.targetAmount,
-    current_amount: changes.currentAmount,
     status: changes.status,
   }).eq("id", id).select("*").single();
   throwIfError(error);
@@ -682,5 +724,44 @@ export async function updateFinancialCommitment(id: string, changes: Partial<Omi
 
 export async function deleteFinancialCommitment(id: string): Promise<void> {
   const { error } = await supabase.from("financial_commitments").delete().eq("id", id);
+  throwIfError(error);
+}
+
+export async function fetchMonthlySnapshots(householdId: string): Promise<MonthlySnapshotModel[]> {
+  const { data, error } = await supabase
+    .from("monthly_snapshots")
+    .select("*")
+    .eq("household_id", householdId)
+    .order("year", { ascending: false })
+    .order("month", { ascending: false });
+  throwIfError(error);
+  return (data ?? []).map(mapMonthlySnapshotRow);
+}
+
+export async function addMonthlySnapshot(snapshot: NewMonthlySnapshot): Promise<MonthlySnapshotModel> {
+  const { data, error } = await supabase
+    .from("monthly_snapshots")
+    .insert({
+      household_id: snapshot.householdId,
+      month: snapshot.month,
+      year: snapshot.year,
+      monthly_income: snapshot.monthlyIncome,
+      total_expenses: snapshot.totalExpenses,
+      fixed_expenses_total: snapshot.fixedExpensesTotal,
+      installment_expenses_total: snapshot.installmentExpensesTotal,
+      remaining_balance: snapshot.remainingBalance,
+      category_totals: snapshot.categoryTotals,
+      card_totals: snapshot.cardTotals,
+      goal_progress: snapshot.goalProgress,
+      financial_health: snapshot.financialHealth,
+    })
+    .select("*")
+    .single();
+  throwIfError(error);
+  return mapMonthlySnapshotRow(data as MonthlySnapshotRow);
+}
+
+export async function deleteMonthlySnapshot(id: string): Promise<void> {
+  const { error } = await supabase.from("monthly_snapshots").delete().eq("id", id);
   throwIfError(error);
 }

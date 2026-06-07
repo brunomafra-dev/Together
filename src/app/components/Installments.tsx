@@ -14,12 +14,12 @@ import {
 } from "lucide-react";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
-import * as financeService from "../../services/financeService";
 
 type PaymentMethodBucket = {
   id: string;
   name: string;
   totalLimit: number;
+  cardExpenseTotal: number;
   commitments: Array<{
     id: string;
     paymentMethodId: string;
@@ -40,8 +40,6 @@ type MonthlyProjection = {
   commitments: number;
   estimatedBalance: number;
 };
-
-const EMPTY_COMMITMENTS: PaymentMethodBucket["commitments"] = [];
 
 function limitTone(available: number, totalLimit: number) {
   const ratio = totalLimit > 0 ? available / totalLimit : 1;
@@ -65,57 +63,39 @@ function monthLabelFromOffset(offset: number) {
   return format(addMonths(new Date(), offset), "MMMM 'de' yyyy", { locale: ptBR });
 }
 
+function billingKeyForPurchase(date: string, closingDay?: number | null) {
+  const purchaseDate = new Date(`${date}T00:00:00`);
+  const billDate = purchaseDate.getDate() > (closingDay || 31) ? addMonths(purchaseDate, 1) : purchaseDate;
+  return `${billDate.getFullYear()}-${String(billDate.getMonth() + 1).padStart(2, "0")}`;
+}
+
 export function Installments() {
-  const { paymentMethods, fixedExpenses, settings, household } = useFinance();
-  const [commitments, setCommitments] = useState(EMPTY_COMMITMENTS);
+  const { paymentMethods, financialCommitments: commitments, expenses, fixedExpenses, settings, household, deleteFinancialCommitment } = useFinance();
   const [showAddForm, setShowAddForm] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
-
-  useEffect(() => {
-    const load = async () => {
-      const householdId = household?.id;
-      if (!householdId) return;
-
-      const rows = await financeService.fetchFinancialCommitments(householdId).catch(() => []);
-      if (rows.length > 0) {
-        setCommitments(
-        rows.map((row) => {
-            return {
-              id: row.id,
-              paymentMethodId: row.paymentMethodId,
-              itemName: row.itemName,
-              installmentValue: row.installmentValue,
-              currentInstallment: row.currentInstallment,
-              totalInstallments: row.totalInstallments,
-              responsiblePerson: row.responsiblePerson,
-              notes: row.notes,
-              startedAt: row.startedAt,
-              status: row.status,
-            };
-          }),
-        );
-      } else {
-        setCommitments(EMPTY_COMMITMENTS);
-      }
-    };
-
-    void load();
-  }, [household?.id, paymentMethods]);
+  const creditCardMethods = useMemo(
+    () => paymentMethods.filter((method) => method.type === "credit_card"),
+    [paymentMethods],
+  );
+  const currentBillKey = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, "0")}`;
 
   const buckets = useMemo<PaymentMethodBucket[]>(() => {
-    if (paymentMethods.length === 0) return [];
+    if (creditCardMethods.length === 0) return [];
 
-    return paymentMethods.map((method) => ({
+    return creditCardMethods.map((method) => ({
       id: method.id,
       name: method.name,
       totalLimit: method.limitAmount ?? 0,
+      cardExpenseTotal: expenses
+        .filter((expense) => expense.card === method.id && billingKeyForPurchase(expense.date, method.closingDay) === currentBillKey)
+        .reduce((sum, expense) => sum + expense.amount, 0),
       commitments: commitments.filter((commitment) => commitment.paymentMethodId === method.id),
     }));
-  }, [paymentMethods, commitments]);
+  }, [creditCardMethods, commitments, expenses]);
 
   const totalLimit = buckets.reduce((sum, bucket) => sum + bucket.totalLimit, 0);
   const committedLimit = buckets.reduce(
-    (sum, bucket) => sum + bucket.commitments.reduce((bucketSum, commitment) => bucketSum + commitment.installmentValue, 0),
+    (sum, bucket) => sum + bucket.cardExpenseTotal,
     0,
   );
   const availableLimit = Math.max(totalLimit - committedLimit, 0);
@@ -154,8 +134,7 @@ export function Installments() {
 
     setDeletingId(id);
     try {
-      await financeService.deleteFinancialCommitment(id);
-      setCommitments((prev) => prev.filter((commitment) => commitment.id !== id));
+      await deleteFinancialCommitment(id);
     } finally {
       setDeletingId(null);
     }
@@ -164,15 +143,15 @@ export function Installments() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-stone-900">Parcelas</h1>
             <p className="mt-1 text-sm text-stone-600">Compromissos financeiros do casal</p>
             <p className="mt-1 text-xs text-stone-500">Agrupado por forma de pagamento para mostrar o poder de compra disponível.</p>
           </div>
           <button
             onClick={() => setShowAddForm(true)}
-            className="flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-white transition-colors hover:bg-stone-800"
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-white transition-colors hover:bg-stone-800 sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             Novo compromisso
@@ -199,45 +178,45 @@ export function Installments() {
               <TrendingDown className="h-4 w-4" />
               Comprometimento mensal
             </div>
-            <p className="text-3xl font-semibold text-stone-900">{formatBRL(committedLimit)}</p>
+            <p className="break-words text-2xl font-semibold text-stone-900 sm:text-3xl">{formatBRL(committedLimit)}</p>
           </div>
           <div className="rounded-2xl border border-stone-200 bg-white p-6">
             <div className="mb-2 flex items-center gap-2 text-xs text-stone-500">
               <Clock3 className="h-4 w-4" />
               Término estimado
             </div>
-            <p className="text-3xl font-semibold capitalize text-stone-900">{estimatedEndDate}</p>
+            <p className="break-words text-2xl font-semibold capitalize text-stone-900 sm:text-3xl">{estimatedEndDate}</p>
           </div>
         </div>
 
         <div className="space-y-6">
           {buckets.length > 0 ? (
             buckets.map((bucket) => {
-              const committed = bucket.commitments.reduce((sum, commitment) => sum + commitment.installmentValue, 0);
+              const committed = bucket.cardExpenseTotal;
               const available = Math.max(bucket.totalLimit - committed, 0);
               return (
                 <section key={bucket.id} className="space-y-4">
                   <div className="rounded-[2rem] border border-stone-200 bg-white p-6 shadow-sm">
                     <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
+                      <div className="min-w-0 space-y-2">
+                        <div className="flex min-w-0 items-center gap-2">
                           <Wallet className="h-5 w-5 text-stone-500" />
-                          <h3 className="text-xl font-semibold text-stone-950">{bucket.name}</h3>
+                          <h3 className="min-w-0 break-words text-xl font-semibold text-stone-950">{bucket.name}</h3>
                         </div>
                         <p className="text-sm text-stone-600">Veja o limite total, comprometido e disponível para esta forma de pagamento.</p>
                       </div>
                       <div className="grid gap-3 sm:grid-cols-3 lg:min-w-[420px]">
                         <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
                           <p className="text-xs uppercase tracking-[0.16em] text-stone-500">Limite total</p>
-                          <p className="mt-2 text-2xl font-semibold text-stone-950">{formatBRL(bucket.totalLimit)}</p>
+                          <p className="mt-2 break-words text-xl font-semibold text-stone-950 sm:text-2xl">{formatBRL(bucket.totalLimit)}</p>
                         </div>
                         <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
                           <p className="text-xs uppercase tracking-[0.16em] text-stone-500">Limite comprometido</p>
-                          <p className="mt-2 text-2xl font-semibold text-stone-950">{formatBRL(committed)}</p>
+                          <p className="mt-2 break-words text-xl font-semibold text-stone-950 sm:text-2xl">{formatBRL(committed)}</p>
                         </div>
                         <div className={`rounded-2xl border p-4 ${limitTone(available, bucket.totalLimit)}`}>
                           <p className="text-xs uppercase tracking-[0.16em] opacity-70">Limite disponível</p>
-                          <p className="mt-2 text-2xl font-semibold">{formatBRL(available)}</p>
+                          <p className="mt-2 break-words text-xl font-semibold sm:text-2xl">{formatBRL(available)}</p>
                         </div>
                       </div>
                     </div>
@@ -252,9 +231,9 @@ export function Installments() {
                         return (
                           <article key={commitment.id ?? `${bucket.id}-${index}`} className="group rounded-2xl border border-stone-200 bg-white p-6">
                             <div className="mb-5 flex items-start justify-between gap-4">
-                              <div className="space-y-2">
+                              <div className="min-w-0 space-y-2">
                                 <div className="flex flex-wrap items-center gap-2">
-                                  <h4 className="font-medium text-stone-900">{commitment.itemName}</h4>
+                                  <h4 className="min-w-0 break-words font-medium text-stone-900">{commitment.itemName}</h4>
                                   <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusTone(commitment.status)}`}>
                                     {commitment.status === "finished" ? "Concluído" : commitment.status === "late" ? "Em atraso" : "Ativo"}
                                   </span>
@@ -274,26 +253,26 @@ export function Installments() {
                               </button>
                             </div>
 
-                            <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
+                            <div className="mb-5 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
                               <div>
                                 <p className="mb-1 text-xs text-stone-500">Nome do item</p>
-                                <p className="font-semibold text-stone-900">{commitment.itemName}</p>
+                                <p className="break-words font-semibold text-stone-900">{commitment.itemName}</p>
                               </div>
                               <div>
                                 <p className="mb-1 text-xs text-stone-500">Forma de pagamento</p>
-                                <p className="font-semibold text-stone-900">{bucket.name}</p>
+                                <p className="break-words font-semibold text-stone-900">{bucket.name}</p>
                               </div>
                               <div>
                                 <p className="mb-1 text-xs text-stone-500">Valor da parcela</p>
-                                <p className="font-semibold text-stone-900">{formatBRL(commitment.installmentValue)}</p>
+                                <p className="break-words font-semibold text-stone-900">{formatBRL(commitment.installmentValue)}</p>
                               </div>
                               <div>
                                 <p className="mb-1 text-xs text-stone-500">Pessoa responsável</p>
-                                <p className="font-semibold text-stone-900">{commitment.responsiblePerson}</p>
+                                <p className="break-words font-semibold text-stone-900">{commitment.responsiblePerson}</p>
                               </div>
                             </div>
 
-                            <div className="mb-5 grid grid-cols-2 gap-4 md:grid-cols-4">
+                            <div className="mb-5 grid gap-4 sm:grid-cols-2 md:grid-cols-4">
                               <div>
                                 <p className="mb-1 text-xs text-stone-500">Parcela atual</p>
                                 <p className="font-semibold text-stone-900">
@@ -312,7 +291,7 @@ export function Installments() {
                               </div>
                               <div>
                                 <p className="mb-1 text-xs text-stone-500">Término estimado</p>
-                                <p className="font-semibold text-stone-900">{endDate}</p>
+                                <p className="break-words font-semibold text-stone-900">{endDate}</p>
                               </div>
                             </div>
 
@@ -325,7 +304,7 @@ export function Installments() {
                             </div>
 
                             <div>
-                              <div className="mb-2 flex justify-between text-xs">
+                              <div className="mb-2 flex flex-wrap justify-between gap-2 text-xs">
                                 <span className="text-stone-600">
                                   {commitment.status === "finished"
                                     ? "Compromisso encerrado"
@@ -382,15 +361,15 @@ export function Installments() {
             <div className="mt-4 grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-stone-200 bg-white/80 p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-stone-500">Renda combinada</p>
-                <p className="mt-2 text-2xl font-semibold text-stone-950">{formatBRL(monthlyIncome)}</p>
+                <p className="mt-2 break-words text-xl font-semibold text-stone-950 sm:text-2xl">{formatBRL(monthlyIncome)}</p>
               </div>
               <div className="rounded-2xl border border-stone-200 bg-white/80 p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-stone-500">Contas fixas</p>
-                <p className="mt-2 text-2xl font-semibold text-stone-950">{formatBRL(monthlyFixedExpenses)}</p>
+                <p className="mt-2 break-words text-xl font-semibold text-stone-950 sm:text-2xl">{formatBRL(monthlyFixedExpenses)}</p>
               </div>
               <div className="rounded-2xl border border-stone-200 bg-white/80 p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-stone-500">Sobra estimada</p>
-                <p className="mt-2 text-2xl font-semibold text-stone-950">{formatBRL(estimatedBalance)}</p>
+                <p className="mt-2 break-words text-xl font-semibold text-stone-950 sm:text-2xl">{formatBRL(estimatedBalance)}</p>
               </div>
             </div>
           </div>
@@ -408,36 +387,36 @@ export function Installments() {
             <div className="mt-5 grid gap-3 sm:grid-cols-3">
               <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-stone-500">Limite total</p>
-                <p className="mt-2 text-2xl font-semibold text-stone-950">{formatBRL(totalLimit)}</p>
+                <p className="mt-2 break-words text-xl font-semibold text-stone-950 sm:text-2xl">{formatBRL(totalLimit)}</p>
               </div>
               <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
                 <p className="text-xs uppercase tracking-[0.16em] text-stone-500">Limite comprometido</p>
-                <p className="mt-2 text-2xl font-semibold text-stone-950">{formatBRL(committedLimit)}</p>
+                <p className="mt-2 break-words text-xl font-semibold text-stone-950 sm:text-2xl">{formatBRL(committedLimit)}</p>
               </div>
               <div className={`rounded-2xl border p-4 ${limitTone(availableLimit, totalLimit)}`}>
                 <p className="text-xs uppercase tracking-[0.16em] opacity-70">Limite disponível</p>
-                <p className="mt-2 text-2xl font-semibold">{formatBRL(availableLimit)}</p>
+                <p className="mt-2 break-words text-xl font-semibold sm:text-2xl">{formatBRL(availableLimit)}</p>
               </div>
             </div>
             <div className="mt-5 space-y-3">
               {projections.map((projection) => (
                 <div key={projection.monthLabel} className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
-                  <div className="mb-3 flex items-center justify-between">
+                  <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm font-medium text-stone-900 capitalize">{projection.monthLabel}</p>
                     <p className="text-xs text-stone-500">Projeção mensal</p>
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3">
                     <div className="rounded-xl bg-white p-3">
                       <p className="text-xs text-stone-500">Contas fixas</p>
-                      <p className="mt-1 text-sm font-semibold text-stone-900">{formatBRL(projection.fixedExpenses)}</p>
+                      <p className="mt-1 break-words text-sm font-semibold text-stone-900">{formatBRL(projection.fixedExpenses)}</p>
                     </div>
                     <div className="rounded-xl bg-white p-3">
                       <p className="text-xs text-stone-500">Parcelas</p>
-                      <p className="mt-1 text-sm font-semibold text-stone-900">{formatBRL(projection.commitments)}</p>
+                      <p className="mt-1 break-words text-sm font-semibold text-stone-900">{formatBRL(projection.commitments)}</p>
                     </div>
                     <div className="rounded-xl bg-white p-3">
                       <p className="text-xs text-stone-500">Sobra estimada</p>
-                      <p className="mt-1 text-sm font-semibold text-stone-900">{formatBRL(projection.estimatedBalance)}</p>
+                      <p className="mt-1 break-words text-sm font-semibold text-stone-900">{formatBRL(projection.estimatedBalance)}</p>
                     </div>
                   </div>
                 </div>
@@ -449,9 +428,8 @@ export function Installments() {
 
       {showAddForm && (
         <AddCommitmentModal
-          paymentMethods={paymentMethods}
+          paymentMethods={creditCardMethods}
           onClose={() => setShowAddForm(false)}
-          onSaved={(commitment) => setCommitments((prev) => [commitment, ...prev])}
         />
       )}
     </Layout>
@@ -461,26 +439,11 @@ export function Installments() {
 function AddCommitmentModal({
   paymentMethods,
   onClose,
-  onSaved,
 }: {
   paymentMethods: ReturnType<typeof useFinance>["paymentMethods"];
   onClose: () => void;
-  onSaved: (
-    commitment: {
-      id: string;
-      paymentMethodId: string;
-      itemName: string;
-      installmentValue: number;
-      currentInstallment: number;
-      totalInstallments: number;
-      responsiblePerson: string;
-      notes: string;
-      startedAt: string;
-      status: "active" | "finished" | "late";
-    },
-  ) => void;
 }) {
-  const { household } = useFinance();
+  const { household, addFinancialCommitment } = useFinance();
   const [paymentMethodId, setPaymentMethodId] = useState(paymentMethods[0]?.id ?? "");
   const [itemName, setItemName] = useState("");
   const [installmentValue, setInstallmentValue] = useState("");
@@ -511,8 +474,7 @@ function AddCommitmentModal({
 
     setSaving(true);
     try {
-      const data = await financeService.addFinancialCommitment({
-        householdId: household?.id || "",
+      await addFinancialCommitment({
         paymentMethodId,
         itemName: itemName.trim(),
         installmentValue: amount,
@@ -523,7 +485,6 @@ function AddCommitmentModal({
         startedAt: new Date().toISOString().split("T")[0],
         status: "active",
       });
-      onSaved(data);
       onClose();
     } finally {
       setSaving(false);
@@ -580,7 +541,7 @@ function AddCommitmentModal({
             </div>
           </div>
 
-          <div className="mt-6 flex items-center justify-end gap-3">
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
             <button type="button" onClick={onClose} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">
               Cancelar
             </button>

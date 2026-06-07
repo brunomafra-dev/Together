@@ -1,19 +1,29 @@
 import { useState } from "react";
 import { Layout } from "./Layout";
-import { useFinance, formatBRL } from "../context/FinanceContext";
+import { useFinance, formatBRL, MonthlySnapshotModel } from "../context/FinanceContext";
 import { Plus, Trash2, Save, X, Edit2 } from "lucide-react";
 import { CategorySelect } from "./CategorySelect";
+
+const PAYMENT_TYPE_LABELS = {
+  credit_card: "Cartão de crédito",
+  debit: "Débito",
+  pix: "Pix",
+  cash: "Dinheiro",
+} as const;
 
 export function Settings() {
   const {
     fixedExpenses,
     settings,
     paymentMethods,
+    monthlySnapshots,
     deleteFixedExpense,
     updateSettings,
     addPaymentMethod,
     updatePaymentMethod,
     deletePaymentMethod,
+    closeMonth,
+    deleteMonthlySnapshot,
   } = useFinance();
 
   const [monthlyIncome, setMonthlyIncome] = useState(settings.monthlyIncome ? settings.monthlyIncome.toString() : "");
@@ -23,6 +33,8 @@ export function Settings() {
   const [showAddFixed, setShowAddFixed] = useState(false);
   const [saved, setSaved] = useState(false);
   const [editingMethodId, setEditingMethodId] = useState<string | null>(null);
+  const [selectedSnapshot, setSelectedSnapshot] = useState<MonthlySnapshotModel | null>(null);
+  const [closingMonth, setClosingMonth] = useState(false);
   const defaultPaymentMethodNames = new Set(["Pix", "Dinheiro", "Débito"]);
 
   const handleSaveSettings = () => {
@@ -32,6 +44,20 @@ export function Settings() {
     });
     setSaved(true);
     setTimeout(() => setSaved(false), 2000);
+  };
+
+  const monthLabel = (snapshot: MonthlySnapshotModel) =>
+    new Date(snapshot.year, snapshot.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+
+  const handleCloseMonth = async () => {
+    if (!window.confirm("Fechar o mês atual? Um histórico imutável será criado.")) return;
+    setClosingMonth(true);
+    try {
+      const snapshot = await closeMonth();
+      setSelectedSnapshot(snapshot);
+    } finally {
+      setClosingMonth(false);
+    }
   };
 
   return (
@@ -61,7 +87,7 @@ export function Settings() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4 sm:grid-cols-2">
               <div>
                 <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
                   Parceiro 1
@@ -94,18 +120,21 @@ export function Settings() {
                 {paymentMethods.map((method) => (
                   <div
                     key={method.id}
-                    className="flex items-center justify-between bg-stone-50 p-3 rounded-lg group"
+                    className="group flex flex-col gap-3 rounded-lg bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between"
                   >
-                    <div className="flex-1">
-                      <p className="text-sm font-medium text-stone-900">{method.name}</p>
-                      <p className="text-xs text-stone-500">
-                        Limite: {method.limitAmount !== null ? formatBRL(method.limitAmount) : "sem limite definido"}
+                    <div className="min-w-0 flex-1">
+                      <p className="break-words text-sm font-medium text-stone-900">{method.name}</p>
+                      <p className="break-words text-xs text-stone-500">
+                        {PAYMENT_TYPE_LABELS[method.type]}{method.type === "credit_card" ? ` · Limite: ${method.limitAmount !== null ? formatBRL(method.limitAmount) : "sem limite definido"}` : ""}
                       </p>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 self-end sm:self-auto">
                       <button
                         type="button"
-                        onClick={() => setEditingMethodId(method.id)}
+                        onClick={() => {
+                          setEditingMethodId(method.id);
+                          setShowAddPaymentMethod(true);
+                        }}
                         className="text-stone-400 hover:text-emerald-600 transition-colors"
                       >
                         <Edit2 className="w-4 h-4" />
@@ -147,11 +176,11 @@ export function Settings() {
         </div>
 
         <div className="bg-white rounded-2xl p-6 border border-stone-200">
-          <div className="flex items-center justify-between mb-4">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-medium text-stone-900">Contas fixas</h2>
             <button
               onClick={() => setShowAddFixed(true)}
-              className="bg-stone-900 hover:bg-stone-800 text-white px-3 py-2 rounded-lg flex items-center gap-2 transition-colors text-sm"
+              className="flex w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors hover:bg-stone-800 sm:w-auto"
             >
               <Plus className="w-4 h-4" />
               Adicionar
@@ -162,23 +191,23 @@ export function Settings() {
             {fixedExpenses.map((expense) => (
               <div
                 key={expense.id}
-                className="flex items-center justify-between py-3 border-b border-stone-100 last:border-0 group"
+                className="group flex flex-col gap-2 border-b border-stone-100 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
               >
-                <div>
-                  <p className="text-sm font-medium text-stone-900">
+                <div className="min-w-0">
+                  <p className="break-words text-sm font-medium text-stone-900">
                     {expense.name}
                   </p>
                   <p className="text-xs text-stone-500">
                     {expense.category} · vence dia {expense.dueDate}
                   </p>
                 </div>
-                <div className="flex items-center gap-3">
-                  <p className="text-sm font-medium text-stone-900">
+                <div className="flex items-center justify-between gap-3 sm:justify-end">
+                  <p className="break-words text-sm font-medium text-stone-900">
                     {formatBRL(expense.amount)}
                   </p>
                   <button
                     onClick={() => deleteFixedExpense(expense.id)}
-                    className="opacity-0 group-hover:opacity-100 text-stone-400 hover:text-rose-600 transition-all"
+                    className="text-stone-400 transition-all hover:text-rose-600 sm:opacity-0 sm:group-hover:opacity-100"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -193,6 +222,46 @@ export function Settings() {
             )}
           </div>
         </div>
+
+        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="font-medium text-stone-900">Histórico financeiro</h2>
+              <p className="text-sm text-stone-500">Feche meses para criar relatórios que não mudam depois.</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void handleCloseMonth()}
+              disabled={closingMonth}
+              className="w-full rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors hover:bg-stone-800 disabled:opacity-60 sm:w-auto"
+            >
+              {closingMonth ? "Fechando..." : "Fechar mês"}
+            </button>
+          </div>
+
+          {monthlySnapshots.length === 0 ? (
+            <p className="text-center py-8 text-stone-400 text-sm">Nenhum histórico mensal ainda.</p>
+          ) : (
+            <div className="space-y-2">
+              {monthlySnapshots.map((snapshot) => (
+                <button
+                  key={snapshot.id}
+                  type="button"
+                  onClick={() => setSelectedSnapshot(snapshot)}
+                  className="w-full rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-left transition-colors hover:bg-stone-100"
+                >
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-medium capitalize text-stone-900">{monthLabel(snapshot)}</p>
+                      <p className="break-words text-xs text-stone-500">Gastos {formatBRL(snapshot.totalExpenses)} · Sobra {formatBRL(snapshot.remainingBalance)}</p>
+                    </div>
+                    <span className="text-xs text-stone-500 sm:text-right">{snapshot.financialHealth.availablePercent}% livre</span>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
 
       {showAddPaymentMethod && (
@@ -206,6 +275,18 @@ export function Settings() {
       )}
       {showAddFixed && (
         <AddFixedExpenseModal onClose={() => setShowAddFixed(false)} />
+      )}
+      {selectedSnapshot && (
+        <FinancialHistoryModal
+          snapshot={selectedSnapshot}
+          monthLabel={monthLabel(selectedSnapshot)}
+          onClose={() => setSelectedSnapshot(null)}
+          onDelete={async () => {
+            if (!window.confirm("Excluir este histórico? Os dados atuais não serão alterados.")) return;
+            await deleteMonthlySnapshot(selectedSnapshot.id);
+            setSelectedSnapshot(null);
+          }}
+        />
       )}
     </Layout>
   );
@@ -235,6 +316,9 @@ function AddPaymentMethodModal({
       ? editingMethod.limitAmount.toString()
       : "",
   );
+  const [methodType, setMethodType] = useState(editingMethod?.type ?? "credit_card");
+  const [closingDay, setClosingDay] = useState(editingMethod?.closingDay ? String(editingMethod.closingDay) : "");
+  const [dueDay, setDueDay] = useState(editingMethod?.dueDay ? String(editingMethod.dueDay) : "");
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,16 +326,16 @@ function AddPaymentMethodModal({
     if (!trimmed) return;
 
     if (editingId && editingMethod) {
-      await updatePaymentMethod(editingId, trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined);
+      await updatePaymentMethod(editingId, trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined, methodType, closingDay ? Number(closingDay) : null, dueDay ? Number(dueDay) : null);
     } else {
-      await addPaymentMethod(trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined);
+      await addPaymentMethod(trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined, methodType, closingDay ? Number(closingDay) : null, dueDay ? Number(dueDay) : null);
     }
     onClose();
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl p-6 w-96 shadow-lg">
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center">
+      <div className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-lg sm:p-6">
         <h2 className="text-lg font-semibold text-stone-900 mb-4">
           {editingId ? "Editar cartão" : "Adicionar cartão"}
         </h2>
@@ -271,29 +355,79 @@ function AddPaymentMethodModal({
 
           <div>
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
-              Limite total
+              Tipo
             </label>
-            <input
-              type="text"
-              inputMode="decimal"
-              value={limitAmount}
-              onChange={(e) => setLimitAmount(e.target.value)}
-              placeholder="0,00"
-              className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
+            <select
+              value={methodType}
+              onChange={(e) => setMethodType(e.target.value as keyof typeof PAYMENT_TYPE_LABELS)}
+              className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+            >
+              <option value="credit_card">Cartão de crédito</option>
+              <option value="debit">Débito</option>
+              <option value="pix">Pix</option>
+              <option value="cash">Dinheiro</option>
+            </select>
           </div>
 
-          <div className="flex gap-2 justify-end pt-2">
+          {methodType === "credit_card" && (
+            <>
+              <div>
+                <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+                  Limite total
+                </label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={limitAmount}
+                  onChange={(e) => setLimitAmount(e.target.value)}
+                  placeholder="0,00"
+                  className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+                    Fechamento
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={closingDay}
+                    onChange={(e) => setClosingDay(e.target.value)}
+                    className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="10"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+                    Vencimento
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="31"
+                    value={dueDay}
+                    onChange={(e) => setDueDay(e.target.value)}
+                    className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                    placeholder="20"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 text-stone-600 hover:bg-stone-100 rounded-lg transition-colors"
+              className="rounded-lg px-4 py-2 text-stone-600 transition-colors hover:bg-stone-100"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors"
+              className="rounded-lg bg-emerald-600 px-4 py-2 text-white transition-colors hover:bg-emerald-700"
             >
               {editingId ? "Salvar" : "Adicionar"}
             </button>
@@ -330,11 +464,11 @@ function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
 
   return (
     <div
-      className="fixed inset-0 bg-stone-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-stone-900/40 p-4 backdrop-blur-sm sm:items-center"
       onClick={onClose}
     >
       <div
-        className="bg-white rounded-3xl max-w-md w-full p-6"
+        className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-3xl bg-white p-5 sm:p-6"
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-semibold text-stone-900 mb-6">
@@ -355,7 +489,7 @@ function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
                 Valor
@@ -395,7 +529,7 @@ function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
             />
           </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <button
               type="button"
               onClick={onClose}
@@ -412,6 +546,93 @@ function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
           </div>
         </form>
       </div>
+    </div>
+  );
+}
+
+function FinancialHistoryModal({
+  snapshot,
+  monthLabel,
+  onClose,
+  onDelete,
+}: {
+  snapshot: MonthlySnapshotModel;
+  monthLabel: string;
+  onClose: () => void;
+  onDelete: () => Promise<void>;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onClick={onClose}>
+      <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[calc(100vh-2rem)] overflow-hidden shadow-xl" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-100 bg-white px-5 py-4 sm:px-6">
+          <div className="min-w-0">
+            <h2 className="break-words text-xl font-semibold capitalize text-stone-950">{monthLabel}</h2>
+            <p className="text-xs text-stone-500">Histórico fechado em {new Date(snapshot.closedAt).toLocaleDateString("pt-BR")}</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="max-h-[calc(100vh-8rem)] overflow-y-auto p-5 sm:p-6">
+          <div className="grid gap-3 md:grid-cols-4">
+            <SummaryTile label="Renda" value={formatBRL(snapshot.monthlyIncome)} />
+            <SummaryTile label="Gastos" value={formatBRL(snapshot.totalExpenses)} />
+            <SummaryTile label="Sobra" value={formatBRL(snapshot.remainingBalance)} />
+            <SummaryTile label="Livre" value={`${snapshot.financialHealth.availablePercent}%`} />
+          </div>
+
+          <div className="mt-6 grid gap-4 md:grid-cols-2">
+            <HistoryList title="Categorias" rows={snapshot.categoryTotals.map((item) => ({ label: item.name, value: formatBRL(item.amount) }))} />
+            <HistoryList title="Cartões" rows={snapshot.cardTotals.map((item) => ({ label: item.name, value: `${formatBRL(item.amount)}${item.availableLimit !== null ? ` · livre ${formatBRL(item.availableLimit)}` : ""}` }))} />
+            <HistoryList title="Metas" rows={snapshot.goalProgress.map((item) => ({ label: item.title, value: `${formatBRL(item.currentAmount)} / ${formatBRL(item.targetAmount)} · ${item.percent}%` }))} />
+            <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+              <h3 className="text-sm font-medium text-stone-900">Indicadores</h3>
+              <p className="mt-3 text-sm text-stone-600">Gasto total: {snapshot.financialHealth.totalSpentPercent}% da renda.</p>
+              <p className="mt-1 text-sm text-stone-600">Parcelas: {formatBRL(snapshot.installmentExpensesTotal)}</p>
+              <p className="mt-1 text-sm text-stone-600">Fixas: {formatBRL(snapshot.fixedExpensesTotal)}</p>
+            </div>
+          </div>
+
+          <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button type="button" onClick={() => void onDelete()} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700">
+              Excluir histórico
+            </button>
+            <button type="button" onClick={onClose} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">
+              Fechar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SummaryTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+      <p className="text-xs uppercase tracking-[0.16em] text-stone-500">{label}</p>
+      <p className="mt-2 break-words text-lg font-semibold text-stone-950">{value}</p>
+    </div>
+  );
+}
+
+function HistoryList({ title, rows }: { title: string; rows: Array<{ label: string; value: string }> }) {
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-white p-4">
+      <h3 className="text-sm font-medium text-stone-900">{title}</h3>
+      {rows.length === 0 ? (
+        <p className="mt-4 text-sm text-stone-400">Nenhum dado neste mês.</p>
+      ) : (
+        <div className="mt-3 space-y-2">
+          {rows.map((row) => (
+            <div key={`${row.label}-${row.value}`} className="flex flex-col gap-1 border-b border-stone-100 py-2 last:border-0 sm:flex-row sm:items-start sm:justify-between">
+              <span className="break-words text-sm text-stone-700">{row.label}</span>
+              <span className="break-words text-sm font-medium text-stone-950 sm:text-right">{row.value}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

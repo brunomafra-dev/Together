@@ -32,11 +32,11 @@ export function RecentExpenses({ expenses }: RecentExpensesProps) {
           {sorted.slice(0, 8).map((expense) => (
             <div
               key={expense.id}
-              className="flex items-center justify-between py-2.5 border-b border-stone-100 last:border-0 group"
+              className="group flex flex-col gap-2 border-b border-stone-100 py-2.5 last:border-0 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm font-medium text-stone-900 truncate">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="min-w-0 break-words text-sm font-medium text-stone-900">
                     {expense.description || expense.category}
                   </p>
                   <span className="text-xs px-2 py-0.5 bg-stone-100 text-stone-600 rounded shrink-0">
@@ -54,13 +54,13 @@ export function RecentExpenses({ expenses }: RecentExpensesProps) {
                     : ""}
                 </p>
               </div>
-              <div className="flex items-center gap-3 ml-2">
-                <p className="text-sm font-medium text-stone-900">
+              <div className="flex items-center justify-between gap-3 sm:ml-2 sm:justify-end">
+                <p className="break-words text-sm font-medium text-stone-900">
                   {formatBRL(expense.amount)}
                 </p>
                 <button
                   onClick={() => deleteExpense(expense.id)}
-                  className="opacity-0 group-hover:opacity-100 text-stone-400 hover:text-rose-600 transition-all"
+                  className="text-stone-400 transition-all hover:text-rose-600 sm:opacity-0 sm:group-hover:opacity-100"
                 >
                   <Trash2 className="w-4 h-4" />
                 </button>

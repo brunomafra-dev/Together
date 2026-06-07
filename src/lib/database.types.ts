@@ -35,6 +35,26 @@ export interface Card extends TimestampedRow {
   household_id: string | null
   name: string | null
   limit_amount: number | null
+  type: 'credit_card' | 'debit' | 'pix' | 'cash' | null
+  closing_day: number | null
+  due_day: number | null
+}
+
+export interface MonthlySnapshot extends TimestampedRow {
+  id: string
+  household_id: string | null
+  month: number | null
+  year: number | null
+  monthly_income: number | null
+  total_expenses: number | null
+  fixed_expenses_total: number | null
+  installment_expenses_total: number | null
+  remaining_balance: number | null
+  category_totals: Json | null
+  card_totals: Json | null
+  goal_progress: Json | null
+  financial_health: Json | null
+  closed_at: string | null
 }
 
 export interface Category extends TimestampedRow {
@@ -85,24 +105,18 @@ export interface Goal extends TimestampedRow {
 export interface GoalPlanItem extends TimestampedRow {
   id: string
   goal_id: string | null
-  household_id: string | null
   name: string | null
   share: string | null
   amount: number | null
-  target_amount: number | null
-  current_amount: number | null
   tone: string | null
 }
 
 export interface GoalProgressRow extends TimestampedRow {
   id: string
   goal_id: string | null
-  household_id: string | null
   name: string | null
   planned: number | null
   realized: number | null
-  target_amount: number | null
-  current_amount: number | null
   status: string | null
 }
 
@@ -142,6 +156,7 @@ export interface Database {
       households: TableDef<Household, NewRow<Household>, PatchRow<Household>>
       household_members: TableDef<HouseholdMember, NewRow<HouseholdMember>, PatchRow<HouseholdMember>>
       cards: TableDef<Card, NewRow<Card>, PatchRow<Card>>
+      monthly_snapshots: TableDef<MonthlySnapshot, NewRow<MonthlySnapshot>, PatchRow<MonthlySnapshot>>
       categories: TableDef<Category, NewRow<Category>, PatchRow<Category>>
       expenses: TableDef<Expense, NewRow<Expense>, PatchRow<Expense>>
       installments: TableDef<Installment, NewRow<Installment>, PatchRow<Installment>>
