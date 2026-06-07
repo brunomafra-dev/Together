@@ -1,6 +1,6 @@
 import { ReactNode } from "react";
 import { Link, useLocation } from "react-router";
-import { Home, CreditCard, Calendar, Settings, Heart, Target } from "lucide-react";
+import { Home, CreditCard, Calendar, UserCircle, Heart, Target } from "lucide-react";
 
 interface LayoutProps {
   children: ReactNode;
@@ -15,7 +15,7 @@ export function Layout({ children }: LayoutProps) {
     { to: "/goals", label: "Metas", icon: Target },
     { to: "/installments", label: "Parcelas", icon: CreditCard },
     { to: "/future", label: "Impacto futuro", icon: Calendar },
-    { to: "/settings", label: "Ajustes", icon: Settings },
+    { to: "/settings", label: "Perfil", icon: UserCircle },
   ];
 
   return (

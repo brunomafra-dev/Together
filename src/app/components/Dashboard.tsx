@@ -149,10 +149,11 @@ export function Dashboard() {
 
   const projectionMessage =
     data.projectedLeftover > 0
-      ? `Se continuarem nesse ritmo, sobrarao ${formatBRL(data.projectedLeftover)} no fim do mes.`
-      : `Atencao: nesse ritmo, voces vao ultrapassar em ${formatBRL(Math.abs(data.projectedLeftover))} ate o fim do mes.`;
+      ? `Nesse ritmo, a previsão é fechar o mês com ${formatBRL(data.projectedLeftover)} livres.`
+      : `Atenção: nesse ritmo, vocês podem ultrapassar em ${formatBRL(Math.abs(data.projectedLeftover))} até o fim do mês.`;
 
   const greetingNames = household?.partnerNames?.filter(Boolean) ?? settings.partnerNames.filter(Boolean);
+  const hasVisibleData = Boolean(household) || expenses.length > 0 || categories.length > 0 || paymentMethods.length > 0;
 
   return (
     <Layout>
@@ -161,9 +162,9 @@ export function Dashboard() {
           {error}
         </div>
       )}
-      {loading && (
+      {loading && !hasVisibleData && (
         <div className="mb-6 rounded-2xl border border-stone-200 bg-white p-4 text-sm text-stone-600">
-          Carregando dados do Supabase...
+          Preparando seus dados...
         </div>
       )}
 

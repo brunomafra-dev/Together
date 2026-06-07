@@ -1,4 +1,4 @@
-﻿import { useEffect, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useFinance } from "../context/FinanceContext";
 import { X } from "lucide-react";
 import { CategorySelect } from "./CategorySelect";
@@ -8,21 +8,43 @@ interface AddExpenseModalProps {
   onClose: () => void;
 }
 
+function todayLocalDate() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
   const { addExpense, household, settings, categories, paymentMethods } = useFinance();
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [methodId, setMethodId] = useState("");
-  const [paidBy, setPaidBy] = useState(household?.partnerIds[0] || "");
+  const [paidBy, setPaidBy] = useState("");
+  const [purchaseDate, setPurchaseDate] = useState(todayLocalDate());
   const [description, setDescription] = useState("");
-  const householdMembers = [
-    { id: household?.partnerIds[0] || "", name: household?.partnerNames[0] || settings.partnerNames[0] || "" },
-    { id: household?.partnerIds[1] || "", name: household?.partnerNames[1] || settings.partnerNames[1] || "" },
-  ].filter((member) => member.id && member.name);
+  const householdMembers = useMemo(() => {
+    const names = [
+      household?.partnerNames[0] || settings.partnerNames[0] || "",
+      household?.partnerNames[1] || settings.partnerNames[1] || "",
+    ];
+    const ids = [household?.partnerIds[0] || "", household?.partnerIds[1] || ""];
+
+    return names
+      .map((name, index) => {
+        const trimmedName = name.trim();
+        return {
+          id: ids[index] || trimmedName,
+          name: trimmedName,
+        };
+      })
+      .filter((member) => member.name);
+  }, [household?.partnerIds, household?.partnerNames, settings.partnerNames]);
 
   useEffect(() => {
-    if (!paidBy && household?.partnerIds[0]) {
-      setPaidBy(household.partnerIds[0]);
+    if ((!paidBy || !householdMembers.some((member) => member.id === paidBy)) && householdMembers[0]) {
+      setPaidBy(householdMembers[0].id);
     }
     if (!methodId && paymentMethods.length > 0) {
       setMethodId(paymentMethods[0].id);
@@ -30,7 +52,7 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
     if (!categoryId && categories.length > 0) {
       setCategoryId(categories[0].id);
     }
-  }, [household?.partnerIds, paymentMethods, categories, paidBy, methodId, categoryId]);
+  }, [householdMembers, paymentMethods, categories, paidBy, methodId, categoryId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -41,7 +63,7 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
       amount: value,
       category: categoryId,
       description,
-      date: new Date().toISOString().split("T")[0],
+      date: purchaseDate,
       paidBy,
       card: methodId,
     });
@@ -109,6 +131,16 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Data da compra</label>
+            <input
+              type="date"
+              value={purchaseDate}
+              onChange={(e) => setPurchaseDate(e.target.value)}
+              className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+            />
           </div>
 
           <div>

@@ -22,6 +22,7 @@ export interface Household extends TimestampedRow {
   monthly_income: number | null
   partner_1_name: string | null
   partner_2_name: string | null
+  avatar_url: string | null
 }
 
 export interface HouseholdMember extends TimestampedRow {
@@ -171,6 +172,10 @@ export interface Database {
       bootstrap_current_user_household: {
         Args: Record<string, never>
         Returns: string
+      }
+      delete_current_user: {
+        Args: Record<string, never>
+        Returns: void
       }
     }
     Enums: Record<string, never>

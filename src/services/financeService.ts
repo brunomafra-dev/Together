@@ -63,6 +63,7 @@ export interface HouseholdModel {
   monthlyIncome: number;
   partnerNames: [string, string];
   partnerIds: [string, string];
+  avatarUrl: string;
 }
 
 export interface GoalModel {
@@ -124,6 +125,13 @@ export interface MonthlySnapshotModel {
 }
 
 export type NewMonthlySnapshot = Omit<MonthlySnapshotModel, "id" | "closedAt">;
+export type MonthlySnapshotInput = NewMonthlySnapshot & { closedAt?: string };
+
+export interface ProfileModel {
+  id: string;
+  name: string;
+  email: string;
+}
 
 const toNumber = (value: unknown) => (typeof value === "number" ? value : Number(value ?? 0) || 0);
 const toString = (value: unknown) => (typeof value === "string" ? value : "");
@@ -225,6 +233,65 @@ const normalizePaymentMethodType = (type: unknown, name = ""): PaymentMethodMode
   return "credit_card";
 };
 
+const mapProfileRow = (row: ProfileRow): ProfileModel => ({
+  id: row.id,
+  name: toString(row.name),
+  email: toString(row.email),
+});
+
+export async function fetchCurrentProfile(): Promise<ProfileModel | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
+    .maybeSingle();
+  throwIfError(error);
+
+  if (data) return mapProfileRow(data as ProfileRow);
+
+  const { data: inserted, error: insertError } = await supabase
+    .from("profiles")
+    .insert({
+      id: user.id,
+      name: toString(user.user_metadata?.name) || toString(user.email),
+      email: toString(user.email),
+    })
+    .select("*")
+    .single();
+  throwIfError(insertError);
+  return mapProfileRow(inserted as ProfileRow);
+}
+
+export async function updateHouseholdAvatar(householdId: string, avatarUrl: string): Promise<HouseholdModel> {
+  const { data, error } = await supabase
+    .from("households")
+    .update({ avatar_url: avatarUrl })
+    .eq("id", householdId)
+    .select("*")
+    .single();
+  throwIfError(error);
+  return mapHouseholdRow(data as HouseholdRow, ["", ""], ["", ""]);
+}
+
+export async function uploadHouseholdAvatar(householdId: string, file: File): Promise<string> {
+  const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
+  const path = `${householdId}/avatar-${Date.now()}.${extension}`;
+  const { error } = await supabase.storage
+    .from("profile-photos")
+    .upload(path, file, { cacheControl: "3600", upsert: true });
+  throwIfError(error);
+
+  const { data } = supabase.storage.from("profile-photos").getPublicUrl(path);
+  return data.publicUrl;
+}
+export async function deleteCurrentAccount(): Promise<void> {
+  const { error } = await supabase.rpc("delete_current_user");
+  throwIfError(error);
+}
+
 const mapFixedExpenseRow = (row: FixedExpenseRow): FixedExpenseModel => ({
   id: row.id,
   name: toString(row.name),
@@ -246,6 +313,7 @@ const mapHouseholdRow = (
     toString(row.partner_2_name) || partnerNames[1] || "",
   ],
   partnerIds,
+  avatarUrl: toString(row.avatar_url),
 });
 
 const mapGoalRow = (row: GoalRow): GoalModel => ({
@@ -738,7 +806,7 @@ export async function fetchMonthlySnapshots(householdId: string): Promise<Monthl
   return (data ?? []).map(mapMonthlySnapshotRow);
 }
 
-export async function addMonthlySnapshot(snapshot: NewMonthlySnapshot): Promise<MonthlySnapshotModel> {
+export async function addMonthlySnapshot(snapshot: MonthlySnapshotInput): Promise<MonthlySnapshotModel> {
   const { data, error } = await supabase
     .from("monthly_snapshots")
     .insert({
@@ -754,6 +822,7 @@ export async function addMonthlySnapshot(snapshot: NewMonthlySnapshot): Promise<
       card_totals: snapshot.cardTotals,
       goal_progress: snapshot.goalProgress,
       financial_health: snapshot.financialHealth,
+      closed_at: snapshot.closedAt ?? new Date().toISOString(),
     })
     .select("*")
     .single();

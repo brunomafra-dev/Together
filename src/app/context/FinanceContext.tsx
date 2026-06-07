@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
+import { useAuth } from "./AuthContext";
 import * as financeService from "../../services/financeService";
 import type {
   CategoryModel,
@@ -98,10 +99,28 @@ const DEFAULT_CATEGORY_NAMES = ["Moradia", "Alimentação", "Gasolina", "Lazer",
 
 const loadErrorMessage = "Não foi possível carregar os dados do Supabase.";
 
+const FINANCE_CACHE_VERSION = 1;
+
+type FinanceCache = {
+  version: number;
+  savedAt: string;
+  householdId: string | null;
+  household: HouseholdModel | null;
+  expenses: Expense[];
+  installments: Installment[];
+  financialCommitments: FinancialCommitmentModel[];
+  fixedExpenses: FixedExpense[];
+  categories: CategoryModel[];
+  paymentMethods: PaymentMethodModel[];
+  monthlySnapshots: MonthlySnapshotModel[];
+  settings: BudgetSettings;
+};
+
 /**
  * FinanceProvider manages the global financial state and Supabase synchronization.
  */
 export function FinanceProvider({ children }: { children: ReactNode }) {
+  const { user, loading: authLoading } = useAuth();
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [household, setHousehold] = useState<HouseholdModel | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -114,6 +133,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<BudgetSettings>(EMPTY_SETTINGS);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const cacheKey = user ? `together:finance:${user.id}:v${FINANCE_CACHE_VERSION}` : null;
 
   // Obter household_id na primeira renderização
   useEffect(() => {
@@ -129,13 +149,40 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     void getHouseholdId();
   }, []);
 
+  useEffect(() => {
+    if (authLoading || !cacheKey) return;
+
+    const rawCache = window.localStorage.getItem(cacheKey);
+    if (!rawCache) return;
+
+    try {
+      const cache = JSON.parse(rawCache) as FinanceCache;
+      if (cache.version !== FINANCE_CACHE_VERSION) return;
+
+      setHouseholdId(cache.householdId);
+      setHousehold(cache.household);
+      setExpenses(cache.expenses ?? []);
+      setInstallments(cache.installments ?? []);
+      setFinancialCommitments(cache.financialCommitments ?? []);
+      setFixedExpenses(cache.fixedExpenses ?? []);
+      setCategories(cache.categories ?? []);
+      setPaymentMethods(cache.paymentMethods ?? []);
+      setMonthlySnapshots(cache.monthlySnapshots ?? []);
+      setSettings(cache.settings ?? EMPTY_SETTINGS);
+      setLoading(false);
+    } catch {
+      window.localStorage.removeItem(cacheKey);
+    }
+  }, [authLoading, cacheKey]);
+
   const refreshData = async () => {
     if (!householdId) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
+    const hasVisibleData = Boolean(household) || expenses.length > 0 || categories.length > 0 || paymentMethods.length > 0;
+    setLoading(!hasVisibleData);
     setError(null);
 
     try {
@@ -226,6 +273,31 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     void refreshData();
   }, [householdId]);
+
+  useEffect(() => {
+    if (!cacheKey || !householdId || !household) return;
+
+    const cache: FinanceCache = {
+      version: FINANCE_CACHE_VERSION,
+      savedAt: new Date().toISOString(),
+      householdId,
+      household,
+      expenses,
+      installments,
+      financialCommitments,
+      fixedExpenses,
+      categories,
+      paymentMethods,
+      monthlySnapshots,
+      settings,
+    };
+
+    try {
+      window.localStorage.setItem(cacheKey, JSON.stringify(cache));
+    } catch {
+      // Cache is a speed optimization; failing to write it should not block the app.
+    }
+  }, [cacheKey, householdId, household, expenses, installments, financialCommitments, fixedExpenses, categories, paymentMethods, monthlySnapshots, settings]);
 
   const updateSettings = async (newSettings: BudgetSettings) => {
     if (household) {
@@ -484,6 +556,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         availablePercent: settings.monthlyIncome > 0 ? Math.round(((settings.monthlyIncome - totalExpenses) / settings.monthlyIncome) * 100) : 0,
         totalSpentPercent: settings.monthlyIncome > 0 ? Math.round((totalExpenses / settings.monthlyIncome) * 100) : 0,
       },
+      closedAt: date.toISOString(),
     });
     setMonthlySnapshots((prev) => [snapshot, ...prev]);
     return snapshot;
