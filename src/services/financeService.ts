@@ -133,7 +133,9 @@ export async function getUserHouseholdId(): Promise<string | null> {
     .from("households")
     .insert({
       name: fallbackHouseholdName,
-      limit_amount: 0,
+      monthly_income: 0,
+      partner_1_name: null,
+      partner_2_name: null,
     })
     .select("id")
     .single();
@@ -196,8 +198,11 @@ const mapFixedExpenseRow = (row: FixedExpenseRow): FixedExpenseModel => ({
 const mapHouseholdRow = (row: HouseholdRow, partnerNames: [string, string]): HouseholdModel => ({
   id: row.id,
   name: toString(row.name),
-  monthlyIncome: toNumber(row.limit_amount),
-  partnerNames,
+  monthlyIncome: toNumber(row.monthly_income),
+  partnerNames: [
+    toString(row.partner_1_name) || partnerNames[0] || "",
+    toString(row.partner_2_name) || partnerNames[1] || "",
+  ],
 });
 
 const mapGoalRow = (row: GoalRow): GoalModel => ({
@@ -485,8 +490,10 @@ export async function updateHouseholdSettings(householdId: string, monthlyIncome
   const { data, error } = await supabase
     .from("households")
     .update({
-      limit_amount: monthlyIncome,
+      monthly_income: monthlyIncome,
       name: partnerNames.filter(Boolean).join(" e ") || "Household",
+      partner_1_name: partnerNames[0] || null,
+      partner_2_name: partnerNames[1] || null,
     })
     .eq("id", householdId)
     .select("*")

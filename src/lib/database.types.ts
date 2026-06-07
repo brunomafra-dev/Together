@@ -18,9 +18,10 @@ export interface Profile extends TimestampedRow {
 
 export interface Household extends TimestampedRow {
   id: string
-  household_id: string | null
   name: string | null
-  limit_amount: number | null
+  monthly_income: number | null
+  partner_1_name: string | null
+  partner_2_name: string | null
 }
 
 export interface HouseholdMember extends TimestampedRow {
