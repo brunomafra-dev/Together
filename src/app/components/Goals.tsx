@@ -12,6 +12,7 @@ type PlanCard = {
   share: string;
   percent: number;
   amount: number;
+  currentAmount: number;
   tone: GoalTone;
 };
 
@@ -20,6 +21,8 @@ type ProgressRow = {
   name: string;
   planned: number;
   realized: number;
+  targetAmount: number;
+  currentAmount: number;
   status: string;
 };
 
@@ -151,12 +154,15 @@ function buildPercentText(percent: number) {
 export function Goals() {
   const { household, settings } = useFinance();
   const [goal, setGoal] = useState<GoalSnapshot | null>(null);
-  const [editing, setEditing] = useState(false);
+  const [editingGoal, setEditingGoal] = useState(false);
+  const [editingPlanning, setEditingPlanning] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const [goalSteps, setGoalSteps] = useState<PlanCard[]>([]);
 
   const income = settings.monthlyIncome || household?.monthlyIncome || 0;
   const snapshot = goal ?? emptyGoal(income);
+  const fallbackPlanCards = useMemo(() => buildSuggestedPlan(income), [income]);
   const mainGoalPercent = snapshot.total > 0 ? Math.round((snapshot.current / snapshot.total) * 100) : 0;
   const mainGoalRemaining = Math.max(snapshot.total - snapshot.current, 0);
   const averagePlanUsage = snapshot.progressRows.some((row) => row.planned > 0)
@@ -165,14 +171,14 @@ export function Goals() {
           snapshot.progressRows.filter((row) => row.planned > 0).length,
       )
     : 0;
-  const planCards = goal?.planCards.length ? snapshot.planCards : buildSuggestedPlan(income);
+  const planCards = goal?.planCards.length ? snapshot.planCards : fallbackPlanCards;
 
   const [title, setTitle] = useState(snapshot.title);
   const [label, setLabel] = useState(snapshot.label);
   const [current, setCurrent] = useState(String(snapshot.current));
   const [total, setTotal] = useState(String(snapshot.total || income || 0));
-  const [allocations, setAllocations] = useState<PlanCard[]>(planCards);
   const [progressRows, setProgressRows] = useState<ProgressRow[]>(snapshot.progressRows);
+  const [planningAllocations, setPlanningAllocations] = useState<PlanCard[]>(planCards);
 
   useEffect(() => {
     const load = async () => {
@@ -186,8 +192,9 @@ export function Goals() {
         setLabel(fallback.label);
         setCurrent("0");
         setTotal(String(income || 0));
-        setAllocations(buildSuggestedPlan(income));
         setProgressRows(fallback.progressRows);
+        setGoalSteps([]);
+        setPlanningAllocations(fallbackPlanCards);
         return;
       }
 
@@ -213,8 +220,16 @@ export function Goals() {
         householdIncome: income,
         planCards: resolvedPlanCards,
         progressRows: rows.length
-          ? rows.map((row) => ({ id: row.id, name: row.name, planned: row.planned, realized: row.realized, status: row.status }))
-          : emptyGoal(income).progressRows,
+          ? rows.map((row) => ({
+              id: row.id,
+              name: row.name,
+              planned: row.planned,
+              realized: row.realized,
+              targetAmount: row.targetAmount,
+              currentAmount: row.currentAmount,
+              status: row.status,
+            }))
+          : [],
         financialHealth: {
           score: rows.length
             ? Math.round(rows.reduce((sum, row) => sum + (row.planned > 0 ? (row.realized / row.planned) * 100 : 0), 0) / rows.length)
@@ -237,43 +252,104 @@ export function Goals() {
       setLabel(currentGoal.label);
       setCurrent(String(currentGoal.currentAmount));
       setTotal(String(currentGoal.targetAmount));
-      setAllocations(resolvedPlanCards);
       setProgressRows(
         rows.length
-          ? rows.map((row) => ({ id: row.id, name: row.name, planned: row.planned, realized: row.realized, status: row.status }))
-          : emptyGoal(income).progressRows,
+          ? rows.map((row) => ({
+              id: row.id,
+              name: row.name,
+              planned: row.planned,
+              realized: row.realized,
+              targetAmount: row.targetAmount,
+              currentAmount: row.currentAmount,
+              status: row.status,
+            }))
+          : [],
       );
+      setGoalSteps(
+        rows.length
+          ? rows.map((row) => ({
+              id: row.id,
+              name: row.name,
+              share: "",
+              percent: 0,
+              amount: row.targetAmount,
+              currentAmount: row.currentAmount,
+              tone: "stone",
+            }))
+          : [],
+      );
+      setPlanningAllocations(resolvedPlanCards);
     };
 
     void load();
-  }, [household?.id, income]);
+  }, [household?.id, income, fallbackPlanCards]);
 
-  useEffect(() => {
-    if (!editing && !goal) {
-      setTitle(snapshot.title);
-      setLabel(snapshot.label);
-      setCurrent(String(snapshot.current));
-      setTotal(String(snapshot.total || income || 0));
-      setAllocations(planCards);
-      setProgressRows(snapshot.progressRows);
-    }
-  }, [editing, goal, income, planCards, snapshot]);
-
-  const openEdit = () => setEditing(true);
-  const closeEdit = () => {
-    setEditing(false);
+  const openGoalEdit = () => setEditingGoal(true);
+  const openPlanningEdit = () => setEditingPlanning(true);
+  const closeGoalEdit = () => {
+    setEditingGoal(false);
+    setFormError(null);
+  };
+  const closePlanningEdit = () => {
+    setEditingPlanning(false);
     setFormError(null);
   };
 
-  const updateAllocation = (index: number, patch: Partial<PlanCard>) => {
-    setAllocations((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  const handleDeleteGoal = async () => {
+    if (!goal?.id) return;
+    if (!window.confirm("Excluir esta meta?")) return;
+
+    setSaving(true);
+    setFormError(null);
+    try {
+      await financeService.deleteGoal(goal.id);
+      setGoal(null);
+      setTitle(emptyGoal(income).title);
+      setLabel(emptyGoal(income).label);
+      setCurrent("0");
+      setTotal(String(income || 0));
+      setProgressRows(emptyGoal(income).progressRows);
+      setPlanningAllocations(fallbackPlanCards);
+      setEditingGoal(false);
+      setEditingPlanning(false);
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Não foi possível excluir a meta.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleDeleteProgressRow = (rowIndex: number) => {
+    setProgressRows((prev) => prev.filter((_, index) => index !== rowIndex));
+  };
+
+  const handleAddGoalStep = () => {
+    setGoalSteps((prev) => [
+      ...prev,
+      { name: "Nova etapa", share: "", percent: 0, amount: 0, currentAmount: 0, tone: "stone" },
+    ]);
+  };
+
+  const updateGoalStep = (index: number, patch: Partial<PlanCard>) => {
+    setGoalSteps((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
+  };
+
+  const deleteGoalStep = (index: number) => {
+    setGoalSteps((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const handleAddSubGoal = () => {
+    setProgressRows((prev) => [
+      ...prev,
+      { name: "Nova sub-meta", planned: 0, realized: 0, targetAmount: 0, currentAmount: 0, status: "Em andamento" },
+    ]);
   };
 
   const updateProgressRow = (index: number, patch: Partial<ProgressRow>) => {
     setProgressRows((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
   };
 
-  const handleSave = async () => {
+  const handleSaveGoal = async () => {
     const householdId = household?.id;
     if (!householdId) return;
     setSaving(true);
@@ -291,32 +367,35 @@ export function Goals() {
         ? await financeService.updateGoal(goal.id, payload)
         : await financeService.addGoal(payload);
 
-      const planCardsPercent = allocations.reduce((sum, item) => sum + item.percent, 0);
-      const normalizedAllocations = planCardsPercent > 0 ? allocations : buildSuggestedPlan(income);
-
-      const existingPlan = goal?.id ? await financeService.fetchGoalPlanItems(savedGoal.id).catch(() => []) : [];
-      for (const item of existingPlan) {
-        await financeService.deleteGoalPlanItem(item.id);
-      }
-      for (const item of normalizedAllocations) {
-        await financeService.addGoalPlanItem(savedGoal.id, {
-          name: item.name,
-          share: buildPercentText(item.percent),
-          amount: income * (item.percent / 100),
-          tone: item.tone,
-        });
-      }
-
       const existingProgress = goal?.id ? await financeService.fetchGoalProgressRows(savedGoal.id).catch(() => []) : [];
       for (const row of existingProgress) {
         await financeService.deleteGoalProgressRow(row.id);
       }
       for (const row of progressRows) {
         await financeService.addGoalProgressRow(savedGoal.id, {
+          householdId,
           name: row.name.trim() || "Meta",
           planned: Number(row.planned) || 0,
           realized: Number(row.realized) || 0,
+          targetAmount: Number(row.targetAmount) || Number(row.planned) || 0,
+          currentAmount: Number(row.currentAmount) || Number(row.realized) || 0,
           status: row.status || "Em andamento",
+        });
+      }
+
+      const existingPlan = goal?.id ? await financeService.fetchGoalPlanItems(savedGoal.id).catch(() => []) : [];
+      for (const item of existingPlan) {
+        await financeService.deleteGoalPlanItem(item.id);
+      }
+      for (const step of goalSteps) {
+        await financeService.addGoalPlanItem(savedGoal.id, {
+          householdId,
+          name: step.name.trim() || "Etapa",
+          share: step.share || "",
+          amount: Number(step.amount) || 0,
+          targetAmount: Number(step.amount) || 0,
+          currentAmount: Number(step.currentAmount) || 0,
+          tone: step.tone,
         });
       }
 
@@ -328,7 +407,8 @@ export function Goals() {
             name: item.name,
             share: item.share,
             percent: Number(item.share.replace("%", "")) || 0,
-            amount: item.amount,
+            amount: item.targetAmount,
+            currentAmount: item.currentAmount,
             tone: item.tone,
           }))
         : buildSuggestedPlan(income);
@@ -341,7 +421,15 @@ export function Goals() {
         total: savedGoal.targetAmount,
         householdIncome: income,
         planCards: resolvedPlanCards,
-        progressRows: rows.map((row) => ({ id: row.id, name: row.name, planned: row.planned, realized: row.realized, status: row.status })),
+        progressRows: rows.map((row) => ({
+          id: row.id,
+          name: row.name,
+          planned: row.planned,
+          realized: row.realized,
+          targetAmount: row.targetAmount,
+          currentAmount: row.currentAmount,
+          status: row.status,
+        })),
         financialHealth: {
           score: rows.length
             ? Math.round(rows.reduce((sum, row) => sum + (row.planned > 0 ? (row.realized / row.planned) * 100 : 0), 0) / rows.length)
@@ -357,9 +445,54 @@ export function Goals() {
         insights: rows.map((row) => ({ kind: "info", text: `${row.name} está ${row.planned - row.realized >= 0 ? "abaixo" : "acima"} do planejado.` })),
         suggestion: emptyGoal(income).suggestion,
       });
-      closeEdit();
+      closeGoalEdit();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Não foi possível salvar a meta.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSavePlanning = async () => {
+    const householdId = household?.id;
+    if (!householdId || !goal?.id) return;
+    setSaving(true);
+    setFormError(null);
+    try {
+      const planCardsPercent = planningAllocations.reduce((sum, item) => sum + item.percent, 0);
+      const normalizedAllocations = planCardsPercent > 0 ? planningAllocations : buildSuggestedPlan(income);
+
+      const existingPlan = await financeService.fetchGoalPlanItems(goal.id).catch(() => []);
+      for (const item of existingPlan) {
+        await financeService.deleteGoalPlanItem(item.id);
+      }
+      for (const item of normalizedAllocations) {
+        await financeService.addGoalPlanItem(goal.id, {
+          name: item.name,
+          share: buildPercentText(item.percent),
+          amount: income * (item.percent / 100),
+          tone: item.tone,
+        });
+      }
+
+      const planItems = await financeService.fetchGoalPlanItems(goal.id).catch(() => []);
+      const resolvedPlanCards = planItems.length
+        ? planItems.map((item) => ({
+            id: item.id,
+            name: item.name,
+            share: item.share,
+            percent: Number(item.share.replace("%", "")) || 0,
+            amount: item.targetAmount,
+            currentAmount: item.currentAmount,
+            tone: item.tone,
+          }))
+        : buildSuggestedPlan(income);
+
+      setGoal((prev) => prev ? { ...prev, planCards: resolvedPlanCards, householdIncome: income } : prev);
+      setPlanningAllocations(resolvedPlanCards);
+      closePlanningEdit();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Não foi possível salvar o plano.");
     } finally {
       setSaving(false);
     }
@@ -375,20 +508,20 @@ export function Goals() {
         </header>
 
         <section className="space-y-4">
-          <SectionHeader icon={Target} title="Objetivo principal" actionLabel={goal ? "Editar objetivo" : "Criar objetivo"} onAction={openEdit} />
+          <SectionHeader icon={Target} title="Objetivo principal" actionLabel={goal ? "Editar objetivo" : "Criar objetivo"} onAction={openGoalEdit} />
           <div className="rounded-[2rem] border border-stone-200 bg-gradient-to-br from-white via-emerald-50/40 to-emerald-50 p-6 shadow-sm">
             <div className="flex flex-col gap-6 lg:flex-row lg:items-start lg:justify-between">
               <div className="space-y-4">
                 <div className="inline-flex rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-emerald-700">{snapshot.label}</div>
                 <div>
                   <h2 className="text-3xl font-semibold text-stone-950">{snapshot.title}</h2>
-                  <p className="mt-2 text-sm text-stone-600">{snapshot.total > 0 ? `${formatBRL(snapshot.current)} de ${formatBRL(snapshot.total)}` : "Sem meta cadastrada"}</p>
+                  <p className="mt-2 text-sm text-stone-600">{goal ? `${formatBRL(snapshot.current)} de ${formatBRL(snapshot.total)}` : "Sem meta cadastrada"}</p>
                 </div>
                 <div className="w-full max-w-3xl">
                   <div className="h-3 rounded-full bg-stone-100">
                     <div className="h-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${mainGoalPercent}%` }} />
                   </div>
-                  <p className="mt-3 text-sm text-stone-600">{snapshot.total > 0 ? `Faltam ${formatBRL(mainGoalRemaining)} para completar.` : "Cadastre uma meta para ver progresso e projeções."}</p>
+                  <p className="mt-3 text-sm text-stone-600">{goal ? `Faltam ${formatBRL(mainGoalRemaining)} para completar.` : "Cadastre uma meta para ver progresso e projeções."}</p>
                 </div>
               </div>
               <div className="min-w-[140px] text-right">
@@ -400,7 +533,7 @@ export function Goals() {
         </section>
 
         <section className="space-y-4">
-          <SectionHeader icon={Wallet} title="Planejamento do casal" actionLabel="Ajustar plano" onAction={openEdit} />
+          <SectionHeader icon={Wallet} title="Planejamento do casal" actionLabel="Ajustar plano" onAction={openPlanningEdit} />
           <p className="text-sm text-stone-600">Como vocês decidiram dividir a renda mensal de {formatBRL(snapshot.householdIncome)}</p>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {planCards.map((card, index) => (
@@ -413,13 +546,18 @@ export function Goals() {
                 <div className="mt-6 h-2 rounded-full bg-white/70">
                   <div className="h-2 rounded-full bg-current opacity-70" style={{ width: `${card.percent}%` }} />
                 </div>
-                {editing && (
+                {editingPlanning && (
                   <div className="mt-4 space-y-2">
                     <label className="block text-xs uppercase tracking-[0.16em] text-stone-500">Percentual</label>
                     <input
                       type="number"
                       value={card.percent}
-                      onChange={(e) => updateAllocation(index, { percent: Number(e.target.value) || 0, share: buildPercentText(Number(e.target.value) || 0), amount: income * ((Number(e.target.value) || 0) / 100) })}
+                      onChange={(e) => setPlanningAllocations((prev) => prev.map((item, i) => i === index ? {
+                        ...item,
+                        percent: Number(e.target.value) || 0,
+                        share: buildPercentText(Number(e.target.value) || 0),
+                        amount: income * ((Number(e.target.value) || 0) / 100),
+                      } : item))}
                       className="w-full rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
@@ -460,13 +598,20 @@ export function Goals() {
                   </div>
                   <ProgressBar percent={pct} />
                   <p className="mt-3 text-sm text-stone-600">{formatBRL(diff)} abaixo do plano</p>
-                  {editing && (
-                    <div className="mt-4 grid gap-3 md:grid-cols-3">
-                      <input type="text" value={row.name} onChange={(e) => updateProgressRow(index, { name: e.target.value })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Nome" />
-                      <input type="number" value={row.planned} onChange={(e) => updateProgressRow(index, { planned: Number(e.target.value) || 0 })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Planejado" />
-                      <input type="number" value={row.realized} onChange={(e) => updateProgressRow(index, { realized: Number(e.target.value) || 0 })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Realizado" />
-                    </div>
-                  )}
+                {editingGoal && (
+                  <div className="mt-4 grid gap-3 md:grid-cols-3">
+                    <input type="text" value={row.name} onChange={(e) => updateProgressRow(index, { name: e.target.value })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Nome" />
+                    <input type="number" value={row.planned} onChange={(e) => updateProgressRow(index, { planned: Number(e.target.value) || 0 })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Planejado" />
+                    <input type="number" value={row.realized} onChange={(e) => updateProgressRow(index, { realized: Number(e.target.value) || 0 })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" placeholder="Realizado" />
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteProgressRow(index)}
+                      className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100"
+                    >
+                      Excluir
+                    </button>
+                  </div>
+                )}
                 </div>
               );
             })}
@@ -537,69 +682,165 @@ export function Goals() {
         </section>
       </div>
 
-      {editing && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 p-4 sm:items-center" onClick={closeEdit}>
-          <div className="w-full max-w-3xl rounded-3xl bg-white p-6 shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between border-b border-stone-100 pb-4">
+      {editingGoal && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onClick={closeGoalEdit}>
+          <div className="w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
               <h2 className="text-xl font-semibold text-stone-950">Editar meta</h2>
-              <button type="button" onClick={closeEdit} className="text-stone-400 hover:text-stone-700"><X className="h-5 w-5" /></button>
+              <button type="button" onClick={closeGoalEdit} className="text-stone-400 hover:text-stone-700"><X className="h-5 w-5" /></button>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2">
-              <div>
-                <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Objetivo</label>
-                <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-              </div>
-              <div>
-                <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Etiqueta</label>
-                <input value={label} onChange={(e) => setLabel(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-              </div>
-              <div>
-                <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Atual</label>
-                <input type="number" value={current} onChange={(e) => setCurrent(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-              </div>
-              <div>
-                <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Total</label>
-                <input type="number" value={total} onChange={(e) => setTotal(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
-              </div>
-            </div>
-
-            <div className="mt-6 grid gap-4 lg:grid-cols-2">
-              <div className="rounded-2xl border border-stone-200 p-4">
-                <p className="mb-3 text-sm font-medium text-stone-900">Planejamento</p>
-                <div className="space-y-3">
-                  {allocations.map((item, index) => (
-                    <div key={item.name} className="grid grid-cols-[1.1fr_0.6fr_0.8fr] gap-2">
-                      <input value={item.name} onChange={(e) => updateAllocation(index, { name: e.target.value })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm" />
-                      <input type="number" value={item.percent} onChange={(e) => updateAllocation(index, { percent: Number(e.target.value) || 0, share: buildPercentText(Number(e.target.value) || 0), amount: (Number(total) || income) * ((Number(e.target.value) || 0) / 100) })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm" />
-                      <div className={`rounded-xl border px-3 py-2 text-sm ${toneClass(item.tone)}`}>{formatBRL((Number(total) || income) * (item.percent / 100))}</div>
-                    </div>
-                  ))}
+            <div className="max-h-[calc(100vh-8rem)] overflow-y-auto px-6 py-5">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Objetivo</label>
+                  <input value={title} onChange={(e) => setTitle(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Etiqueta</label>
+                  <input value={label} onChange={(e) => setLabel(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Atual</label>
+                  <input type="number" value={current} onChange={(e) => setCurrent(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+                </div>
+                <div>
+                  <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Total</label>
+                  <input type="number" value={total} onChange={(e) => setTotal(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
                 </div>
               </div>
 
-              <div className="rounded-2xl border border-stone-200 p-4">
-                <p className="mb-3 text-sm font-medium text-stone-900">Planejado vs realizado</p>
+              <div className="mt-6 rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-sm font-medium text-stone-900">Etapas da meta</p>
+                  <button type="button" onClick={handleAddGoalStep} className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700">
+                    Adicionar etapa
+                  </button>
+                </div>
+                <div className="space-y-3">
+                  {goalSteps.map((step, index) => (
+                    <div key={step.id ?? `${step.name}-${index}`} className="grid gap-2 md:grid-cols-[1.2fr_0.7fr_0.7fr_auto]">
+                      <input
+                        value={step.name}
+                        onChange={(e) => updateGoalStep(index, { name: e.target.value })}
+                        className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                        placeholder="Nome"
+                      />
+                      <input
+                        type="number"
+                        value={step.amount}
+                        onChange={(e) => updateGoalStep(index, { amount: Number(e.target.value) || 0 })}
+                        className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                        placeholder="Valor alvo"
+                      />
+                      <input
+                        type="number"
+                        value={step.currentAmount}
+                        onChange={(e) => updateGoalStep(index, { currentAmount: Number(e.target.value) || 0 })}
+                        className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                        placeholder="Valor atual"
+                      />
+                      <button type="button" onClick={() => deleteGoalStep(index)} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                        Excluir
+                      </button>
+                    </div>
+                  ))}
+                  {goalSteps.length === 0 && <p className="text-sm text-stone-500">Nenhuma etapa cadastrada.</p>}
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-2xl border border-stone-200 bg-white p-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-sm font-medium text-stone-900">Sub-metas</p>
+                  <button type="button" onClick={handleAddSubGoal} className="rounded-lg border border-stone-200 bg-white px-3 py-1.5 text-xs font-medium text-stone-700">
+                    Adicionar sub-meta
+                  </button>
+                </div>
                 <div className="space-y-3">
                   {progressRows.map((row, index) => (
-                    <div key={row.id ?? row.name} className="grid grid-cols-[1fr_0.8fr_0.8fr] gap-2">
-                      <input value={row.name} onChange={(e) => updateProgressRow(index, { name: e.target.value })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm" />
-                      <input type="number" value={row.planned} onChange={(e) => updateProgressRow(index, { planned: Number(e.target.value) || 0 })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm" />
-                      <input type="number" value={row.realized} onChange={(e) => updateProgressRow(index, { realized: Number(e.target.value) || 0 })} className="rounded-xl border border-stone-200 px-3 py-2 text-sm" />
+                    <div key={row.id ?? `${row.name}-${index}`} className="grid gap-2 md:grid-cols-[1.2fr_0.7fr_0.7fr_auto]">
+                      <input
+                        value={row.name}
+                        onChange={(e) => updateProgressRow(index, { name: e.target.value })}
+                        className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                        placeholder="Nome"
+                      />
+                      <input
+                        type="number"
+                        value={row.planned}
+                        onChange={(e) => updateProgressRow(index, { planned: Number(e.target.value) || 0, targetAmount: Number(e.target.value) || 0 })}
+                        className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                        placeholder="Valor alvo"
+                      />
+                      <input
+                        type="number"
+                        value={row.realized}
+                        onChange={(e) => updateProgressRow(index, { realized: Number(e.target.value) || 0, currentAmount: Number(e.target.value) || 0 })}
+                        className="rounded-xl border border-stone-200 px-3 py-2 text-sm"
+                        placeholder="Valor atual"
+                      />
+                      <button type="button" onClick={() => handleDeleteProgressRow(index)} className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-medium text-rose-700">
+                        Excluir
+                      </button>
                     </div>
                   ))}
+                  {progressRows.length === 0 && <p className="text-sm text-stone-500">Nenhuma sub-meta cadastrada.</p>}
                 </div>
               </div>
+
+              {formError && <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{formError}</p>}
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                {goal?.id && (
+                  <button
+                    type="button"
+                    onClick={() => void handleDeleteGoal()}
+                    disabled={saving}
+                    className="mr-auto rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700 transition-colors hover:bg-rose-100 disabled:opacity-60"
+                  >
+                    Excluir meta
+                  </button>
+                )}
+                <button type="button" onClick={closeGoalEdit} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">Cancelar</button>
+                <button type="button" disabled={saving} onClick={() => void handleSaveGoal()} className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
+                  <Save className="h-4 w-4" />
+                  {saving ? "Salvando..." : "Salvar meta"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editingPlanning && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onClick={closePlanningEdit}>
+          <div className="w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
+              <h2 className="text-xl font-semibold text-stone-950">Ajustar plano</h2>
+              <button type="button" onClick={closePlanningEdit} className="text-stone-400 hover:text-stone-700"><X className="h-5 w-5" /></button>
             </div>
 
-            {formError && <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{formError}</p>}
+            <div className="max-h-[calc(100vh-8rem)] overflow-y-auto px-6 py-5">
+              <p className="text-sm text-stone-600">Distribuição calculada com base na renda mensal do household: {formatBRL(income)}</p>
+              <div className="mt-6 space-y-3">
+                {planningAllocations.map((item, index) => (
+                  <div key={item.name} className="grid grid-cols-[1.1fr_0.6fr_0.8fr] gap-2">
+                    <input value={item.name} onChange={(e) => setPlanningAllocations((prev) => prev.map((row, i) => i === index ? { ...row, name: e.target.value } : row))} className="rounded-xl border border-stone-200 px-3 py-2 text-sm" />
+                    <input type="number" value={item.percent} onChange={(e) => setPlanningAllocations((prev) => prev.map((row, i) => i === index ? { ...row, percent: Number(e.target.value) || 0, share: buildPercentText(Number(e.target.value) || 0), amount: income * ((Number(e.target.value) || 0) / 100) } : row))} className="rounded-xl border border-stone-200 px-3 py-2 text-sm" />
+                    <div className={`rounded-xl border px-3 py-2 text-sm ${toneClass(item.tone)}`}>{formatBRL(income * (item.percent / 100))}</div>
+                  </div>
+                ))}
+              </div>
 
-            <div className="mt-6 flex items-center justify-end gap-3">
-              <button type="button" onClick={closeEdit} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">Cancelar</button>
-              <button type="button" disabled={saving} onClick={() => void handleSave()} className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
-                <Save className="h-4 w-4" />
-                {saving ? "Salvando..." : "Salvar meta"}
-              </button>
+              {formError && <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{formError}</p>}
+
+              <div className="mt-6 flex items-center justify-end gap-3">
+                <button type="button" onClick={closePlanningEdit} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">Cancelar</button>
+                <button type="button" disabled={saving} onClick={() => void handleSavePlanning()} className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
+                  <Save className="h-4 w-4" />
+                  {saving ? "Salvando..." : "Salvar plano"}
+                </button>
+              </div>
             </div>
           </div>
         </div>

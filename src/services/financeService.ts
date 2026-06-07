@@ -58,6 +58,7 @@ export interface HouseholdModel {
   name: string;
   monthlyIncome: number;
   partnerNames: [string, string];
+  partnerIds: [string, string];
 }
 
 export interface GoalModel {
@@ -72,18 +73,24 @@ export interface GoalModel {
 export interface GoalPlanItemModel {
   id: string;
   goalId: string;
+  householdId: string;
   name: string;
   share: string;
   amount: number;
+  targetAmount: number;
+  currentAmount: number;
   tone: "stone" | "emerald" | "cyan" | "amber" | "indigo";
 }
 
 export interface GoalProgressRowModel {
   id: string;
   goalId: string;
+  householdId: string;
   name: string;
   planned: number;
   realized: number;
+  targetAmount: number;
+  currentAmount: number;
   status: string;
 }
 
@@ -121,6 +128,10 @@ export async function getUserHouseholdId(): Promise<string | null> {
     .maybeSingle();
 
   throwIfError(error);
+  console.log("[financeService] household lookup result", {
+    householdId: members?.household_id ?? null,
+    userId: user.id,
+  });
   if (members?.household_id) return members.household_id;
 
   const fallbackHouseholdName =
@@ -129,27 +140,25 @@ export async function getUserHouseholdId(): Promise<string | null> {
     toString(user.email) ||
     "Household";
 
-  const { data: createdHousehold, error: createHouseholdError } = await supabase
-    .from("households")
-    .insert({
-      name: fallbackHouseholdName,
-      monthly_income: 0,
-      partner_1_name: null,
-      partner_2_name: null,
-    })
-    .select("id")
-    .single();
-
-  throwIfError(createHouseholdError);
-
-  const householdId = toString(createdHousehold?.id);
-  if (!householdId) return null;
-
-  const { error: memberInsertError } = await supabase.from("household_members").insert({
-    household_id: householdId,
-    profile_id: user.id,
+  console.log("[financeService] Calling bootstrap_current_user_household RPC", {
+    householdName: fallbackHouseholdName,
+    userId: user.id,
   });
-  throwIfError(memberInsertError);
+
+  const { data: rpcHouseholdId, error: rpcError } = await supabase.rpc("bootstrap_current_user_household");
+
+  console.log("[financeService] bootstrap_current_user_household RPC response", {
+    data: rpcHouseholdId,
+    error: rpcError,
+  });
+
+  throwIfError(rpcError);
+
+  const householdId = toString(rpcHouseholdId);
+  console.log("[financeService] bootstrap_current_user_household returned household_id", {
+    householdId,
+  });
+  if (!householdId) return null;
 
   return householdId;
 }
@@ -195,7 +204,11 @@ const mapFixedExpenseRow = (row: FixedExpenseRow): FixedExpenseModel => ({
   dueDate: toNumber(row.due_day),
 });
 
-const mapHouseholdRow = (row: HouseholdRow, partnerNames: [string, string]): HouseholdModel => ({
+const mapHouseholdRow = (
+  row: HouseholdRow,
+  partnerNames: [string, string],
+  partnerIds: [string, string],
+): HouseholdModel => ({
   id: row.id,
   name: toString(row.name),
   monthlyIncome: toNumber(row.monthly_income),
@@ -203,6 +216,7 @@ const mapHouseholdRow = (row: HouseholdRow, partnerNames: [string, string]): Hou
     toString(row.partner_1_name) || partnerNames[0] || "",
     toString(row.partner_2_name) || partnerNames[1] || "",
   ],
+  partnerIds,
 });
 
 const mapGoalRow = (row: GoalRow): GoalModel => ({
@@ -217,18 +231,24 @@ const mapGoalRow = (row: GoalRow): GoalModel => ({
 const mapGoalPlanItemRow = (row: GoalPlanItemRow): GoalPlanItemModel => ({
   id: row.id,
   goalId: toString(row.goal_id),
+  householdId: toString(row.household_id),
   name: toString(row.name),
   share: toString(row.share),
   amount: toNumber(row.amount),
+  targetAmount: toNumber(row.target_amount ?? row.amount),
+  currentAmount: toNumber(row.current_amount),
   tone: (toString(row.tone) as GoalPlanItemModel["tone"]) || "stone",
 });
 
 const mapGoalProgressRow = (row: GoalProgressRow): GoalProgressRowModel => ({
   id: row.id,
   goalId: toString(row.goal_id),
+  householdId: toString(row.household_id),
   name: toString(row.name),
   planned: toNumber(row.planned),
   realized: toNumber(row.realized),
+  targetAmount: toNumber(row.target_amount ?? row.planned),
+  currentAmount: toNumber(row.current_amount ?? row.realized),
   status: toString(row.status),
 });
 
@@ -357,17 +377,22 @@ export async function fetchHousehold(householdId: string): Promise<HouseholdMode
 
   const profileIds = (members ?? []).map((member) => member.profile_id).filter(Boolean) as string[];
   let partnerNames: [string, string] = ["", ""];
+  let partnerIds: [string, string] = ["", ""];
 
   if (profileIds.length > 0) {
     const { data: profiles, error: profileError } = await supabase.from("profiles").select("id, name").in("id", profileIds);
     throwIfError(profileError);
+    partnerIds = [
+      toString((profiles?.[0] as ProfileRow | undefined)?.id),
+      toString((profiles?.[1] as ProfileRow | undefined)?.id),
+    ];
     partnerNames = [
       toString((profiles?.[0] as ProfileRow | undefined)?.name),
       toString((profiles?.[1] as ProfileRow | undefined)?.name),
     ];
   }
 
-  return mapHouseholdRow(householdRow, partnerNames);
+  return mapHouseholdRow(householdRow, partnerNames, partnerIds);
 }
 
 export async function addExpense(expense: Omit<ExpenseModel, "id"> & { householdId: string }): Promise<ExpenseModel> {
@@ -545,9 +570,12 @@ export async function fetchGoalPlanItems(goalId: string): Promise<GoalPlanItemMo
 export async function addGoalPlanItem(goalId: string, item: Omit<GoalPlanItemModel, "id" | "goalId">): Promise<GoalPlanItemModel> {
   const { data, error } = await supabase.from("goal_plan_items").insert({
     goal_id: goalId,
+    household_id: item.householdId,
     name: item.name,
     share: item.share,
     amount: item.amount,
+    target_amount: item.targetAmount,
+    current_amount: item.currentAmount,
     tone: item.tone,
   }).select("*").single();
   throwIfError(error);
@@ -556,9 +584,12 @@ export async function addGoalPlanItem(goalId: string, item: Omit<GoalPlanItemMod
 
 export async function updateGoalPlanItem(id: string, changes: Partial<Omit<GoalPlanItemModel, "id" | "goalId">>): Promise<GoalPlanItemModel> {
   const { data, error } = await supabase.from("goal_plan_items").update({
+    household_id: changes.householdId,
     name: changes.name,
     share: changes.share,
     amount: changes.amount,
+    target_amount: changes.targetAmount,
+    current_amount: changes.currentAmount,
     tone: changes.tone,
   }).eq("id", id).select("*").single();
   throwIfError(error);
@@ -579,9 +610,12 @@ export async function fetchGoalProgressRows(goalId: string): Promise<GoalProgres
 export async function addGoalProgressRow(goalId: string, row: Omit<GoalProgressRowModel, "id" | "goalId">): Promise<GoalProgressRowModel> {
   const { data, error } = await supabase.from("goal_progress_rows").insert({
     goal_id: goalId,
+    household_id: row.householdId,
     name: row.name,
     planned: row.planned,
     realized: row.realized,
+    target_amount: row.targetAmount,
+    current_amount: row.currentAmount,
     status: row.status,
   }).select("*").single();
   throwIfError(error);
@@ -590,9 +624,12 @@ export async function addGoalProgressRow(goalId: string, row: Omit<GoalProgressR
 
 export async function updateGoalProgressRow(id: string, changes: Partial<Omit<GoalProgressRowModel, "id" | "goalId">>): Promise<GoalProgressRowModel> {
   const { data, error } = await supabase.from("goal_progress_rows").update({
+    household_id: changes.householdId,
     name: changes.name,
     planned: changes.planned,
     realized: changes.realized,
+    target_amount: changes.targetAmount,
+    current_amount: changes.currentAmount,
     status: changes.status,
   }).eq("id", id).select("*").single();
   throwIfError(error);

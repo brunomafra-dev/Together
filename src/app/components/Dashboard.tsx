@@ -30,13 +30,21 @@ export function Dashboard() {
       status: "active" | "finished" | "late";
     }>
   >([]);
+  const [goalSummary, setGoalSummary] = useState<{
+    title: string;
+    label: string;
+    planNames: string[];
+  } | null>(null);
 
   useEffect(() => {
     const load = async () => {
-      const householdId = await financeService.getUserHouseholdId();
+      const householdId = household?.id;
       if (!householdId) return;
 
-      const rows = await financeService.fetchFinancialCommitments(householdId).catch(() => []);
+      const [rows, goals] = await Promise.all([
+        financeService.fetchFinancialCommitments(householdId).catch(() => []),
+        financeService.fetchGoals(householdId).catch(() => []),
+      ]);
       setFinancialCommitments(
         rows.map((row) => ({
           id: row.id,
@@ -46,10 +54,23 @@ export function Dashboard() {
           status: row.status,
         })),
       );
+
+      const currentGoal = goals[0];
+      if (!currentGoal) {
+        setGoalSummary(null);
+        return;
+      }
+
+      const planItems = await financeService.fetchGoalPlanItems(currentGoal.id).catch(() => []);
+      setGoalSummary({
+        title: currentGoal.title,
+        label: currentGoal.label,
+        planNames: planItems.map((item) => item.name).filter(Boolean),
+      });
     };
 
     void load();
-  }, []);
+  }, [household?.id]);
 
   const now = new Date();
   const currentMonth = useMemo(
@@ -61,12 +82,17 @@ export function Dashboard() {
     const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
     const paymentMethodNames = new Map(paymentMethods.map((method) => [method.id, method.name]));
     const householdNames = household?.partnerNames ?? settings.partnerNames.filter(Boolean);
+    const householdMembers = new Map(
+      (household?.partnerIds ?? ["", ""])
+        .map((id, index) => [id, householdNames[index] || ""] as const)
+        .filter(([id]) => Boolean(id)),
+    );
 
     const resolvedExpenses = expenses.map((expense) => ({
       ...expense,
       category: categoryNames.get(expense.category) || expense.category || "Sem categoria",
       card: expense.card ? paymentMethodNames.get(expense.card) || expense.card : null,
-      paidBy: householdNames.find((name) => name === expense.paidBy) || expense.paidBy || "Sem responsavel",
+      paidBy: householdMembers.get(expense.paidBy) || expense.paidBy || "Sem responsavel",
     }));
 
     const monthExpenses = resolvedExpenses.filter((expense) =>
@@ -229,6 +255,32 @@ export function Dashboard() {
             </div>
             <p className="text-xl font-semibold text-stone-900">{formatBRL(data.variableSpent)}</p>
           </div>
+        </div>
+
+        <div className="rounded-2xl border border-stone-200 bg-white p-5">
+          <div className="mb-3 flex items-center gap-2 text-xs text-stone-500">
+            <Sparkles className="h-4 w-4" />
+            Meta salva
+          </div>
+          {goalSummary ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium text-stone-900">{goalSummary.title}</p>
+              <p className="text-xs text-stone-500">{goalSummary.label}</p>
+              <div className="flex flex-wrap gap-2 pt-1">
+                {goalSummary.planNames.length > 0 ? (
+                  goalSummary.planNames.map((name) => (
+                    <span key={name} className="rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
+                      {name}
+                    </span>
+                  ))
+                ) : (
+                  <span className="text-sm text-stone-500">Sem plano salvo ainda.</span>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-sm text-stone-500">Sem meta cadastrada</p>
+          )}
         </div>
 
         <div className="rounded-2xl border border-stone-200 bg-white p-6">

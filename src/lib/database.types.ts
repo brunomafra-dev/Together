@@ -85,18 +85,24 @@ export interface Goal extends TimestampedRow {
 export interface GoalPlanItem extends TimestampedRow {
   id: string
   goal_id: string | null
+  household_id: string | null
   name: string | null
   share: string | null
   amount: number | null
+  target_amount: number | null
+  current_amount: number | null
   tone: string | null
 }
 
 export interface GoalProgressRow extends TimestampedRow {
   id: string
   goal_id: string | null
+  household_id: string | null
   name: string | null
   planned: number | null
   realized: number | null
+  target_amount: number | null
+  current_amount: number | null
   status: string | null
 }
 
@@ -146,7 +152,12 @@ export interface Database {
       financial_commitments: TableDef<FinancialCommitment, NewRow<FinancialCommitment>, PatchRow<FinancialCommitment>>
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      bootstrap_current_user_household: {
+        Args: Record<string, never>
+        Returns: string
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }

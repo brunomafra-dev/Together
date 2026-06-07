@@ -8,9 +8,14 @@ interface RecentExpensesProps {
 }
 
 export function RecentExpenses({ expenses }: RecentExpensesProps) {
-  const { deleteExpense } = useFinance();
+  const { deleteExpense, household, settings } = useFinance();
   const sorted = [...expenses].sort(
     (a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()
+  );
+  const householdMembers = new Map(
+    (household?.partnerIds ?? ["", ""])
+      .map((id, index) => [id, household?.partnerNames[index] || settings.partnerNames[index] || ""] as const)
+      .filter(([id]) => Boolean(id)),
   );
 
   return (
@@ -42,7 +47,7 @@ export function RecentExpenses({ expenses }: RecentExpensesProps) {
                   {format(parseISO(expense.date), "d 'de' MMM", {
                     locale: ptBR,
                   })}{" "}
-                  · {expense.paidBy}
+                  · {householdMembers.get(expense.paidBy) || expense.paidBy}
                   {expense.card ? ` · ${expense.card}` : ""}
                   {expense.installments && expense.installments > 1
                     ? ` · ${expense.installments}x`

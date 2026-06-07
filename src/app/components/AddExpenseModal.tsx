@@ -9,16 +9,20 @@ interface AddExpenseModalProps {
 }
 
 export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
-  const { addExpense, settings, categories, paymentMethods } = useFinance();
+  const { addExpense, household, settings, categories, paymentMethods } = useFinance();
   const [amount, setAmount] = useState("");
   const [categoryId, setCategoryId] = useState("");
   const [methodId, setMethodId] = useState("");
-  const [paidBy, setPaidBy] = useState(settings.partnerNames[0] || "");
+  const [paidBy, setPaidBy] = useState(household?.partnerIds[0] || "");
   const [description, setDescription] = useState("");
+  const householdMembers = [
+    { id: household?.partnerIds[0] || "", name: household?.partnerNames[0] || settings.partnerNames[0] || "" },
+    { id: household?.partnerIds[1] || "", name: household?.partnerNames[1] || settings.partnerNames[1] || "" },
+  ].filter((member) => member.id && member.name);
 
   useEffect(() => {
-    if (!paidBy && settings.partnerNames[0]) {
-      setPaidBy(settings.partnerNames[0]);
+    if (!paidBy && household?.partnerIds[0]) {
+      setPaidBy(household.partnerIds[0]);
     }
     if (!methodId && paymentMethods.length > 0) {
       setMethodId(paymentMethods[0].id);
@@ -26,19 +30,16 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
     if (!categoryId && categories.length > 0) {
       setCategoryId(categories[0].id);
     }
-  }, [settings.partnerNames, paymentMethods, categories, paidBy, methodId, categoryId]);
+  }, [household?.partnerIds, paymentMethods, categories, paidBy, methodId, categoryId]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = parseFloat(amount.replace(",", "."));
     if (!value || value <= 0) return;
 
-    const selectedCategory = categories.find((c) => c.id === categoryId);
-    const categoryName = selectedCategory?.name || "";
-
     await addExpense({
       amount: value,
-      category: categoryName,
+      category: categoryId,
       description,
       date: new Date().toISOString().split("T")[0],
       paidBy,
@@ -96,13 +97,18 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
 
           <div>
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Quem pagou</label>
-            <input
-              type="text"
+            <select
               value={paidBy}
               onChange={(e) => setPaidBy(e.target.value)}
-              className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              placeholder="Digite quem pagou"
-            />
+              className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"
+            >
+              <option value="">Selecione quem pagou</option>
+              {householdMembers.map((member) => (
+                <option key={member.id} value={member.id}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
           </div>
 
           <div>

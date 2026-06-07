@@ -69,10 +69,11 @@ export function Installments() {
   const { paymentMethods, fixedExpenses, settings, household } = useFinance();
   const [commitments, setCommitments] = useState(EMPTY_COMMITMENTS);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
-      const householdId = await financeService.getUserHouseholdId();
+      const householdId = household?.id;
       if (!householdId) return;
 
       const rows = await financeService.fetchFinancialCommitments(householdId).catch(() => []);
@@ -99,7 +100,7 @@ export function Installments() {
     };
 
     void load();
-  }, [paymentMethods]);
+  }, [household?.id, paymentMethods]);
 
   const buckets = useMemo<PaymentMethodBucket[]>(() => {
     if (paymentMethods.length === 0) return [];
@@ -147,6 +148,18 @@ export function Installments() {
       estimatedBalance: monthlyIncome - monthFixedExpenses - monthCommitments,
     };
   });
+
+  const handleDeleteCommitment = async (id: string) => {
+    if (!window.confirm("Excluir este compromisso?")) return;
+
+    setDeletingId(id);
+    try {
+      await financeService.deleteFinancialCommitment(id);
+      setCommitments((prev) => prev.filter((commitment) => commitment.id !== id));
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <Layout>
@@ -250,7 +263,13 @@ export function Installments() {
                                   <span className="font-medium text-stone-600">{commitment.responsiblePerson}</span> · {bucket.name} · termina em {endDate}
                                 </p>
                               </div>
-                              <button type="button" className="text-stone-400 transition-all hover:text-rose-600">
+                              <button
+                                type="button"
+                                onClick={() => void handleDeleteCommitment(commitment.id)}
+                                disabled={deletingId === commitment.id}
+                                className="text-stone-400 transition-all hover:text-rose-600 disabled:cursor-not-allowed disabled:opacity-50"
+                                aria-label="Excluir compromisso"
+                              >
                                 <Trash2 className="h-4 w-4" />
                               </button>
                             </div>
@@ -428,7 +447,150 @@ export function Installments() {
         </section>
       </div>
 
-      {showAddForm && <div className="fixed inset-0 bg-black/50" onClick={() => setShowAddForm(false)} />}
+      {showAddForm && (
+        <AddCommitmentModal
+          paymentMethods={paymentMethods}
+          onClose={() => setShowAddForm(false)}
+          onSaved={(commitment) => setCommitments((prev) => [commitment, ...prev])}
+        />
+      )}
     </Layout>
+  );
+}
+
+function AddCommitmentModal({
+  paymentMethods,
+  onClose,
+  onSaved,
+}: {
+  paymentMethods: ReturnType<typeof useFinance>["paymentMethods"];
+  onClose: () => void;
+  onSaved: (
+    commitment: {
+      id: string;
+      paymentMethodId: string;
+      itemName: string;
+      installmentValue: number;
+      currentInstallment: number;
+      totalInstallments: number;
+      responsiblePerson: string;
+      notes: string;
+      startedAt: string;
+      status: "active" | "finished" | "late";
+    },
+  ) => void;
+}) {
+  const { household } = useFinance();
+  const [paymentMethodId, setPaymentMethodId] = useState(paymentMethods[0]?.id ?? "");
+  const [itemName, setItemName] = useState("");
+  const [installmentValue, setInstallmentValue] = useState("");
+  const [currentInstallment, setCurrentInstallment] = useState("1");
+  const [totalInstallments, setTotalInstallments] = useState("1");
+  const [responsiblePerson, setResponsiblePerson] = useState(household?.partnerNames[0] || "");
+  const [notes, setNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (!paymentMethodId && paymentMethods.length > 0) {
+      setPaymentMethodId(paymentMethods[0].id);
+    }
+  }, [paymentMethodId, paymentMethods]);
+
+  useEffect(() => {
+    if (!responsiblePerson && household?.partnerNames[0]) {
+      setResponsiblePerson(household.partnerNames[0]);
+    }
+  }, [household?.partnerNames, responsiblePerson]);
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(installmentValue.replace(",", "."));
+    const current = parseInt(currentInstallment, 10) || 1;
+    const total = parseInt(totalInstallments, 10) || 1;
+    if (!paymentMethodId || !itemName.trim() || !amount) return;
+
+    setSaving(true);
+    try {
+      const data = await financeService.addFinancialCommitment({
+        householdId: household?.id || "",
+        paymentMethodId,
+        itemName: itemName.trim(),
+        installmentValue: amount,
+        currentInstallment: current,
+        totalInstallments: total,
+        responsiblePerson: responsiblePerson.trim() || "Sem responsável",
+        notes: notes.trim(),
+        startedAt: new Date().toISOString().split("T")[0],
+        status: "active",
+      });
+      onSaved(data);
+      onClose();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onClick={onClose}>
+      <div className="w-full max-w-xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
+          <div>
+            <h2 className="text-xl font-semibold text-stone-950">Novo compromisso</h2>
+            <p className="mt-0.5 text-xs text-stone-500">Adicione um compromisso financeiro ao cartão/forma de pagamento.</p>
+          </div>
+          <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700">
+            <Trash2 className="h-5 w-5 rotate-45" />
+          </button>
+        </div>
+
+        <form className="max-h-[calc(100vh-8rem)] overflow-y-auto px-6 py-5" onSubmit={handleSubmit}>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Item</label>
+              <input value={itemName} onChange={(e) => setItemName(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Valor da parcela</label>
+              <input value={installmentValue} onChange={(e) => setInstallmentValue(e.target.value)} inputMode="decimal" className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Forma de pagamento</label>
+              <select value={paymentMethodId} onChange={(e) => setPaymentMethodId(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white">
+                <option value="">Selecione</option>
+                {paymentMethods.map((method) => (
+                  <option key={method.id} value={method.id}>{method.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Parcela atual</label>
+              <input value={currentInstallment} onChange={(e) => setCurrentInstallment(e.target.value)} type="number" min="1" className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Total de parcelas</label>
+              <input value={totalInstallments} onChange={(e) => setTotalInstallments(e.target.value)} type="number" min="1" className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Responsável</label>
+              <input value={responsiblePerson} onChange={(e) => setResponsiblePerson(e.target.value)} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+            <div className="md:col-span-2">
+              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Observações</label>
+              <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={4} className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+            </div>
+          </div>
+
+          <div className="mt-6 flex items-center justify-end gap-3">
+            <button type="button" onClick={onClose} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">
+              Cancelar
+            </button>
+            <button type="submit" disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
+              <Plus className="h-4 w-4" />
+              {saving ? "Salvando..." : "Salvar compromisso"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

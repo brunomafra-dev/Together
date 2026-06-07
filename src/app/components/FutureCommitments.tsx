@@ -7,7 +7,7 @@ import { formatBRL, useFinance } from "../context/FinanceContext";
 import * as financeService from "../../services/financeService";
 
 export function FutureCommitments() {
-  const { fixedExpenses, settings } = useFinance();
+  const { fixedExpenses, settings, household } = useFinance();
   const [commitments, setCommitments] = useState<
     Array<{
       installmentValue: number;
@@ -19,7 +19,7 @@ export function FutureCommitments() {
 
   useEffect(() => {
     const load = async () => {
-      const householdId = await financeService.getUserHouseholdId();
+      const householdId = household?.id;
       if (!householdId) return;
 
       const rows = await financeService.fetchFinancialCommitments(householdId).catch(() => []);
@@ -34,7 +34,7 @@ export function FutureCommitments() {
     };
 
     void load();
-  }, []);
+  }, [household?.id]);
 
   const futureMonths = useMemo(() => {
     const months = [];
