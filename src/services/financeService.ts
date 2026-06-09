@@ -194,7 +194,7 @@ const mapExpenseRow = (row: any): ExpenseModel => ({
   categoryId: toString(row.category_id),
   description: toString(row.description),
   date: toString(row.purchase_date),
-  createdBy: toString(row.created_by),
+  createdBy: toString(row.paid_by) || toString(row.created_by),
   cardId: row.card_id,
   notes: toString(row.notes),
 });
@@ -506,6 +506,7 @@ export async function fetchHousehold(householdId: string): Promise<HouseholdMode
 }
 
 export async function addExpense(expense: Omit<ExpenseModel, "id"> & { householdId: string }): Promise<ExpenseModel> {
+  const { data: { user } } = await supabase.auth.getUser();
   const payload: TableInsert<"expenses"> = {
     household_id: expense.householdId,
     category_id: expense.categoryId || null,
@@ -513,7 +514,8 @@ export async function addExpense(expense: Omit<ExpenseModel, "id"> & { household
     description: expense.description,
     amount: expense.amount,
     purchase_date: expense.date,
-    created_by: expense.createdBy || null,
+    created_by: user?.id || null,
+    paid_by: expense.createdBy || null,
     notes: (expense as any).notes,
   };
   const { data, error } = await supabase.from("expenses").insert(payload).select("*").single();
@@ -527,7 +529,7 @@ export async function updateExpense(id: string, changes: Partial<Omit<ExpenseMod
   if (changes.categoryId !== undefined) payload.category_id = changes.categoryId || null;
   if (changes.description !== undefined) payload.description = changes.description;
   if (changes.date !== undefined) payload.purchase_date = changes.date;
-  if (changes.createdBy !== undefined) payload.created_by = changes.createdBy || null;
+  if (changes.createdBy !== undefined) payload.paid_by = changes.createdBy || null;
   if (changes.cardId !== undefined) payload.card_id = changes.cardId || null;
   const { data, error } = await supabase.from("expenses").update(payload).eq("id", id).select("*").single();
   throwIfError(error);
@@ -646,7 +648,7 @@ export async function updateHouseholdSettings(householdId: string, monthlyIncome
     .select("*")
     .single();
   throwIfError(error);
-  return mapHouseholdRow(data as HouseholdRow, partnerNames);
+  return mapHouseholdRow(data as HouseholdRow, partnerNames, ["", ""]);
 }
 
 export async function fetchGoals(householdId: string): Promise<GoalModel[]> {

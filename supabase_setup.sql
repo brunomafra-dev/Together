@@ -115,8 +115,11 @@ alter table if exists public.categories
 add column if not exists household_id uuid references public.households(id) on delete cascade;
 
 -- Check and alter expenses table if household_id is missing
-alter table if exists public.expenses 
+alter table if exists public.expenses
 add column if not exists household_id uuid references public.households(id) on delete cascade;
+
+alter table if exists public.expenses
+add column if not exists paid_by text;
 
 alter table if exists public.expenses
 add column if not exists notes text;

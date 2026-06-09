@@ -37,14 +37,15 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
         return {
           id: ids[index] || trimmedName,
           name: trimmedName,
+          value: trimmedName,
         };
       })
       .filter((member) => member.name);
   }, [household?.partnerIds, household?.partnerNames, settings.partnerNames]);
 
   useEffect(() => {
-    if ((!paidBy || !householdMembers.some((member) => member.id === paidBy)) && householdMembers[0]) {
-      setPaidBy(householdMembers[0].id);
+    if ((!paidBy || !householdMembers.some((member) => member.value === paidBy)) && householdMembers[0]) {
+      setPaidBy(householdMembers[0].value);
     }
     if (!methodId && paymentMethods.length > 0) {
       setMethodId(paymentMethods[0].id);
@@ -126,7 +127,7 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
             >
               <option value="">Selecione quem pagou</option>
               {householdMembers.map((member) => (
-                <option key={member.id} value={member.id}>
+                <option key={member.id} value={member.value}>
                   {member.name}
                 </option>
               ))}
@@ -164,7 +165,7 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
             </button>
             <button
               type="submit"
-              disabled={!amount || parseFloat(amount.replace(",", ".")) <= 0}
+              disabled={!amount || parseFloat(amount.replace(",", ".")) <= 0 || !paidBy}
               className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             >
               Salvar

@@ -73,6 +73,7 @@ export interface Expense extends TimestampedRow {
   amount: number | null
   purchase_date: string | null
   created_by: string | null
+  paid_by: string | null
 }
 
 export interface Installment extends TimestampedRow {
