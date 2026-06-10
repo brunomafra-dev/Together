@@ -58,6 +58,13 @@ export interface MonthlySnapshot extends TimestampedRow {
   closed_at: string | null
 }
 
+export interface HouseholdFinanceState extends TimestampedRow {
+  household_id: string
+  active_month: number
+  active_year: number
+  updated_at: string | null
+}
+
 export interface Category extends TimestampedRow {
   id: string
   household_id: string | null
@@ -74,6 +81,7 @@ export interface Expense extends TimestampedRow {
   purchase_date: string | null
   created_by: string | null
   paid_by: string | null
+  recurring_monthly: boolean | null
 }
 
 export interface Installment extends TimestampedRow {
@@ -92,6 +100,18 @@ export interface FixedExpense extends TimestampedRow {
   amount: number | null
   category: string | null
   due_day: number | null
+  amount_type: 'fixed' | 'variable' | null
+}
+
+export interface FixedExpenseMonthlyValue extends TimestampedRow {
+  id: string
+  household_id: string | null
+  fixed_expense_id: string | null
+  month: number | null
+  year: number | null
+  estimated_amount: number | null
+  actual_amount: number | null
+  status: 'estimated' | 'confirmed' | null
 }
 
 export interface Goal extends TimestampedRow {
@@ -158,11 +178,13 @@ export interface Database {
       households: TableDef<Household, NewRow<Household>, PatchRow<Household>>
       household_members: TableDef<HouseholdMember, NewRow<HouseholdMember>, PatchRow<HouseholdMember>>
       cards: TableDef<Card, NewRow<Card>, PatchRow<Card>>
+      household_finance_state: TableDef<HouseholdFinanceState, HouseholdFinanceState, PatchRow<HouseholdFinanceState>>
       monthly_snapshots: TableDef<MonthlySnapshot, NewRow<MonthlySnapshot>, PatchRow<MonthlySnapshot>>
       categories: TableDef<Category, NewRow<Category>, PatchRow<Category>>
       expenses: TableDef<Expense, NewRow<Expense>, PatchRow<Expense>>
       installments: TableDef<Installment, NewRow<Installment>, PatchRow<Installment>>
       fixed_expenses: TableDef<FixedExpense, NewRow<FixedExpense>, PatchRow<FixedExpense>>
+      fixed_expense_monthly_values: TableDef<FixedExpenseMonthlyValue, NewRow<FixedExpenseMonthlyValue>, PatchRow<FixedExpenseMonthlyValue>>
       goals: TableDef<Goal, NewRow<Goal>, PatchRow<Goal>>
       goal_plan_items: TableDef<GoalPlanItem, NewRow<GoalPlanItem>, PatchRow<GoalPlanItem>>
       goal_progress_rows: TableDef<GoalProgressRow, NewRow<GoalProgressRow>, PatchRow<GoalProgressRow>>

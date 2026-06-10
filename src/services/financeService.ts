@@ -6,12 +6,14 @@ type InstallmentRow = TableRow<"installments">;
 type CardRow = TableRow<"cards">;
 type HouseholdRow = TableRow<"households">;
 type FixedExpenseRow = TableRow<"fixed_expenses">;
+type FixedExpenseMonthlyValueRow = TableRow<"fixed_expense_monthly_values">;
 type ProfileRow = TableRow<"profiles">;
 type GoalRow = TableRow<"goals">;
 type GoalPlanItemRow = TableRow<"goal_plan_items">;
 type GoalProgressRow = TableRow<"goal_progress_rows">;
 type FinancialCommitmentRow = TableRow<"financial_commitments">;
 type MonthlySnapshotRow = TableRow<"monthly_snapshots">;
+type HouseholdFinanceStateRow = TableRow<"household_finance_state">;
 
 export interface ExpenseModel {
   id: string;
@@ -22,6 +24,7 @@ export interface ExpenseModel {
   createdBy: string;
   cardId?: string | null;
   notes?: string;
+  recurringMonthly?: boolean;
 }
 
 export interface InstallmentModel {
@@ -46,6 +49,18 @@ export interface FixedExpenseModel {
   amount: number;
   category: string;
   dueDate: number;
+  amountType: "fixed" | "variable";
+}
+
+export interface FixedExpenseMonthlyValueModel {
+  id: string;
+  householdId: string;
+  fixedExpenseId: string;
+  month: number;
+  year: number;
+  estimatedAmount: number;
+  actualAmount: number | null;
+  status: "estimated" | "confirmed";
 }
 
 export interface PaymentMethodModel {
@@ -96,7 +111,7 @@ export interface GoalProgressRowModel {
 export interface FinancialCommitmentModel {
   id: string;
   householdId: string;
-  paymentMethodId: string;
+  paymentMethodId: string | null;
   itemName: string;
   installmentValue: number;
   currentInstallment: number;
@@ -122,6 +137,13 @@ export interface MonthlySnapshotModel {
   goalProgress: Array<{ title: string; currentAmount: number; targetAmount: number; percent: number }>;
   financialHealth: { availablePercent: number; totalSpentPercent: number };
   closedAt: string;
+}
+
+export interface HouseholdFinanceStateModel {
+  householdId: string;
+  activeMonth: number;
+  activeYear: number;
+  updatedAt: string;
 }
 
 export type NewMonthlySnapshot = Omit<MonthlySnapshotModel, "id" | "closedAt">;
@@ -197,6 +219,7 @@ const mapExpenseRow = (row: any): ExpenseModel => ({
   createdBy: toString(row.paid_by) || toString(row.created_by),
   cardId: row.card_id,
   notes: toString(row.notes),
+  recurringMonthly: Boolean(row.recurring_monthly),
 });
 
 const mapInstallmentRow = (row: any): InstallmentModel => ({
@@ -298,6 +321,18 @@ const mapFixedExpenseRow = (row: FixedExpenseRow): FixedExpenseModel => ({
   amount: toNumber(row.amount),
   category: toString(row.category),
   dueDate: toNumber(row.due_day),
+  amountType: row.amount_type === "variable" ? "variable" : "fixed",
+});
+
+const mapFixedExpenseMonthlyValueRow = (row: FixedExpenseMonthlyValueRow): FixedExpenseMonthlyValueModel => ({
+  id: row.id,
+  householdId: toString(row.household_id),
+  fixedExpenseId: toString(row.fixed_expense_id),
+  month: toNumber(row.month),
+  year: toNumber(row.year),
+  estimatedAmount: toNumber(row.estimated_amount),
+  actualAmount: row.actual_amount === null ? null : toNumber(row.actual_amount),
+  status: row.status === "confirmed" ? "confirmed" : "estimated",
 });
 
 const mapHouseholdRow = (
@@ -346,7 +381,7 @@ const mapGoalProgressRow = (row: GoalProgressRow): GoalProgressRowModel => ({
 const mapFinancialCommitmentRow = (row: FinancialCommitmentRow): FinancialCommitmentModel => ({
   id: row.id,
   householdId: toString(row.household_id),
-  paymentMethodId: toString(row.payment_method_id),
+  paymentMethodId: row.payment_method_id ? toString(row.payment_method_id) : null,
   itemName: toString(row.item_name),
   installmentValue: toNumber(row.installment_value),
   currentInstallment: toNumber(row.current_installment),
@@ -374,6 +409,13 @@ const mapMonthlySnapshotRow = (row: MonthlySnapshotRow): MonthlySnapshotModel =>
     ? row.financial_health as MonthlySnapshotModel["financialHealth"]
     : { availablePercent: 0, totalSpentPercent: 0 },
   closedAt: toString(row.closed_at || row.created_at),
+});
+
+const mapHouseholdFinanceStateRow = (row: HouseholdFinanceStateRow): HouseholdFinanceStateModel => ({
+  householdId: toString(row.household_id),
+  activeMonth: toNumber(row.active_month),
+  activeYear: toNumber(row.active_year),
+  updatedAt: toString(row.updated_at || row.created_at),
 });
 
 export async function fetchExpenses(householdId: string): Promise<ExpenseModel[]> {
@@ -432,17 +474,26 @@ export async function fetchFixedExpenses(householdId: string): Promise<FixedExpe
 export async function addFixedExpense(
   fixedExpense: Omit<FixedExpenseModel, "id"> & { householdId: string },
 ): Promise<FixedExpenseModel> {
-  const { data, error } = await supabase
+  const payload = {
+    household_id: fixedExpense.householdId,
+    name: fixedExpense.name,
+    amount: fixedExpense.amount,
+    category: fixedExpense.category,
+    due_day: fixedExpense.dueDate,
+    amount_type: fixedExpense.amountType ?? "fixed",
+  };
+  let { data, error } = await supabase
     .from("fixed_expenses")
-    .insert({
-      household_id: fixedExpense.householdId,
-      name: fixedExpense.name,
-      amount: fixedExpense.amount,
-      category: fixedExpense.category,
-      due_day: fixedExpense.dueDate,
-    })
+    .insert(payload)
     .select("*")
     .single();
+  if (error && String(error.message || "").includes("amount_type")) {
+    const fallbackPayload = { ...payload } as any;
+    delete fallbackPayload.amount_type;
+    const fallback = await supabase.from("fixed_expenses").insert(fallbackPayload).select("*").single();
+    data = fallback.data;
+    error = fallback.error;
+  }
   throwIfError(error);
   return mapFixedExpenseRow(data as FixedExpenseRow);
 }
@@ -451,17 +502,26 @@ export async function updateFixedExpense(
   id: string,
   changes: Partial<Omit<FixedExpenseModel, "id">>,
 ): Promise<FixedExpenseModel> {
-  const { data, error } = await supabase
+  const payload = {
+    name: changes.name,
+    amount: changes.amount,
+    category: changes.category,
+    due_day: changes.dueDate,
+    amount_type: changes.amountType,
+  };
+  let { data, error } = await supabase
     .from("fixed_expenses")
-    .update({
-      name: changes.name,
-      amount: changes.amount,
-      category: changes.category,
-      due_day: changes.dueDate,
-    })
+    .update(payload)
     .eq("id", id)
     .select("*")
     .single();
+  if (error && String(error.message || "").includes("amount_type")) {
+    const fallbackPayload = { ...payload } as any;
+    delete fallbackPayload.amount_type;
+    const fallback = await supabase.from("fixed_expenses").update(fallbackPayload).eq("id", id).select("*").single();
+    data = fallback.data;
+    error = fallback.error;
+  }
   throwIfError(error);
   return mapFixedExpenseRow(data as FixedExpenseRow);
 }
@@ -469,6 +529,45 @@ export async function updateFixedExpense(
 export async function deleteFixedExpense(id: string): Promise<void> {
   const { error } = await supabase.from("fixed_expenses").delete().eq("id", id);
   throwIfError(error);
+}
+
+export async function fetchFixedExpenseMonthlyValues(householdId: string): Promise<FixedExpenseMonthlyValueModel[]> {
+  const { data, error } = await supabase
+    .from("fixed_expense_monthly_values")
+    .select("*")
+    .eq("household_id", householdId)
+    .order("year", { ascending: false })
+    .order("month", { ascending: false });
+  if (error) {
+    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("fixed_expense_monthly_values")) return [];
+    throwIfError(error);
+  }
+  return (data ?? []).map(mapFixedExpenseMonthlyValueRow);
+}
+
+export async function upsertFixedExpenseMonthlyValue(
+  value: Omit<FixedExpenseMonthlyValueModel, "id">,
+): Promise<FixedExpenseMonthlyValueModel | null> {
+  const { data, error } = await supabase
+    .from("fixed_expense_monthly_values")
+    .upsert({
+      household_id: value.householdId,
+      fixed_expense_id: value.fixedExpenseId,
+      month: value.month,
+      year: value.year,
+      estimated_amount: value.estimatedAmount,
+      actual_amount: value.actualAmount,
+      status: value.status,
+    } as any, { onConflict: "fixed_expense_id,month,year" })
+    .select("*")
+    .single();
+  if (error) {
+    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("fixed_expense_monthly_values")) {
+      throw new Error("Tabela fixed_expense_monthly_values nao encontrada. Rode o SQL supabase_fixed_expense_monthly_values.sql no Supabase.");
+    }
+    throwIfError(error);
+  }
+  return data ? mapFixedExpenseMonthlyValueRow(data as FixedExpenseMonthlyValueRow) : null;
 }
 
 export async function fetchHousehold(householdId: string): Promise<HouseholdModel | null> {
@@ -517,8 +616,16 @@ export async function addExpense(expense: Omit<ExpenseModel, "id"> & { household
     created_by: user?.id || null,
     paid_by: expense.createdBy || null,
     notes: (expense as any).notes,
+    recurring_monthly: (expense as any).recurringMonthly ?? false,
   };
-  const { data, error } = await supabase.from("expenses").insert(payload).select("*").single();
+  let { data, error } = await supabase.from("expenses").insert(payload).select("*").single();
+  if (error && String(error.message || "").includes("recurring_monthly")) {
+    const fallbackPayload = { ...payload } as any;
+    delete fallbackPayload.recurring_monthly;
+    const fallback = await supabase.from("expenses").insert(fallbackPayload).select("*").single();
+    data = fallback.data;
+    error = fallback.error;
+  }
   throwIfError(error);
   return mapExpenseRow(data as ExpenseRow);
 }
@@ -531,7 +638,15 @@ export async function updateExpense(id: string, changes: Partial<Omit<ExpenseMod
   if (changes.date !== undefined) payload.purchase_date = changes.date;
   if (changes.createdBy !== undefined) payload.paid_by = changes.createdBy || null;
   if (changes.cardId !== undefined) payload.card_id = changes.cardId || null;
-  const { data, error } = await supabase.from("expenses").update(payload).eq("id", id).select("*").single();
+  if (changes.recurringMonthly !== undefined) (payload as any).recurring_monthly = changes.recurringMonthly;
+  let { data, error } = await supabase.from("expenses").update(payload).eq("id", id).select("*").single();
+  if (error && String(error.message || "").includes("recurring_monthly")) {
+    const fallbackPayload = { ...payload } as any;
+    delete fallbackPayload.recurring_monthly;
+    const fallback = await supabase.from("expenses").update(fallbackPayload).eq("id", id).select("*").single();
+    data = fallback.data;
+    error = fallback.error;
+  }
   throwIfError(error);
   return mapExpenseRow(data as ExpenseRow);
 }
@@ -762,7 +877,7 @@ export async function fetchFinancialCommitments(householdId: string): Promise<Fi
 export async function addFinancialCommitment(commitment: Omit<FinancialCommitmentModel, "id">): Promise<FinancialCommitmentModel> {
   const { data, error } = await supabase.from("financial_commitments").insert({
     household_id: commitment.householdId,
-    payment_method_id: commitment.paymentMethodId,
+    payment_method_id: commitment.paymentMethodId || null,
     item_name: commitment.itemName,
     installment_value: commitment.installmentValue,
     current_installment: commitment.currentInstallment,
@@ -778,7 +893,7 @@ export async function addFinancialCommitment(commitment: Omit<FinancialCommitmen
 
 export async function updateFinancialCommitment(id: string, changes: Partial<Omit<FinancialCommitmentModel, "id" | "householdId">>): Promise<FinancialCommitmentModel> {
   const { data, error } = await supabase.from("financial_commitments").update({
-    payment_method_id: changes.paymentMethodId,
+    payment_method_id: changes.paymentMethodId || null,
     item_name: changes.itemName,
     installment_value: changes.installmentValue,
     current_installment: changes.currentInstallment,
@@ -808,10 +923,45 @@ export async function fetchMonthlySnapshots(householdId: string): Promise<Monthl
   return (data ?? []).map(mapMonthlySnapshotRow);
 }
 
+export async function fetchHouseholdFinanceState(householdId: string): Promise<HouseholdFinanceStateModel | null> {
+  const { data, error } = await supabase
+    .from("household_finance_state")
+    .select("*")
+    .eq("household_id", householdId)
+    .maybeSingle();
+  if (error) {
+    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("household_finance_state")) return null;
+    throwIfError(error);
+  }
+  return data ? mapHouseholdFinanceStateRow(data as HouseholdFinanceStateRow) : null;
+}
+
+export async function upsertHouseholdFinanceState(
+  householdId: string,
+  activeMonth: number,
+  activeYear: number,
+): Promise<HouseholdFinanceStateModel | null> {
+  const { data, error } = await supabase
+    .from("household_finance_state")
+    .upsert({
+      household_id: householdId,
+      active_month: activeMonth,
+      active_year: activeYear,
+      updated_at: new Date().toISOString(),
+    } as any)
+    .select("*")
+    .single();
+  if (error) {
+    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("household_finance_state")) return null;
+    throwIfError(error);
+  }
+  return data ? mapHouseholdFinanceStateRow(data as HouseholdFinanceStateRow) : null;
+}
+
 export async function addMonthlySnapshot(snapshot: MonthlySnapshotInput): Promise<MonthlySnapshotModel> {
   const { data, error } = await supabase
     .from("monthly_snapshots")
-    .insert({
+    .upsert({
       household_id: snapshot.householdId,
       month: snapshot.month,
       year: snapshot.year,
@@ -825,7 +975,7 @@ export async function addMonthlySnapshot(snapshot: MonthlySnapshotInput): Promis
       goal_progress: snapshot.goalProgress,
       financial_health: snapshot.financialHealth,
       closed_at: snapshot.closedAt ?? new Date().toISOString(),
-    })
+    }, { onConflict: "household_id,month,year" })
     .select("*")
     .single();
   throwIfError(error);

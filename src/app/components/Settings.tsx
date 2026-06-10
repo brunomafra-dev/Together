@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { Layout } from "./Layout";
-import { useFinance, formatBRL, MonthlySnapshotModel } from "../context/FinanceContext";
+import { Expense, FixedExpense, FixedExpenseMonthlyValueModel, useFinance, formatBRL, MonthlySnapshotModel } from "../context/FinanceContext";
 import { Camera, LogOut, Mail, Plus, Trash2, Save, X, Edit2 } from "lucide-react";
+import { toast } from "sonner";
 import { CategorySelect } from "./CategorySelect";
 import { useAuth } from "../context/AuthContext";
 import * as financeService from "../../services/financeService";
@@ -13,20 +14,56 @@ const PAYMENT_TYPE_LABELS = {
   cash: "Dinheiro",
 } as const;
 
+const csvCell = (value: string | number) => {
+  const text = String(value ?? "");
+  return `"${text.replace(/"/g, '""')}"`;
+};
+
+const exportSnapshotExpensesCsv = (snapshot: MonthlySnapshotModel, monthLabel: string, expenses: Expense[]) => {
+  const monthKey = `${snapshot.year}-${String(snapshot.month).padStart(2, "0")}`;
+  const rows = [
+    ["data", "descricao", "categoria", "forma de pagamento", "quem pagou", "valor"],
+    ...expenses
+      .filter((expense) => expense.date.slice(0, 7) === monthKey)
+      .map((expense) => [
+        expense.date,
+        expense.description || "",
+        expense.category || "Sem categoria",
+        expense.card || "",
+        expense.paidBy || "",
+        expense.amount.toFixed(2).replace(".", ","),
+      ]),
+  ];
+  const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(";")).join("\n")}`;
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `gastos-${monthLabel.replace(/\s+/g, "-").toLowerCase()}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+};
+
 export function Settings() {
   const { user, signOut } = useAuth();
   const {
     household,
+    expenses,
     fixedExpenses,
+    fixedExpenseMonthlyValues,
     settings,
     paymentMethods,
     monthlySnapshots,
+    activeCycle,
     deleteFixedExpense,
+    upsertFixedExpenseMonthlyValue,
     updateSettings,
+    updateHouseholdAvatar,
     addPaymentMethod,
     updatePaymentMethod,
     deletePaymentMethod,
     closeMonth,
+    reopenMonth,
     deleteMonthlySnapshot,
   } = useFinance();
 
@@ -35,6 +72,8 @@ export function Settings() {
   const [partner2, setPartner2] = useState(settings.partnerNames[1]);
   const [showAddPaymentMethod, setShowAddPaymentMethod] = useState(false);
   const [showAddFixed, setShowAddFixed] = useState(false);
+  const [editingFixedExpense, setEditingFixedExpense] = useState<FixedExpense | null>(null);
+  const [editingFixedMonthlyValue, setEditingFixedMonthlyValue] = useState<FixedExpense | null>(null);
   const [saved, setSaved] = useState(false);
   const [editingMethodId, setEditingMethodId] = useState<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = useState<MonthlySnapshotModel | null>(null);
@@ -98,7 +137,7 @@ export function Settings() {
     setProfileError(null);
     try {
       const avatarUrl = await financeService.uploadHouseholdAvatar(household.id, file);
-      await financeService.updateHouseholdAvatar(household.id, avatarUrl);
+      await updateHouseholdAvatar(avatarUrl);
       setHouseholdAvatarUrl(avatarUrl);
     } catch (error) {
       setProfileError(error instanceof Error ? error.message : "Não foi possível salvar a foto.");
@@ -233,7 +272,7 @@ export function Settings() {
                           setEditingMethodId(method.id);
                           setShowAddPaymentMethod(true);
                         }}
-                        className="text-stone-400 hover:text-emerald-600 transition-colors"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-[0_0_18px_rgba(16,185,129,0.16)]"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
@@ -245,7 +284,7 @@ export function Settings() {
                           }
                         }}
                         disabled={defaultPaymentMethodNames.has(method.name)}
-                        className="text-stone-400 hover:text-rose-600 transition-colors disabled:cursor-not-allowed disabled:opacity-30"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 hover:shadow-[0_0_18px_rgba(244,63,94,0.16)] disabled:cursor-not-allowed disabled:opacity-30"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -256,7 +295,7 @@ export function Settings() {
               <button
                 type="button"
                 onClick={() => setShowAddPaymentMethod(true)}
-                className="w-full bg-stone-900 hover:bg-stone-800 text-white px-4 py-2 rounded-lg flex items-center justify-center gap-2 transition-colors text-sm"
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
               >
                 <Plus className="w-4 h-4" />
                 Adicionar cartão
@@ -271,15 +310,26 @@ export function Settings() {
             <h2 className="font-medium text-stone-900">Contas Fixas</h2>
             <button
               onClick={() => setShowAddFixed(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors hover:bg-stone-800 sm:w-auto"
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 sm:w-auto"
             >
               <Plus className="w-4 h-4" />
-              Adicionar
+              Nova conta
             </button>
           </div>
 
           <div className="space-y-1">
             {fixedExpenses.map((expense) => (
+              <FixedExpenseRow
+                key={expense.id}
+                expense={expense}
+                monthlyValues={fixedExpenseMonthlyValues}
+                activeCycle={activeCycle}
+                onEdit={setEditingFixedExpense}
+                onEditMonthlyValue={setEditingFixedMonthlyValue}
+                onDelete={deleteFixedExpense}
+              />
+            ))}
+            {false && fixedExpenses.map((expense) => (
               <div
                 key={expense.id}
                 className="group flex flex-col gap-2 border-b border-stone-100 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
@@ -293,12 +343,29 @@ export function Settings() {
                   </p>
                 </div>
                 <div className="flex items-center justify-between gap-3 sm:justify-end">
+                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+                    expense.amountType === "variable"
+                      ? "bg-amber-50 text-amber-700"
+                      : "bg-emerald-50 text-emerald-700"
+                  }`}>
+                    {expense.amountType === "variable" ? "Variavel" : "Fixa"}
+                  </span>
                   <p className="break-words text-sm font-medium text-stone-900">
                     {formatBRL(expense.amount)}
                   </p>
                   <button
+                    type="button"
+                    onClick={() => setEditingFixedExpense(expense)}
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-[0_0_18px_rgba(16,185,129,0.16)] sm:opacity-0 sm:group-hover:opacity-100"
+                    aria-label="Editar conta fixa"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => deleteFixedExpense(expense.id)}
-                    className="text-stone-400 transition-all hover:text-rose-600 sm:opacity-0 sm:group-hover:opacity-100"
+                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 hover:shadow-[0_0_18px_rgba(244,63,94,0.16)] sm:opacity-0 sm:group-hover:opacity-100"
+                    aria-label="Excluir conta fixa"
                   >
                     <Trash2 className="w-4 h-4" />
                   </button>
@@ -389,6 +456,38 @@ export function Settings() {
       {showAddFixed && (
         <AddFixedExpenseModal onClose={() => setShowAddFixed(false)} />
       )}
+      {editingFixedExpense && (
+        <AddFixedExpenseModal
+          fixedExpense={editingFixedExpense}
+          onClose={() => setEditingFixedExpense(null)}
+        />
+      )}
+      {editingFixedMonthlyValue && (
+        <FixedExpenseMonthlyValueModal
+          fixedExpense={editingFixedMonthlyValue}
+          currentValue={fixedExpenseMonthlyValues.find(
+            (value) =>
+              value.fixedExpenseId === editingFixedMonthlyValue.id &&
+              value.month === activeCycle.month &&
+              value.year === activeCycle.year,
+          )}
+          month={activeCycle.month}
+          year={activeCycle.year}
+          onClose={() => setEditingFixedMonthlyValue(null)}
+          onSave={async (actualAmount) => {
+            await upsertFixedExpenseMonthlyValue({
+              fixedExpenseId: editingFixedMonthlyValue.id,
+              month: activeCycle.month,
+              year: activeCycle.year,
+              estimatedAmount: editingFixedMonthlyValue.amount,
+              actualAmount,
+              status: "confirmed",
+            });
+            toast.success("Valor real salvo.");
+            setEditingFixedMonthlyValue(null);
+          }}
+        />
+      )}
       {selectedSnapshot && (
         <FinancialHistoryModal
           snapshot={selectedSnapshot}
@@ -399,13 +498,201 @@ export function Settings() {
             await deleteMonthlySnapshot(selectedSnapshot.id);
             setSelectedSnapshot(null);
           }}
+          onReopen={async () => {
+            if (!window.confirm(`Reabrir ${monthLabel(selectedSnapshot)}? Esse mes voltara a ser o mes aberto e os gastos variaveis poderao ser editados novamente.`)) return;
+            await reopenMonth(selectedSnapshot);
+            setSelectedSnapshot(null);
+          }}
+          expenses={expenses}
         />
       )}
     </Layout>
   );
 }
 
+function FixedExpenseRow({
+  expense,
+  monthlyValues,
+  activeCycle,
+  onEdit,
+  onEditMonthlyValue,
+  onDelete,
+}: {
+  expense: FixedExpense;
+  monthlyValues: FixedExpenseMonthlyValueModel[];
+  activeCycle: { month: number; year: number };
+  onEdit: (expense: FixedExpense) => void;
+  onEditMonthlyValue: (expense: FixedExpense) => void;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const monthlyValue = monthlyValues.find(
+    (value) =>
+      value.fixedExpenseId === expense.id &&
+      value.month === activeCycle.month &&
+      value.year === activeCycle.year,
+  );
+  const displayedAmount =
+    monthlyValue?.status === "confirmed" && monthlyValue.actualAmount !== null
+      ? monthlyValue.actualAmount
+      : monthlyValue?.estimatedAmount ?? expense.amount;
+
+  return (
+    <div className="group flex flex-col gap-2 border-b border-stone-100 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+      <div className="min-w-0">
+        <p className="break-words text-sm font-medium text-stone-900">{expense.name}</p>
+        <p className="text-xs text-stone-500">
+          {expense.category} - vence dia {expense.dueDate}
+          {expense.amountType === "variable" && (
+            <span>
+              {" "}-
+              {" "}
+              {monthlyValue?.status === "confirmed" ? "valor real informado" : "estimado"}
+            </span>
+          )}
+        </p>
+      </div>
+      <div className="flex flex-wrap items-center justify-between gap-3 sm:justify-end">
+        <span
+          className={`rounded-full px-2.5 py-1 text-xs font-medium ${
+            expense.amountType === "variable"
+              ? "bg-amber-50 text-amber-700"
+              : "bg-emerald-50 text-emerald-700"
+          }`}
+        >
+          {expense.amountType === "variable" ? "Variavel" : "Fixa"}
+        </span>
+        <p className="break-words text-sm font-medium text-stone-900">{formatBRL(displayedAmount)}</p>
+        {expense.amountType === "variable" && (
+          <button
+            type="button"
+            onClick={() => onEditMonthlyValue(expense)}
+            className="rounded-lg border border-stone-200 px-2.5 py-1 text-xs text-stone-600 transition-colors hover:bg-stone-50"
+          >
+            Informar real
+          </button>
+        )}
+        <button
+          type="button"
+          onClick={() => onEdit(expense)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-[0_0_18px_rgba(16,185,129,0.16)] sm:opacity-0 sm:group-hover:opacity-100"
+          aria-label="Editar conta fixa"
+        >
+          <Edit2 className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void onDelete(expense.id)}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 hover:shadow-[0_0_18px_rgba(244,63,94,0.16)] sm:opacity-0 sm:group-hover:opacity-100"
+          aria-label="Excluir conta fixa"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function FixedExpenseMonthlyValueModal({
+  fixedExpense,
+  currentValue,
+  month,
+  year,
+  onClose,
+  onSave,
+}: {
+  fixedExpense: FixedExpense;
+  currentValue?: FixedExpenseMonthlyValueModel;
+  month: number;
+  year: number;
+  onClose: () => void;
+  onSave: (actualAmount: number) => Promise<void>;
+}) {
+  const [actualAmount, setActualAmount] = useState(
+    currentValue?.actualAmount !== null && currentValue?.actualAmount !== undefined
+      ? String(currentValue.actualAmount).replace(".", ",")
+      : String(fixedExpense.amount).replace(".", ","),
+  );
+  const [saving, setSaving] = useState(false);
+  const monthLabel = `${String(month).padStart(2, "0")}/${year}`;
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const value = parseFloat(actualAmount.replace(",", "."));
+    if (!value || value <= 0 || saving) return;
+
+    setSaving(true);
+    try {
+      await onSave(value);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-stone-900/40 p-4 backdrop-blur-sm sm:items-center"
+      onClick={() => {
+        if (!saving) onClose();
+      }}
+    >
+      <div
+        className="w-full max-w-md rounded-3xl bg-white p-5 shadow-xl sm:p-6"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-stone-900">Valor real do mes</h2>
+            <p className="mt-1 text-xs text-stone-500">
+              {fixedExpense.name} - {monthLabel}
+            </p>
+          </div>
+          <button type="button" disabled={saving} onClick={onClose} className="text-stone-400 hover:text-stone-700 disabled:opacity-50">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
+            Estimado: {formatBRL(fixedExpense.amount)}. Ao salvar, o dashboard e o fechamento deste mes passam a usar o valor real.
+          </div>
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+              Valor real
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={actualAmount}
+              onChange={(event) => setActualAmount(event.target.value)}
+              className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="0,00"
+            />
+          </div>
+          <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+            <button
+              type="button"
+              disabled={saving}
+              onClick={onClose}
+              className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-60"
+            >
+              {saving ? "Salvando..." : "Salvar valor real"}
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 interface AddFixedExpenseModalProps {
+  fixedExpense?: FixedExpense;
   onClose: () => void;
 }
 
@@ -551,28 +838,50 @@ function AddPaymentMethodModal({
   );
 }
 
-function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
-  const { addFixedExpense, categories } = useFinance();
-  const [name, setName] = useState("");
-  const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [dueDate, setDueDate] = useState("");
+function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalProps) {
+  const { addFixedExpense, updateFixedExpense, categories } = useFinance();
+  const selectedCategoryId = fixedExpense
+    ? categories.find((category) => category.name === fixedExpense.category)?.id ?? ""
+    : "";
+  const [name, setName] = useState(fixedExpense?.name ?? "");
+  const [amount, setAmount] = useState(
+    fixedExpense ? String(fixedExpense.amount).replace(".", ",") : "",
+  );
+  const [categoryId, setCategoryId] = useState(selectedCategoryId);
+  const [dueDate, setDueDate] = useState(fixedExpense ? String(fixedExpense.dueDate) : "");
+  const [amountType, setAmountType] = useState<FixedExpense["amountType"]>(
+    fixedExpense?.amountType ?? "fixed",
+  );
+  const [saving, setSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = parseFloat(amount.replace(",", "."));
-    if (!name || !value) return;
+    const parsedDueDate = parseInt(dueDate, 10);
+    if (!name.trim() || !value || !parsedDueDate || saving) return;
 
     const selectedCategory = categories.find((c) => c.id === categoryId);
     const categoryName = selectedCategory?.name || "";
 
-    addFixedExpense({
-      name,
-      amount: value,
-      category: categoryName,
-      dueDate: parseInt(dueDate),
-    });
-    onClose();
+    setSaving(true);
+    try {
+      const payload = {
+        name: name.trim(),
+        amount: value,
+        category: categoryName,
+        dueDate: parsedDueDate,
+        amountType,
+      };
+
+      if (fixedExpense) {
+        await updateFixedExpense(fixedExpense.id, payload);
+      } else {
+        await addFixedExpense(payload);
+      }
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -585,10 +894,40 @@ function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
         onClick={(e) => e.stopPropagation()}
       >
         <h2 className="text-xl font-semibold text-stone-900 mb-6">
-          Nova conta fixa
+          {fixedExpense ? "Editar conta fixa" : "Nova conta fixa"}
         </h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
+          <div>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+              Tipo de valor
+            </label>
+            <div className="grid grid-cols-2 gap-2 rounded-xl bg-stone-100 p-1">
+              <button
+                type="button"
+                onClick={() => setAmountType("fixed")}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  amountType === "fixed"
+                    ? "bg-white text-stone-950 shadow-sm"
+                    : "text-stone-500 hover:text-stone-800"
+                }`}
+              >
+                Fixo
+              </button>
+              <button
+                type="button"
+                onClick={() => setAmountType("variable")}
+                className={`rounded-lg px-3 py-2 text-sm font-medium transition-colors ${
+                  amountType === "variable"
+                    ? "bg-white text-stone-950 shadow-sm"
+                    : "text-stone-500 hover:text-stone-800"
+                }`}
+              >
+                Variavel mensal
+              </button>
+            </div>
+          </div>
+
           <div>
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
               Nome
@@ -605,7 +944,7 @@ function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
-                Valor
+                {amountType === "variable" ? "Valor estimado" : "Valor"}
               </label>
               <input
                 type="text"
@@ -615,6 +954,11 @@ function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 placeholder="0,00"
               />
+              {amountType === "variable" && (
+                <p className="mt-1 text-xs text-stone-500">
+                  Use uma media para projecao. O valor real por mes entra na proxima etapa.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
@@ -646,15 +990,17 @@ function AddFixedExpenseModal({ onClose }: AddFixedExpenseModalProps) {
             <button
               type="button"
               onClick={onClose}
+              disabled={saving}
               className="flex-1 px-4 py-3 border border-stone-200 text-stone-700 rounded-xl hover:bg-stone-50 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors font-medium"
+              disabled={saving}
+              className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-60 transition-colors font-medium"
             >
-              Salvar
+              {saving ? "Salvando..." : fixedExpense ? "Salvar edicao" : "Salvar"}
             </button>
           </div>
         </form>
@@ -668,11 +1014,15 @@ function FinancialHistoryModal({
   monthLabel,
   onClose,
   onDelete,
+  onReopen,
+  expenses,
 }: {
   snapshot: MonthlySnapshotModel;
   monthLabel: string;
   onClose: () => void;
   onDelete: () => Promise<void>;
+  onReopen: () => Promise<void>;
+  expenses: Expense[];
 }) {
 
   return (
@@ -711,6 +1061,12 @@ function FinancialHistoryModal({
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <button type="button" onClick={() => void onDelete()} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700">
               Excluir histórico
+            </button>
+            <button type="button" onClick={() => void onReopen()} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
+              Reabrir mês
+            </button>
+            <button type="button" onClick={() => exportSnapshotExpensesCsv(snapshot, monthLabel, expenses)} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">
+              Exportar CSV
             </button>
             <button type="button" onClick={onClose} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">
               Fechar

@@ -1,27 +1,37 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { endOfMonth, format, getDate, getDaysInMonth, isWithinInterval, parseISO, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Plus, Sparkles, TrendingDown, Users, Wallet } from "lucide-react";
+import { CalendarCheck, Plus, Sparkles, TrendingDown, Users, Wallet, X } from "lucide-react";
+import { toast } from "sonner";
 import { AddExpenseModal } from "./AddExpenseModal";
 import { CategoryBreakdown } from "./CategoryBreakdown";
 import { Layout } from "./Layout";
 import { RecentExpenses } from "./RecentExpenses";
-import { formatBRL, useFinance } from "../context/FinanceContext";
+import { formatBRL, MonthlySnapshotModel, useFinance } from "../context/FinanceContext";
 import * as financeService from "../../services/financeService";
+
+const nextCycle = (cycle: { month: number; year: number }) =>
+  cycle.month === 12 ? { month: 1, year: cycle.year + 1 } : { month: cycle.month + 1, year: cycle.year };
 
 export function Dashboard() {
   const {
     household,
     expenses,
     fixedExpenses,
+    fixedExpenseMonthlyValues,
     financialCommitments,
     categories,
     paymentMethods,
     settings,
     loading,
     error,
+    closeMonth,
+    openNextMonth,
+    activeCycle,
   } = useFinance();
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showCloseMonth, setShowCloseMonth] = useState(false);
+  const [closedSnapshot, setClosedSnapshot] = useState<MonthlySnapshotModel | null>(null);
   const [goalSummary, setGoalSummary] = useState<{
     title: string;
     label: string;
@@ -52,10 +62,16 @@ export function Dashboard() {
     void load();
   }, [household?.id]);
 
-  const now = new Date();
+  const cycleMonthDate = new Date(activeCycle.year, activeCycle.month - 1, 1);
+  const today = new Date();
+  const isActiveCycleCurrentMonth =
+    today.getFullYear() === activeCycle.year && today.getMonth() + 1 === activeCycle.month;
+  const paceReferenceDate = isActiveCycleCurrentMonth
+    ? today
+    : new Date(activeCycle.year, activeCycle.month - 1, 1);
   const currentMonth = useMemo(
-    () => ({ start: startOfMonth(now), end: endOfMonth(now) }),
-    [],
+    () => ({ start: startOfMonth(cycleMonthDate), end: endOfMonth(cycleMonthDate) }),
+    [cycleMonthDate],
   );
 
   const data = useMemo(() => {
@@ -78,9 +94,21 @@ export function Dashboard() {
     const monthExpenses = resolvedExpenses.filter((expense) =>
       isWithinInterval(parseISO(expense.date), currentMonth),
     );
+    const fixedExpenseAmount = (expense: typeof fixedExpenses[number]) => {
+      const monthlyValue = fixedExpenseMonthlyValues.find(
+        (value) =>
+          value.fixedExpenseId === expense.id &&
+          value.month === activeCycle.month &&
+          value.year === activeCycle.year,
+      );
+      return monthlyValue?.status === "confirmed" && monthlyValue.actualAmount !== null
+        ? monthlyValue.actualAmount
+        : monthlyValue?.estimatedAmount ?? expense.amount;
+    };
+
     const fixedCategoryExpenses = fixedExpenses.map((expense) => ({
       category: expense.category || "Sem categoria",
-      amount: expense.amount,
+      amount: fixedExpenseAmount(expense),
     }));
     const categoryExpenses = [
       ...monthExpenses.map((expense) => ({ category: expense.category, amount: expense.amount })),
@@ -88,7 +116,7 @@ export function Dashboard() {
     ];
 
     const variableSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const fixedTotal = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const fixedTotal = fixedExpenses.reduce((sum, expense) => sum + fixedExpenseAmount(expense), 0);
     const categorySpent = categoryExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const commitmentsTotal = financialCommitments
       .filter((commitment) => commitment.status !== "finished")
@@ -107,8 +135,8 @@ export function Dashboard() {
       .map(([name, amount]) => ({ name, amount }))
       .sort((left, right) => right.amount - left.amount);
 
-    const dayOfMonth = getDate(now);
-    const daysInMonth = getDaysInMonth(now);
+    const dayOfMonth = getDate(paceReferenceDate);
+    const daysInMonth = getDaysInMonth(cycleMonthDate);
     const daysLeft = daysInMonth - dayOfMonth;
     const dailyPace = dayOfMonth > 0 ? variableSpent / dayOfMonth : 0;
     const projectedVariable = dailyPace * daysInMonth;
@@ -130,9 +158,10 @@ export function Dashboard() {
       projectedLeftover,
       dailyPace,
     };
-  }, [categories, currentMonth, expenses, fixedExpenses, financialCommitments, household?.partnerNames, paymentMethods, settings.monthlyIncome, settings.partnerNames]);
+  }, [activeCycle.month, activeCycle.year, categories, currentMonth, cycleMonthDate, expenses, fixedExpenseMonthlyValues, fixedExpenses, financialCommitments, household?.partnerNames, paceReferenceDate, paymentMethods, settings.monthlyIncome, settings.partnerNames]);
 
-  const monthLabel = format(now, "MMMM 'de' yyyy", { locale: ptBR });
+  const monthLabel = format(cycleMonthDate, "MMMM 'de' yyyy", { locale: ptBR });
+  const activeMonthKey = `${activeCycle.year}-${String(activeCycle.month).padStart(2, "0")}`;
   const availableColor =
     data.available > 1000
       ? "text-emerald-700"
@@ -176,13 +205,22 @@ export function Dashboard() {
               {greetingNames.length > 0 ? `Oi, ${greetingNames.join(" e ")}` : "Oi"}
             </h1>
           </div>
-          <button
-            onClick={() => setShowAddExpense(true)}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-white shadow-sm transition-colors hover:bg-stone-800 sm:w-auto"
-          >
-            <Plus className="h-4 w-4" />
-            Novo gasto
-          </button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <button
+              onClick={() => setShowCloseMonth(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-stone-700 shadow-sm transition-colors hover:bg-stone-50 sm:w-auto"
+            >
+              <CalendarCheck className="h-4 w-4" />
+              Fechar mes
+            </button>
+            <button
+              onClick={() => setShowAddExpense(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-100 sm:w-auto"
+            >
+              <Plus className="h-4 w-4" />
+              Novo gasto
+            </button>
+          </div>
         </div>
 
         <div className="rounded-3xl border border-stone-200 bg-gradient-to-br from-white to-stone-50 p-5 sm:p-8">
@@ -299,11 +337,33 @@ export function Dashboard() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <CategoryBreakdown expenses={data.categoryExpenses} />
-          <RecentExpenses expenses={data.monthExpenses} />
+          <RecentExpenses expenses={expenses} defaultMonth={activeMonthKey} />
         </div>
       </div>
 
       {showAddExpense && <AddExpenseModal onClose={() => setShowAddExpense(false)} />}
+      {showCloseMonth && (
+        <CloseMonthModal
+          monthLabel={monthLabel}
+          data={data}
+          onClose={() => {
+            setShowCloseMonth(false);
+            setClosedSnapshot(null);
+          }}
+          onConfirm={async () => {
+            const snapshot = await closeMonth();
+            setClosedSnapshot(snapshot);
+            toast.success("Mes fechado com sucesso.");
+          }}
+          onOpenNextMonth={async () => {
+            await openNextMonth();
+            toast.success("Proximo mes aberto.");
+            setShowCloseMonth(false);
+            setClosedSnapshot(null);
+          }}
+          closedSnapshot={closedSnapshot}
+        />
+      )}
     </Layout>
   );
 }
@@ -335,6 +395,160 @@ function PartnerCard({
       <div className="h-1.5 overflow-hidden rounded-full bg-white/60">
         <div className={`h-full rounded-full transition-all ${toneMap[tone].bar}`} style={{ width: `${pct}%` }} />
       </div>
+    </div>
+  );
+}
+
+function CloseMonthModal({
+  monthLabel,
+  data,
+  onClose,
+  onConfirm,
+  onOpenNextMonth,
+  closedSnapshot,
+}: {
+  monthLabel: string;
+  data: {
+    income: number;
+    variableSpent: number;
+    fixedTotal: number;
+    installmentsTotal: number;
+    available: number;
+    categoryExpenses: Array<{ category: string; amount: number }>;
+    peopleTotals: Array<{ name: string; amount: number }>;
+  };
+  onClose: () => void;
+  onConfirm: () => Promise<void>;
+  onOpenNextMonth: () => Promise<void>;
+  closedSnapshot: MonthlySnapshotModel | null;
+}) {
+  const [isSaving, setIsSaving] = useState(false);
+  const categoryTotals = Array.from(
+    data.categoryExpenses.reduce((acc, item) => {
+      acc.set(item.category, (acc.get(item.category) || 0) + item.amount);
+      return acc;
+    }, new Map<string, number>()),
+  ).sort((a, b) => b[1] - a[1]);
+
+  const handleConfirm = async () => {
+    setIsSaving(true);
+    try {
+      await onConfirm();
+    } catch (err) {
+      toast.error((err as Error)?.message || "Nao foi possivel fechar o mes.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleOpenNextMonth = async () => {
+    setIsSaving(true);
+    try {
+      await onOpenNextMonth();
+    } catch (err) {
+      toast.error((err as Error)?.message || "Nao foi possivel abrir o proximo mes.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const nextMonthLabel = closedSnapshot
+    ? format(new Date(nextCycle({ month: closedSnapshot.month, year: closedSnapshot.year }).year, nextCycle({ month: closedSnapshot.month, year: closedSnapshot.year }).month - 1, 1), "MMMM 'de' yyyy", { locale: ptBR })
+    : "";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-stone-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={() => {
+        if (!isSaving) onClose();
+      }}
+    >
+      <div className="max-h-[100dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-h-[calc(100vh-2rem)] sm:rounded-3xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-stone-900">{closedSnapshot ? `${monthLabel} fechado` : `Fechar ${monthLabel}`}</h2>
+            <p className="mt-1 text-xs text-stone-500">
+              {closedSnapshot ? "Historico salvo. Agora voce pode abrir o proximo mes." : "Confira o resumo antes de salvar o fechamento."}
+            </p>
+          </div>
+          <button disabled={isSaving} onClick={onClose} className="text-stone-400 transition-colors hover:text-stone-600 disabled:opacity-50">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        {closedSnapshot ? (
+          <>
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900">
+              {monthLabel} foi fechado com snapshot. Os gastos continuam preservados no historico.
+            </div>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+              <button disabled={isSaving} onClick={onClose} className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50">
+                Ver depois
+              </button>
+              <button disabled={isSaving} onClick={handleOpenNextMonth} className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+                {isSaving ? "Abrindo..." : `Abrir ${nextMonthLabel}`}
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <SummaryLine label="Renda" value={data.income} />
+              <SummaryLine label="Gastos variaveis" value={data.variableSpent} />
+              <SummaryLine label="Contas fixas" value={data.fixedTotal} />
+              <SummaryLine label="Parcelas/compromissos" value={data.installmentsTotal} />
+              <SummaryLine label="Saldo restante" value={data.available} strong />
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <SummaryList title="Gastos por categoria" rows={categoryTotals.map(([name, amount]) => ({ name, amount }))} />
+              <SummaryList title="Gastos por pessoa" rows={data.peopleTotals} />
+            </div>
+
+            <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
+              Ao confirmar, este mes sera salvo no historico. Voce podera reabrir o mes pelo historico se tiver fechado sem querer.
+            </div>
+
+            <div className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <button disabled={isSaving} onClick={onClose} className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50">
+                Cancelar
+              </button>
+              <button disabled={isSaving} onClick={handleConfirm} className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+                {isSaving ? "Fechando..." : "Confirmar fechamento"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function SummaryLine({ label, value, strong = false }: { label: string; value: number; strong?: boolean }) {
+  return (
+    <div className="rounded-xl border border-stone-100 bg-stone-50 p-3">
+      <p className="text-xs text-stone-500">{label}</p>
+      <p className={`mt-1 break-words text-sm ${strong ? "font-semibold text-stone-950" : "font-medium text-stone-900"}`}>{formatBRL(value)}</p>
+    </div>
+  );
+}
+
+function SummaryList({ title, rows }: { title: string; rows: Array<{ name: string; amount: number }> }) {
+  return (
+    <div className="rounded-xl border border-stone-100 p-3">
+      <p className="mb-2 text-xs font-medium uppercase tracking-wider text-stone-500">{title}</p>
+      {rows.length === 0 ? (
+        <p className="text-sm text-stone-500">Sem dados neste mes.</p>
+      ) : (
+        <div className="space-y-2">
+          {rows.slice(0, 6).map((row) => (
+            <div key={row.name} className="flex items-center justify-between gap-3 text-sm">
+              <span className="min-w-0 break-words text-stone-700">{row.name}</span>
+              <span className="shrink-0 font-medium text-stone-900">{formatBRL(row.amount)}</span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

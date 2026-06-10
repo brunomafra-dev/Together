@@ -6,30 +6,49 @@ import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
 
 export function FutureCommitments() {
-  const { fixedExpenses, financialCommitments: commitments, settings } = useFinance();
+  const { fixedExpenses, financialCommitments: commitments, expenses, settings, activeCycle, categories, paymentMethods } = useFinance();
+
+  const activeSubscriptions = useMemo(
+    () => expenses.filter((expense) => expense.recurringMonthly),
+    [expenses],
+  );
+  const subscriptionTotal = useMemo(
+    () => activeSubscriptions.reduce((sum, expense) => sum + expense.amount, 0),
+    [activeSubscriptions],
+  );
+  const fixedRecurringExpenses = useMemo(
+    () => fixedExpenses.filter((expense) => expense.amountType !== "variable"),
+    [fixedExpenses],
+  );
+  const variableRecurringExpenses = useMemo(
+    () => fixedExpenses.filter((expense) => expense.amountType === "variable"),
+    [fixedExpenses],
+  );
 
   const futureMonths = useMemo(() => {
     const months = [];
-    const now = new Date();
+    const baseMonth = new Date(activeCycle.year, activeCycle.month - 1, 1);
 
     for (let i = 1; i <= 6; i++) {
-      const monthDate = addMonths(now, i);
+      const monthDate = addMonths(baseMonth, i);
       const monthCommitments = commitments
         .filter((commitment) => commitment.status !== "finished" && commitment.totalInstallments - commitment.currentInstallment >= i)
         .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
       const monthFixed = fixedExpenses.reduce((s, e) => s + e.amount, 0);
-      const total = monthCommitments + monthFixed;
+      const monthSubscriptions = subscriptionTotal;
+      const total = monthCommitments + monthFixed + monthSubscriptions;
       months.push({
         date: monthDate,
         label: format(monthDate, "MMMM 'de' yyyy", { locale: ptBR }),
         commitments: monthCommitments,
         fixed: monthFixed,
+        subscriptions: monthSubscriptions,
         total,
         free: settings.monthlyIncome - total,
       });
     }
     return months;
-  }, [commitments, fixedExpenses, settings.monthlyIncome]);
+  }, [activeCycle.month, activeCycle.year, commitments, fixedExpenses, settings.monthlyIncome, subscriptionTotal]);
 
   const prevMonth = futureMonths[0]?.total || 0;
 
@@ -68,7 +87,7 @@ export function FutureCommitments() {
                   )}
                 </div>
 
-                <div className="grid gap-3 sm:grid-cols-3">
+                <div className="grid gap-3 sm:grid-cols-4">
                   <div className="bg-stone-50 rounded-xl p-3">
                     <p className="text-xs text-stone-500 mb-1">Contas fixas</p>
                     <p className="break-words font-semibold text-stone-900">{formatBRL(month.fixed)}</p>
@@ -76,6 +95,10 @@ export function FutureCommitments() {
                   <div className="bg-indigo-50 rounded-xl p-3">
                     <p className="text-xs text-indigo-700 mb-1">Compromissos</p>
                     <p className="break-words font-semibold text-indigo-900">{formatBRL(month.commitments)}</p>
+                  </div>
+                  <div className="bg-amber-50 rounded-xl p-3">
+                    <p className="text-xs text-amber-700 mb-1">Assinaturas</p>
+                    <p className="break-words font-semibold text-amber-900">{formatBRL(month.subscriptions)}</p>
                   </div>
                   <div className="bg-emerald-50 rounded-xl p-3">
                     <p className="text-xs text-emerald-700 mb-1">Sobra estimada</p>
@@ -104,6 +127,65 @@ export function FutureCommitments() {
                 <p className="break-words text-sm font-medium text-stone-900 sm:text-right">{formatBRL(expense.amount)}</p>
               </div>
             ))}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-stone-600" />
+              <h3 className="font-medium text-stone-900">Resumo das recorrentes</h3>
+            </div>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div className="rounded-xl bg-emerald-50 p-4">
+              <p className="text-xs text-emerald-700">Fixas reais</p>
+              <p className="mt-1 font-semibold text-emerald-900">
+                {formatBRL(fixedRecurringExpenses.reduce((sum, expense) => sum + expense.amount, 0))}
+              </p>
+            </div>
+            <div className="rounded-xl bg-amber-50 p-4">
+              <p className="text-xs text-amber-700">Variaveis estimadas</p>
+              <p className="mt-1 font-semibold text-amber-900">
+                {formatBRL(variableRecurringExpenses.reduce((sum, expense) => sum + expense.amount, 0))}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+          <div className="flex items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-amber-600" />
+              <h3 className="font-medium text-stone-900">Assinaturas ativas</h3>
+            </div>
+            <p className="text-sm font-semibold text-stone-900">{formatBRL(subscriptionTotal)}</p>
+          </div>
+          <div className="space-y-2">
+            {activeSubscriptions.length === 0 ? (
+              <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-500">
+                Nenhuma assinatura mensal cadastrada.
+              </p>
+            ) : (
+              activeSubscriptions.map((expense) => {
+                const categoryName = categories.find((category) => category.id === expense.category)?.name ?? "Assinatura";
+                const paymentName = paymentMethods.find((method) => method.id === expense.card)?.name ?? "Sem forma";
+
+                return (
+                  <div key={expense.id} className="flex flex-col gap-2 border-b border-stone-100 py-2.5 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-medium text-stone-900">
+                        {expense.description || categoryName}
+                      </p>
+                      <p className="text-xs text-stone-500">
+                        {categoryName} · {paymentName}
+                      </p>
+                    </div>
+                    <p className="break-words text-sm font-medium text-stone-900 sm:text-right">{formatBRL(expense.amount)}</p>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
       </div>

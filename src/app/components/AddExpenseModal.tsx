@@ -1,11 +1,13 @@
-﻿import { useEffect, useMemo, useState } from "react";
-import { useFinance } from "../context/FinanceContext";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
+import { Expense, useFinance } from "../context/FinanceContext";
 import { X } from "lucide-react";
 import { CategorySelect } from "./CategorySelect";
 import { PaymentMethodSelect } from "./PaymentMethodSelect";
 
 interface AddExpenseModalProps {
   onClose: () => void;
+  expense?: Expense;
 }
 
 function todayLocalDate() {
@@ -16,14 +18,18 @@ function todayLocalDate() {
   return `${year}-${month}-${day}`;
 }
 
-export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
-  const { addExpense, household, settings, categories, paymentMethods } = useFinance();
-  const [amount, setAmount] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [methodId, setMethodId] = useState("");
-  const [paidBy, setPaidBy] = useState("");
-  const [purchaseDate, setPurchaseDate] = useState(todayLocalDate());
-  const [description, setDescription] = useState("");
+export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
+  const { addExpense, updateExpense, household, settings, categories, paymentMethods } = useFinance();
+  const isEditing = Boolean(expense);
+  const [amount, setAmount] = useState(expense ? String(expense.amount).replace(".", ",") : "");
+  const [categoryId, setCategoryId] = useState(expense?.category ?? "");
+  const [methodId, setMethodId] = useState(expense?.card ?? "");
+  const [paidBy, setPaidBy] = useState(expense?.paidBy ?? "");
+  const [purchaseDate, setPurchaseDate] = useState(expense?.date ?? todayLocalDate());
+  const [description, setDescription] = useState(expense?.description ?? "");
+  const [recurringMonthly, setRecurringMonthly] = useState(Boolean(expense?.recurringMonthly));
+  const [isSaving, setIsSaving] = useState(false);
+
   const householdMembers = useMemo(() => {
     const names = [
       household?.partnerNames[0] || settings.partnerNames[0] || "",
@@ -42,6 +48,10 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
       })
       .filter((member) => member.name);
   }, [household?.partnerIds, household?.partnerNames, settings.partnerNames]);
+  const subscriptionCategoryId = useMemo(
+    () => categories.find((category) => category.name.trim().toLowerCase() === "assinaturas")?.id ?? "",
+    [categories],
+  );
 
   useEffect(() => {
     if ((!paidBy || !householdMembers.some((member) => member.value === paidBy)) && householdMembers[0]) {
@@ -58,24 +68,44 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = parseFloat(amount.replace(",", "."));
-    if (!value || value <= 0) return;
+    if (!value || value <= 0 || isSaving) return;
 
-    await addExpense({
-      amount: value,
-      category: categoryId,
-      description,
-      date: purchaseDate,
-      paidBy,
-      card: methodId,
-    });
+    setIsSaving(true);
+    try {
+      const payload = {
+        amount: value,
+        category: categoryId,
+        description,
+        date: purchaseDate,
+        paidBy,
+        card: methodId,
+        recurringMonthly,
+      };
 
-    onClose();
+      if (expense) {
+        await updateExpense(expense.id, payload);
+        toast.success("Gasto atualizado.");
+      } else {
+        await addExpense(payload);
+        toast.success("Gasto salvo.");
+      }
+
+      onClose();
+    } catch (err) {
+      toast.error((err as Error)?.message || "Nao foi possivel salvar o gasto.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isSaving) onClose();
   };
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-stone-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
-      onClick={onClose}
+      onClick={handleClose}
     >
       <div
         className="max-h-[100dvh] w-full max-w-md overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-h-[calc(100vh-2rem)] sm:rounded-3xl sm:p-6"
@@ -83,10 +113,12 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
       >
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-xl font-semibold text-stone-900">Novo gasto</h2>
-            <p className="text-xs text-stone-500 mt-0.5">Adicione rápido, ajustes depois.</p>
+            <h2 className="text-xl font-semibold text-stone-900">{isEditing ? "Editar gasto" : "Novo gasto"}</h2>
+            <p className="text-xs text-stone-500 mt-0.5">
+              {isEditing ? "Ajuste os dados do lancamento." : "Adicione rapido, ajustes depois."}
+            </p>
           </div>
-          <button onClick={onClose} className="text-stone-400 hover:text-stone-600 transition-colors">
+          <button disabled={isSaving} onClick={handleClose} className="text-stone-400 hover:text-stone-600 disabled:opacity-50 transition-colors">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -145,7 +177,7 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Descrição (opcional)</label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Descricao (opcional)</label>
             <input
               type="text"
               value={description}
@@ -155,20 +187,40 @@ export function AddExpenseModal({ onClose }: AddExpenseModalProps) {
             />
           </div>
 
+          <label className="flex items-start gap-3 rounded-xl border border-stone-200 bg-stone-50 px-4 py-3 text-sm text-stone-700">
+            <input
+              type="checkbox"
+              checked={recurringMonthly}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setRecurringMonthly(checked);
+                if (checked && subscriptionCategoryId) {
+                  setCategoryId(subscriptionCategoryId);
+                }
+              }}
+              className="mt-1 h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
+            />
+            <span>
+              <span className="block font-medium text-stone-900">Recorrente mensal</span>
+              <span className="text-xs text-stone-500">Marca para revisao mensal, sem lancar duplicado automaticamente.</span>
+            </span>
+          </label>
+
           <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <button
               type="button"
-              onClick={onClose}
-              className="flex-1 px-4 py-3 border border-stone-200 text-stone-700 rounded-xl hover:bg-stone-50 transition-colors"
+              onClick={handleClose}
+              disabled={isSaving}
+              className="flex-1 px-4 py-3 border border-stone-200 text-stone-700 rounded-xl hover:bg-stone-50 disabled:opacity-50 transition-colors"
             >
               Cancelar
             </button>
             <button
               type="submit"
-              disabled={!amount || parseFloat(amount.replace(",", ".")) <= 0 || !paidBy}
+              disabled={isSaving || !amount || parseFloat(amount.replace(",", ".")) <= 0 || !paidBy}
               className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             >
-              Salvar
+              {isSaving ? "Salvando..." : isEditing ? "Salvar edicao" : "Salvar"}
             </button>
           </div>
         </form>

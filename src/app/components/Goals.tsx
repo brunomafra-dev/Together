@@ -27,6 +27,10 @@ type ProgressRow = {
   status: string;
 };
 
+type ContributionTarget =
+  | { kind: "main" }
+  | { kind: "future"; index: number };
+
 type GoalSnapshot = {
   id?: string;
   title: string;
@@ -124,7 +128,21 @@ function nextPlanTone(index: number): GoalTone {
   return tones[index % tones.length];
 }
 
-function SectionHeader({ icon: Icon, title, actionLabel, onAction }: { icon: typeof Target; title: string; actionLabel?: string; onAction?: () => void }) {
+function SectionHeader({
+  icon: Icon,
+  title,
+  actionLabel,
+  actionIcon: ActionIcon = Edit3,
+  actionTone = "ghost",
+  onAction,
+}: {
+  icon: typeof Target;
+  title: string;
+  actionLabel?: string;
+  actionIcon?: typeof Edit3;
+  actionTone?: "ghost" | "primary";
+  onAction?: () => void;
+}) {
   return (
     <div className="flex items-center justify-between">
       <div className="flex items-center gap-2 text-2xl font-medium text-stone-900">
@@ -132,8 +150,16 @@ function SectionHeader({ icon: Icon, title, actionLabel, onAction }: { icon: typ
         <span>{title}</span>
       </div>
       {actionLabel ? (
-        <button type="button" onClick={onAction} className="inline-flex items-center gap-2 text-sm text-stone-500 hover:text-stone-800">
-          <Edit3 className="h-4 w-4" />
+        <button
+          type="button"
+          onClick={onAction}
+          className={`inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors ${
+            actionTone === "primary"
+              ? "border border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+              : "border border-stone-200 bg-white text-stone-600 shadow-sm hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-[0_0_18px_rgba(16,185,129,0.16)]"
+          }`}
+        >
+          <ActionIcon className="h-4 w-4" />
           {actionLabel}
         </button>
       ) : null}
@@ -156,7 +182,16 @@ function buildPercentText(percent: number) {
 }
 
 export function Goals() {
-  const { household, settings, expenses, fixedExpenses, installments, categories } = useFinance();
+  const {
+    household,
+    settings,
+    expenses,
+    fixedExpenses,
+    fixedExpenseMonthlyValues,
+    financialCommitments,
+    categories,
+    activeCycle,
+  } = useFinance();
   const [goal, setGoal] = useState<GoalSnapshot | null>(null);
   const [editingGoal, setEditingGoal] = useState(false);
   const [editingPlanning, setEditingPlanning] = useState(false);
@@ -170,19 +205,37 @@ export function Goals() {
   const mainGoalRemaining = Math.max(snapshot.total - snapshot.current, 0);
   const planCards = snapshot.planCards;
   const financialData = useMemo(() => {
-    const now = new Date();
-    const currentMonth = { start: startOfMonth(now), end: endOfMonth(now) };
+    const cycleDate = new Date(activeCycle.year, activeCycle.month - 1, 1);
+    const today = new Date();
+    const referenceDate =
+      today.getFullYear() === activeCycle.year && today.getMonth() + 1 === activeCycle.month
+        ? today
+        : cycleDate;
+    const currentMonth = { start: startOfMonth(cycleDate), end: endOfMonth(cycleDate) };
     const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
     const monthExpenses = expenses.filter((expense) =>
       isWithinInterval(parseISO(expense.date), currentMonth),
     );
+    const fixedExpenseAmount = (expense: typeof fixedExpenses[number]) => {
+      const monthlyValue = fixedExpenseMonthlyValues.find(
+        (value) =>
+          value.fixedExpenseId === expense.id &&
+          value.month === activeCycle.month &&
+          value.year === activeCycle.year,
+      );
+      return monthlyValue?.status === "confirmed" && monthlyValue.actualAmount !== null
+        ? monthlyValue.actualAmount
+        : monthlyValue?.estimatedAmount ?? expense.amount;
+    };
     const variableSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const fixedSpent = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const installmentSpent = installments.reduce((sum, installment) => sum + installment.monthlyAmount, 0);
+    const fixedSpent = fixedExpenses.reduce((sum, expense) => sum + fixedExpenseAmount(expense), 0);
+    const installmentSpent = financialCommitments
+      .filter((commitment) => commitment.status !== "finished")
+      .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
     const totalSpent = fixedSpent + variableSpent + installmentSpent;
     const remainingBalance = income - totalSpent;
-    const dayOfMonth = Math.max(getDate(now), 1);
-    const daysInMonth = getDaysInMonth(now);
+    const dayOfMonth = Math.max(getDate(referenceDate), 1);
+    const daysInMonth = getDaysInMonth(cycleDate);
     const projectedVariable = (variableSpent / dayOfMonth) * daysInMonth;
     const projectedEndBalance = income - fixedSpent - installmentSpent - projectedVariable;
     const categoryTotals = new Map<string, number>();
@@ -194,12 +247,11 @@ export function Goals() {
 
     for (const expense of fixedExpenses) {
       const name = expense.category || "Sem categoria";
-      categoryTotals.set(name, (categoryTotals.get(name) || 0) + expense.amount);
+      categoryTotals.set(name, (categoryTotals.get(name) || 0) + fixedExpenseAmount(expense));
     }
 
-    for (const installment of installments) {
-      const name = categoryNames.get(installment.category) || installment.category || "Parcelas";
-      categoryTotals.set(name, (categoryTotals.get(name) || 0) + installment.monthlyAmount);
+    for (const commitment of financialCommitments.filter((item) => item.status !== "finished")) {
+      categoryTotals.set("Parcelas", (categoryTotals.get("Parcelas") || 0) + commitment.installmentValue);
     }
 
     const sortedCategories = Array.from(categoryTotals.entries())
@@ -228,7 +280,7 @@ export function Goals() {
       healthScore,
       spendingTrend,
     };
-  }, [categories, expenses, fixedExpenses, installments, income]);
+  }, [activeCycle.month, activeCycle.year, categories, expenses, financialCommitments, fixedExpenseMonthlyValues, fixedExpenses, income]);
 
   const [title, setTitle] = useState(snapshot.title);
   const [label, setLabel] = useState(snapshot.label);
@@ -239,6 +291,8 @@ export function Goals() {
   const [futureGoalName, setFutureGoalName] = useState("");
   const [futureGoalPlanned, setFutureGoalPlanned] = useState("");
   const [futureGoalRealized, setFutureGoalRealized] = useState("");
+  const [contributionTarget, setContributionTarget] = useState<ContributionTarget | null>(null);
+  const [contributionAmount, setContributionAmount] = useState("");
   const planningTotalPercent = planningAllocations.reduce((sum, item) => sum + (Number(item.percent) || 0), 0);
 
   useEffect(() => {
@@ -286,7 +340,7 @@ export function Goals() {
               name: row.name,
               planned: row.planned,
               realized: row.realized,
-              status: row.status,
+              status: row.status === "Sem meta cadastrada" || !row.status ? "Em andamento" : row.status,
             }))
           : [],
         financialHealth: {
@@ -320,7 +374,7 @@ export function Goals() {
               name: row.name,
               planned: row.planned,
               realized: row.realized,
-              status: row.status,
+              status: row.status === "Sem meta cadastrada" || !row.status ? "Em andamento" : row.status,
             }))
           : [],
       );
@@ -345,6 +399,11 @@ export function Goals() {
     setFutureGoalName("");
     setFutureGoalPlanned("");
     setFutureGoalRealized("");
+    setFormError(null);
+  };
+  const closeContribution = () => {
+    setContributionTarget(null);
+    setContributionAmount("");
     setFormError(null);
   };
 
@@ -391,7 +450,7 @@ export function Goals() {
       name: row.name,
       planned: row.planned,
       realized: row.realized,
-      status: row.status,
+    status: row.status === "Sem meta cadastrada" || !row.status ? "Em andamento" : row.status,
     }));
 
     setGoal({
@@ -505,6 +564,53 @@ export function Goals() {
       closeFutureGoalEdit();
     } catch (error) {
       setFormError(error instanceof Error ? error.message : "Não foi possível salvar a meta futura.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveContribution = async () => {
+    const amount = Number(contributionAmount.replace(",", "."));
+    if (!contributionTarget || !amount || amount <= 0) return;
+
+    setSaving(true);
+    setFormError(null);
+    try {
+      if (contributionTarget.kind === "main") {
+        const savedGoal = await ensureGoal();
+        if (!savedGoal) return;
+        const updatedGoal = await financeService.updateGoal(savedGoal.id, {
+          title: savedGoal.title,
+          label: savedGoal.label,
+          currentAmount: savedGoal.currentAmount + amount,
+          targetAmount: savedGoal.targetAmount,
+        });
+        await refreshGoalState(updatedGoal);
+        setCurrent(String(updatedGoal.currentAmount));
+      } else {
+        const row = progressRows[contributionTarget.index];
+        if (!row) return;
+        const nextRealized = row.realized + amount;
+        if (row.id) {
+          await financeService.updateGoalProgressRow(row.id, {
+            name: row.name,
+            planned: row.planned,
+            realized: nextRealized,
+            status: row.status,
+          });
+          const savedGoal = await ensureGoal();
+          if (savedGoal) await refreshGoalState(savedGoal);
+        } else {
+          setProgressRows((prev) =>
+            prev.map((item, index) =>
+              index === contributionTarget.index ? { ...item, realized: nextRealized } : item,
+            ),
+          );
+        }
+      }
+      closeContribution();
+    } catch (error) {
+      setFormError(error instanceof Error ? error.message : "Nao foi possivel adicionar o valor.");
     } finally {
       setSaving(false);
     }
@@ -665,6 +771,16 @@ export function Goals() {
                   <h2 className="break-words text-2xl font-semibold text-stone-950 sm:text-3xl">{snapshot.title}</h2>
                   <p className="mt-2 break-words text-sm text-stone-600">{goal ? `${formatBRL(snapshot.current)} de ${formatBRL(snapshot.total)}` : "Sem meta cadastrada"}</p>
                 </div>
+                {goal && (
+                  <button
+                    type="button"
+                    onClick={() => setContributionTarget({ kind: "main" })}
+                    className="inline-flex w-fit items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Adicionar valor
+                  </button>
+                )}
                 <div className="w-full max-w-3xl">
                   <div className="h-3 rounded-full bg-stone-100">
                     <div className="h-3 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${mainGoalPercent}%` }} />
@@ -725,7 +841,14 @@ export function Goals() {
         </section>
 
         <section className="space-y-4">
-          <SectionHeader icon={TrendingDown} title="Metas futuras" actionLabel="Adicionar meta futura" onAction={openFutureGoalAdd} />
+          <SectionHeader
+            icon={TrendingDown}
+            title="Metas futuras"
+            actionLabel="Nova meta"
+            actionIcon={Plus}
+            actionTone="primary"
+            onAction={openFutureGoalAdd}
+          />
           <div className="overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-sm">
             {progressRows.length > 0 ? (
               progressRows.map((row, index) => {
@@ -740,8 +863,16 @@ export function Goals() {
                           <div className="flex shrink-0 gap-2 pt-1">
                             <button
                               type="button"
+                              onClick={() => setContributionTarget({ kind: "future", index })}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-100 bg-emerald-50 text-emerald-600 transition-all hover:bg-emerald-100 hover:text-emerald-700 hover:shadow-[0_0_18px_rgba(16,185,129,0.2)]"
+                              aria-label="Adicionar valor na meta futura"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => openFutureGoalEdit(index)}
-                              className="text-stone-400 transition-colors hover:text-emerald-600"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-[0_0_18px_rgba(16,185,129,0.16)]"
                               aria-label="Editar meta futura"
                             >
                               <Edit3 className="h-4 w-4" />
@@ -750,7 +881,7 @@ export function Goals() {
                               type="button"
                               onClick={() => void handleDeleteProgressRow(index)}
                               disabled={saving}
-                              className="text-stone-400 transition-colors hover:text-rose-600 disabled:opacity-50"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 hover:shadow-[0_0_18px_rgba(244,63,94,0.16)] disabled:opacity-50"
                               aria-label="Excluir meta futura"
                             >
                               <Trash2 className="h-4 w-4" />
@@ -774,9 +905,10 @@ export function Goals() {
                 <button
                   type="button"
                   onClick={openFutureGoalAdd}
-                  className="mt-4 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-stone-800"
+                  className="mt-4 inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
                 >
-                  Adicionar meta futura
+                  <Plus className="h-4 w-4" />
+                  Nova meta
                 </button>
               </div>
             )}
@@ -784,6 +916,51 @@ export function Goals() {
         </section>
 
       </div>
+
+      {contributionTarget && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onClick={closeContribution}>
+          <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-lg sm:p-6" onClick={(e) => e.stopPropagation()}>
+            <div className="mb-4 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold text-stone-900">Adicionar valor</h2>
+                <p className="mt-1 text-xs text-stone-500">
+                  {contributionTarget.kind === "main"
+                    ? snapshot.title
+                    : progressRows[contributionTarget.index]?.name ?? "Meta futura"}
+                </p>
+              </div>
+              <button type="button" onClick={closeContribution} className="text-stone-400 hover:text-stone-700">
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Valor</label>
+                <input
+                  type="text"
+                  inputMode="decimal"
+                  value={contributionAmount}
+                  onChange={(e) => setContributionAmount(e.target.value)}
+                  placeholder="0,00"
+                  className="w-full rounded-lg border border-stone-200 px-4 py-3 text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  autoFocus
+                />
+              </div>
+
+              {formError && <p className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{formError}</p>}
+
+              <div className="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+                <button type="button" onClick={closeContribution} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">Cancelar</button>
+                <button type="button" disabled={saving} onClick={() => void handleSaveContribution()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
+                  <Plus className="h-4 w-4" />
+                  {saving ? "Salvando..." : "Adicionar"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingGoal && (
         <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onClick={closeGoalEdit}>
@@ -842,7 +1019,7 @@ export function Goals() {
           <div className="max-h-[calc(100vh-2rem)] w-full max-w-md overflow-y-auto rounded-2xl bg-white p-5 shadow-lg sm:p-6" onClick={(e) => e.stopPropagation()}>
             <div className="mb-4 flex items-center justify-between gap-3">
               <h2 className="text-lg font-semibold text-stone-900">
-                {editingFutureGoalIndex >= 0 ? "Editar meta futura" : "Adicionar meta futura"}
+                {editingFutureGoalIndex >= 0 ? "Editar meta" : "Nova meta"}
               </h2>
               <button type="button" onClick={closeFutureGoalEdit} className="text-stone-400 hover:text-stone-700">
                 <X className="h-5 w-5" />
@@ -925,7 +1102,7 @@ export function Goals() {
                       },
                     ])
                   }
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-stone-200 px-3 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
                 >
                   <Plus className="h-4 w-4" />
                   Adicionar categoria
