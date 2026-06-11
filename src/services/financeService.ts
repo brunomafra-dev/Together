@@ -7,6 +7,7 @@ type CardRow = TableRow<"cards">;
 type HouseholdRow = TableRow<"households">;
 type FixedExpenseRow = TableRow<"fixed_expenses">;
 type FixedExpenseMonthlyValueRow = TableRow<"fixed_expense_monthly_values">;
+type IncomeEntryRow = TableRow<"income_entries">;
 type ProfileRow = TableRow<"profiles">;
 type GoalRow = TableRow<"goals">;
 type GoalPlanItemRow = TableRow<"goal_plan_items">;
@@ -63,6 +64,17 @@ export interface FixedExpenseMonthlyValueModel {
   status: "estimated" | "confirmed";
 }
 
+export interface IncomeEntryModel {
+  id: string;
+  householdId: string;
+  amount: number;
+  date: string;
+  description: string;
+  sourceType: string;
+  receivedBy: string;
+  recurringMonthly: boolean;
+}
+
 export interface PaymentMethodModel {
   id: string;
   name: string;
@@ -112,6 +124,7 @@ export interface FinancialCommitmentModel {
   id: string;
   householdId: string;
   paymentMethodId: string | null;
+  categoryId: string;
   itemName: string;
   installmentValue: number;
   currentInstallment: number;
@@ -135,7 +148,7 @@ export interface MonthlySnapshotModel {
   categoryTotals: Array<{ name: string; amount: number }>;
   cardTotals: Array<{ name: string; amount: number; limitAmount: number | null; availableLimit: number | null }>;
   goalProgress: Array<{ title: string; currentAmount: number; targetAmount: number; percent: number }>;
-  financialHealth: { availablePercent: number; totalSpentPercent: number };
+  financialHealth: { availablePercent: number; totalSpentPercent: number; baseIncome?: number; extraIncome?: number };
   closedAt: string;
 }
 
@@ -335,6 +348,17 @@ const mapFixedExpenseMonthlyValueRow = (row: FixedExpenseMonthlyValueRow): Fixed
   status: row.status === "confirmed" ? "confirmed" : "estimated",
 });
 
+const mapIncomeEntryRow = (row: IncomeEntryRow): IncomeEntryModel => ({
+  id: row.id,
+  householdId: toString(row.household_id),
+  amount: toNumber(row.amount),
+  date: toString(row.entry_date),
+  description: toString(row.description),
+  sourceType: toString(row.source_type) || "extra",
+  receivedBy: toString(row.received_by),
+  recurringMonthly: Boolean(row.recurring_monthly),
+});
+
 const mapHouseholdRow = (
   row: HouseholdRow,
   partnerNames: [string, string],
@@ -382,6 +406,7 @@ const mapFinancialCommitmentRow = (row: FinancialCommitmentRow): FinancialCommit
   id: row.id,
   householdId: toString(row.household_id),
   paymentMethodId: row.payment_method_id ? toString(row.payment_method_id) : null,
+  categoryId: toString(row.category_id),
   itemName: toString(row.item_name),
   installmentValue: toNumber(row.installment_value),
   currentInstallment: toNumber(row.current_installment),
@@ -563,11 +588,74 @@ export async function upsertFixedExpenseMonthlyValue(
     .single();
   if (error) {
     if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("fixed_expense_monthly_values")) {
-      throw new Error("Tabela fixed_expense_monthly_values nao encontrada. Rode o SQL supabase_fixed_expense_monthly_values.sql no Supabase.");
+      throw new Error("Tabela fixed_expense_monthly_values não encontrada. Rode o SQL supabase_fixed_expense_monthly_values.sql no Supabase.");
     }
     throwIfError(error);
   }
   return data ? mapFixedExpenseMonthlyValueRow(data as FixedExpenseMonthlyValueRow) : null;
+}
+
+export async function fetchIncomeEntries(householdId: string): Promise<IncomeEntryModel[]> {
+  const { data, error } = await supabase
+    .from("income_entries")
+    .select("*")
+    .eq("household_id", householdId)
+    .order("entry_date", { ascending: false });
+  if (error) {
+    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("income_entries")) return [];
+    throwIfError(error);
+  }
+  return (data ?? []).map(mapIncomeEntryRow);
+}
+
+export async function addIncomeEntry(entry: Omit<IncomeEntryModel, "id">): Promise<IncomeEntryModel> {
+  const { data, error } = await supabase
+    .from("income_entries")
+    .insert({
+      household_id: entry.householdId,
+      amount: entry.amount,
+      entry_date: entry.date,
+      description: entry.description,
+      source_type: entry.sourceType,
+      received_by: entry.receivedBy || null,
+      recurring_monthly: entry.recurringMonthly,
+    } as any)
+    .select("*")
+    .single();
+  if (error) {
+    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("income_entries")) {
+      throw new Error("Tabela income_entries não encontrada. Rode o SQL supabase_income_entries.sql no Supabase.");
+    }
+    throwIfError(error);
+  }
+  return mapIncomeEntryRow(data as IncomeEntryRow);
+}
+
+export async function updateIncomeEntry(
+  id: string,
+  changes: Partial<Omit<IncomeEntryModel, "id" | "householdId">>,
+): Promise<IncomeEntryModel> {
+  const payload: Partial<TableInsert<"income_entries">> = {};
+  if (changes.amount !== undefined) payload.amount = changes.amount;
+  if (changes.date !== undefined) payload.entry_date = changes.date;
+  if (changes.description !== undefined) payload.description = changes.description;
+  if (changes.sourceType !== undefined) payload.source_type = changes.sourceType;
+  if (changes.receivedBy !== undefined) payload.received_by = changes.receivedBy || null;
+  if (changes.recurringMonthly !== undefined) payload.recurring_monthly = changes.recurringMonthly;
+
+  const { data, error } = await supabase
+    .from("income_entries")
+    .update(payload as any)
+    .eq("id", id)
+    .select("*")
+    .single();
+  throwIfError(error);
+  return mapIncomeEntryRow(data as IncomeEntryRow);
+}
+
+export async function deleteIncomeEntry(id: string): Promise<void> {
+  const { error } = await supabase.from("income_entries").delete().eq("id", id);
+  throwIfError(error);
 }
 
 export async function fetchHousehold(householdId: string): Promise<HouseholdModel | null> {
@@ -878,6 +966,7 @@ export async function addFinancialCommitment(commitment: Omit<FinancialCommitmen
   const { data, error } = await supabase.from("financial_commitments").insert({
     household_id: commitment.householdId,
     payment_method_id: commitment.paymentMethodId || null,
+    category_id: commitment.categoryId || null,
     item_name: commitment.itemName,
     installment_value: commitment.installmentValue,
     current_installment: commitment.currentInstallment,
@@ -894,6 +983,7 @@ export async function addFinancialCommitment(commitment: Omit<FinancialCommitmen
 export async function updateFinancialCommitment(id: string, changes: Partial<Omit<FinancialCommitmentModel, "id" | "householdId">>): Promise<FinancialCommitmentModel> {
   const { data, error } = await supabase.from("financial_commitments").update({
     payment_method_id: changes.paymentMethodId || null,
+    category_id: changes.categoryId || null,
     item_name: changes.itemName,
     installment_value: changes.installmentValue,
     current_installment: changes.currentInstallment,

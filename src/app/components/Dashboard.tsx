@@ -1,10 +1,12 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
 import { endOfMonth, format, getDate, getDaysInMonth, isWithinInterval, parseISO, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarCheck, Plus, Sparkles, TrendingDown, Users, Wallet, X } from "lucide-react";
+import { CalendarCheck, Plus, Sparkles, Trash2, TrendingDown, Users, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
 import { AddExpenseModal } from "./AddExpenseModal";
 import { CategoryBreakdown } from "./CategoryBreakdown";
+import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { RecentExpenses } from "./RecentExpenses";
 import { formatBRL, MonthlySnapshotModel, useFinance } from "../context/FinanceContext";
@@ -22,14 +24,18 @@ export function Dashboard() {
     financialCommitments,
     categories,
     paymentMethods,
+    incomeEntries,
     settings,
     loading,
     error,
     closeMonth,
+    addIncomeEntry,
+    deleteIncomeEntry,
     openNextMonth,
     activeCycle,
   } = useFinance();
   const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showAddIncome, setShowAddIncome] = useState(false);
   const [showCloseMonth, setShowCloseMonth] = useState(false);
   const [closedSnapshot, setClosedSnapshot] = useState<MonthlySnapshotModel | null>(null);
   const [goalSummary, setGoalSummary] = useState<{
@@ -88,11 +94,14 @@ export function Dashboard() {
       ...expense,
       category: categoryNames.get(expense.category) || expense.category || "Sem categoria",
       card: expense.card ? paymentMethodNames.get(expense.card) || expense.card : null,
-      paidBy: householdMembers.get(expense.paidBy) || expense.paidBy || "Sem responsavel",
+      paidBy: householdMembers.get(expense.paidBy) || expense.paidBy || "Sem responsável",
     }));
 
     const monthExpenses = resolvedExpenses.filter((expense) =>
       isWithinInterval(parseISO(expense.date), currentMonth),
+    );
+    const monthIncomeEntries = incomeEntries.filter((entry) =>
+      isWithinInterval(parseISO(entry.date), currentMonth),
     );
     const fixedExpenseAmount = (expense: typeof fixedExpenses[number]) => {
       const monthlyValue = fixedExpenseMonthlyValues.find(
@@ -113,6 +122,12 @@ export function Dashboard() {
     const categoryExpenses = [
       ...monthExpenses.map((expense) => ({ category: expense.category, amount: expense.amount })),
       ...fixedCategoryExpenses,
+      ...financialCommitments
+        .filter((commitment) => commitment.status !== "finished")
+        .map((commitment) => ({
+          category: categoryNames.get(commitment.categoryId) || commitment.categoryId || "Parcelas",
+          amount: commitment.installmentValue,
+        })),
     ];
 
     const variableSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
@@ -123,7 +138,9 @@ export function Dashboard() {
       .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
     const committed = fixedTotal + commitmentsTotal;
     const totalSpent = committed + variableSpent;
-    const income = settings.monthlyIncome;
+    const baseIncome = settings.monthlyIncome;
+    const extraIncome = monthIncomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    const income = baseIncome + extraIncome;
     const available = income - totalSpent;
 
     const spendByPerson = monthExpenses.reduce((acc, expense) => {
@@ -132,6 +149,14 @@ export function Dashboard() {
     }, {} as Record<string, number>);
 
     const peopleTotals = Object.entries(spendByPerson)
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((left, right) => right.amount - left.amount);
+    const categoryTotals = Array.from(
+      categoryExpenses.reduce((acc, item) => {
+        acc.set(item.category, (acc.get(item.category) || 0) + item.amount);
+        return acc;
+      }, new Map<string, number>()),
+    )
       .map(([name, amount]) => ({ name, amount }))
       .sort((left, right) => right.amount - left.amount);
 
@@ -144,6 +169,9 @@ export function Dashboard() {
 
     return {
       income,
+      baseIncome,
+      extraIncome,
+      monthIncomeEntries,
       fixedTotal,
       installmentsTotal: commitmentsTotal,
       variableSpent,
@@ -152,13 +180,14 @@ export function Dashboard() {
       available,
       monthExpenses,
       categoryExpenses,
+      categoryTotals,
       categorySpent,
       peopleTotals,
       daysLeft,
       projectedLeftover,
       dailyPace,
     };
-  }, [activeCycle.month, activeCycle.year, categories, currentMonth, cycleMonthDate, expenses, fixedExpenseMonthlyValues, fixedExpenses, financialCommitments, household?.partnerNames, paceReferenceDate, paymentMethods, settings.monthlyIncome, settings.partnerNames]);
+  }, [activeCycle.month, activeCycle.year, categories, currentMonth, cycleMonthDate, expenses, fixedExpenseMonthlyValues, fixedExpenses, financialCommitments, household?.partnerNames, incomeEntries, paceReferenceDate, paymentMethods, settings.monthlyIncome, settings.partnerNames]);
 
   const monthLabel = format(cycleMonthDate, "MMMM 'de' yyyy", { locale: ptBR });
   const activeMonthKey = `${activeCycle.year}-${String(activeCycle.month).padStart(2, "0")}`;
@@ -207,18 +236,25 @@ export function Dashboard() {
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
-              onClick={() => setShowCloseMonth(true)}
-              className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-stone-700 shadow-sm transition-colors hover:bg-stone-50 sm:w-auto"
-            >
-              <CalendarCheck className="h-4 w-4" />
-              Fechar mes
-            </button>
-            <button
               onClick={() => setShowAddExpense(true)}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-100 sm:w-auto"
             >
               <Plus className="h-4 w-4" />
               Novo gasto
+            </button>
+            <button
+              onClick={() => setShowAddIncome(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-4 py-2.5 font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-50 sm:w-auto"
+            >
+              <Plus className="h-4 w-4" />
+              Adicionar renda
+            </button>
+            <button
+              onClick={() => setShowCloseMonth(true)}
+              className="flex w-full items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2.5 text-stone-700 shadow-sm transition-colors hover:bg-stone-50 sm:w-auto"
+            >
+              <CalendarCheck className="h-4 w-4" />
+              Fechar mês
             </button>
           </div>
         </div>
@@ -227,7 +263,7 @@ export function Dashboard() {
           <p className="mb-2 text-sm text-stone-600">Livre para gastar</p>
           <h2 className={`break-words text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl ${availableColor}`}>{formatBRL(data.available)}</h2>
           <p className="mt-3 text-sm text-stone-500">
-            Calculado com renda do household, contas fixas, compromissos e gastos reais do mes.
+            Calculado com renda planejada, rendas extras do mês, contas fixas, compromissos e gastos reais.
           </p>
 
           <div className="mt-6">
@@ -264,9 +300,12 @@ export function Dashboard() {
           <div className="rounded-2xl border border-stone-200 bg-white p-5">
             <div className="mb-2 flex items-center gap-2 text-xs text-stone-500">
               <Wallet className="h-4 w-4" />
-              Renda do household
+              Renda do mês
             </div>
             <p className="break-words text-lg font-semibold text-stone-900 sm:text-xl">{formatBRL(data.income)}</p>
+            <p className="mt-1 text-xs text-stone-500">
+              {formatBRL(data.baseIncome)} planejada + {formatBRL(data.extraIncome)} rendas extras
+            </p>
           </div>
           <div className="rounded-2xl border border-stone-200 bg-white p-5">
             <div className="mb-2 flex items-center gap-2 text-xs text-stone-500">
@@ -281,11 +320,52 @@ export function Dashboard() {
           <div className="rounded-2xl border border-stone-200 bg-white p-5">
             <div className="mb-2 flex items-center gap-2 text-xs text-stone-500">
               <Plus className="h-4 w-4" />
-              Gastos do mes
+              Gastos do mês
             </div>
             <p className="break-words text-lg font-semibold text-stone-900 sm:text-xl">{formatBRL(data.categorySpent)}</p>
           </div>
         </div>
+
+        <ExpandableSection
+          title="Rendas do mês"
+          summary={`${data.monthIncomeEntries.length} rendas · ${formatBRL(data.extraIncome)}`}
+          defaultOpen={data.monthIncomeEntries.length > 0}
+        >
+          {data.monthIncomeEntries.length === 0 ? (
+            <p className="text-sm text-stone-500">Nenhuma renda extra lançada neste mês.</p>
+          ) : (
+            <div className="space-y-2">
+              {data.monthIncomeEntries.map((entry) => (
+                <div key={entry.id} className="flex flex-col gap-3 rounded-xl border border-stone-100 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="break-words text-sm font-medium text-stone-900">{entry.description || "Renda"}</p>
+                    <p className="break-words text-xs text-stone-500">
+                      {format(parseISO(entry.date), "dd 'de' MMM", { locale: ptBR })} · {entry.sourceType} {entry.receivedBy ? `· ${entry.receivedBy}` : ""}
+                    </p>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 sm:justify-end">
+                    <span className="font-semibold text-emerald-700">{formatBRL(entry.amount)}</span>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await deleteIncomeEntry(entry.id);
+                          toast.success("Renda removida.");
+                        } catch (err) {
+                          toast.error((err as Error)?.message || "Não foi possível remover a renda.");
+                        }
+                      }}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                      aria-label="Excluir renda"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </ExpandableSection>
 
         <div className="rounded-2xl border border-stone-200 bg-white p-5">
           <div className="mb-3 flex items-center gap-2 text-xs text-stone-500">
@@ -313,11 +393,16 @@ export function Dashboard() {
           )}
         </div>
 
-        <div className="rounded-2xl border border-stone-200 bg-white p-6">
-          <div className="mb-4 flex items-center gap-2 text-stone-700">
-            <Users className="h-4 w-4" />
-            <h3 className="font-medium">Quem gastou</h3>
-          </div>
+        <ExpandableSection
+          title="Quem gastou"
+          summary={
+            data.peopleTotals.length >= 2
+              ? `${data.peopleTotals[0].name} ${formatBRL(data.peopleTotals[0].amount)} · ${data.peopleTotals[1].name} ${formatBRL(data.peopleTotals[1].amount)}`
+              : data.peopleTotals[0]
+                ? `${data.peopleTotals[0].name} ${formatBRL(data.peopleTotals[0].amount)}`
+                : "Nenhum gasto real no mês"
+          }
+        >
           {data.peopleTotals.length > 0 ? (
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {data.peopleTotals.slice(0, 2).map((person, index) => (
@@ -333,14 +418,38 @@ export function Dashboard() {
           ) : (
             <p className="text-sm text-stone-500">Nenhum gasto real encontrado para mostrar este card.</p>
           )}
-        </div>
+        </ExpandableSection>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <ExpandableSection
+          title="Onde está indo"
+          summary={
+            data.categoryTotals[0]
+              ? `Maior categoria: ${data.categoryTotals[0].name} · ${formatBRL(data.categoryTotals[0].amount)}`
+              : "Sem categorias no ciclo"
+          }
+        >
           <CategoryBreakdown expenses={data.categoryExpenses} />
+        </ExpandableSection>
+
+        <ExpandableSection
+          title="Últimos gastos"
+          summary={`${monthLabel} · ${data.monthExpenses.length} lançamentos · ${formatBRL(data.variableSpent)}`}
+          defaultOpen
+        >
           <RecentExpenses expenses={expenses} defaultMonth={activeMonthKey} />
-        </div>
+        </ExpandableSection>
       </div>
 
+      {showAddIncome && (
+        <AddIncomeEntryModal
+          partnerNames={household?.partnerNames ?? settings.partnerNames}
+          onClose={() => setShowAddIncome(false)}
+          onSave={async (entry) => {
+            await addIncomeEntry(entry);
+            toast.success("Renda adicionada.");
+          }}
+        />
+      )}
       {showAddExpense && <AddExpenseModal onClose={() => setShowAddExpense(false)} />}
       {showCloseMonth && (
         <CloseMonthModal
@@ -353,11 +462,11 @@ export function Dashboard() {
           onConfirm={async () => {
             const snapshot = await closeMonth();
             setClosedSnapshot(snapshot);
-            toast.success("Mes fechado com sucesso.");
+            toast.success("Mês fechado com sucesso.");
           }}
           onOpenNextMonth={async () => {
             await openNextMonth();
-            toast.success("Proximo mes aberto.");
+            toast.success("Próximo mês aberto.");
             setShowCloseMonth(false);
             setClosedSnapshot(null);
           }}
@@ -399,6 +508,149 @@ function PartnerCard({
   );
 }
 
+function AddIncomeEntryModal({
+  partnerNames,
+  onClose,
+  onSave,
+}: {
+  partnerNames: [string, string] | string[];
+  onClose: () => void;
+  onSave: (entry: {
+    amount: number;
+    date: string;
+    description: string;
+    sourceType: string;
+    receivedBy: string;
+    recurringMonthly: boolean;
+  }) => Promise<void>;
+}) {
+  const people = partnerNames.filter(Boolean);
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [sourceType, setSourceType] = useState("extra");
+  const [receivedBy, setReceivedBy] = useState(people[0] || "");
+  const [date, setDate] = useState(new Date().toISOString().slice(0, 10));
+  const [saving, setSaving] = useState(false);
+
+  const handleSubmit = async (event: FormEvent) => {
+    event.preventDefault();
+    const normalizedAmount = Number(amount.replace(",", "."));
+    if (!normalizedAmount || normalizedAmount <= 0) {
+      toast.error("Informe um valor válido.");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await onSave({
+        amount: normalizedAmount,
+        date,
+        description: description.trim() || "Renda",
+        sourceType,
+        receivedBy,
+        recurringMonthly: false,
+      });
+      onClose();
+    } catch (err) {
+      toast.error((err as Error)?.message || "Não foi possível adicionar a renda.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-stone-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
+      <form
+        onSubmit={(event) => void handleSubmit(event)}
+        className="max-h-[100dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-h-[calc(100vh-2rem)] sm:rounded-3xl sm:p-6"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="mb-5 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-xl font-semibold text-stone-900">Adicionar renda</h2>
+            <p className="mt-1 text-sm text-stone-500">Registre renda variável, extra, comissão, freela ou reembolso.</p>
+          </div>
+          <button type="button" onClick={onClose} disabled={saving} className="text-stone-400 transition-colors hover:text-stone-600 disabled:opacity-50">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">Valor</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={amount}
+              onChange={(event) => setAmount(event.target.value)}
+              className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="0,00"
+            />
+          </div>
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">Descrição</label>
+            <input
+              type="text"
+              value={description}
+              onChange={(event) => setDescription(event.target.value)}
+              className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              placeholder="Ex: Corridas Uber, freela, bônus"
+            />
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">Tipo</label>
+              <select
+                value={sourceType}
+                onChange={(event) => setSourceType(event.target.value)}
+                className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                <option value="extra">Extra</option>
+                <option value="trabalho">Trabalho variável</option>
+                <option value="freela">Freela</option>
+                <option value="comissao">Comissão</option>
+                <option value="venda">Venda</option>
+                <option value="reembolso">Reembolso</option>
+              </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">Data</label>
+              <input
+                type="date"
+                value={date}
+                onChange={(event) => setDate(event.target.value)}
+                className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
+          </div>
+          <div>
+            <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">Quem recebeu</label>
+            <select
+              value={receivedBy}
+              onChange={(event) => setReceivedBy(event.target.value)}
+              className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+            >
+              {people.length === 0 && <option value="">Casa</option>}
+              {people.map((name) => (
+                <option key={name} value={name}>{name}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+          <button type="button" onClick={onClose} disabled={saving} className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50">
+            Cancelar
+          </button>
+          <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+            {saving ? "Salvando..." : "Adicionar renda"}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+}
+
 function CloseMonthModal({
   monthLabel,
   data,
@@ -410,6 +662,8 @@ function CloseMonthModal({
   monthLabel: string;
   data: {
     income: number;
+    baseIncome: number;
+    extraIncome: number;
     variableSpent: number;
     fixedTotal: number;
     installmentsTotal: number;
@@ -435,7 +689,7 @@ function CloseMonthModal({
     try {
       await onConfirm();
     } catch (err) {
-      toast.error((err as Error)?.message || "Nao foi possivel fechar o mes.");
+      toast.error((err as Error)?.message || "Não foi possível fechar o mês.");
     } finally {
       setIsSaving(false);
     }
@@ -446,7 +700,7 @@ function CloseMonthModal({
     try {
       await onOpenNextMonth();
     } catch (err) {
-      toast.error((err as Error)?.message || "Nao foi possivel abrir o proximo mes.");
+      toast.error((err as Error)?.message || "Não foi possível abrir o próximo mês.");
     } finally {
       setIsSaving(false);
     }
@@ -468,7 +722,7 @@ function CloseMonthModal({
           <div>
             <h2 className="text-xl font-semibold text-stone-900">{closedSnapshot ? `${monthLabel} fechado` : `Fechar ${monthLabel}`}</h2>
             <p className="mt-1 text-xs text-stone-500">
-              {closedSnapshot ? "Historico salvo. Agora voce pode abrir o proximo mes." : "Confira o resumo antes de salvar o fechamento."}
+              {closedSnapshot ? "Histórico salvo. Agora você pode abrir o próximo mês." : "Confira o resumo antes de salvar o fechamento."}
             </p>
           </div>
           <button disabled={isSaving} onClick={onClose} className="text-stone-400 transition-colors hover:text-stone-600 disabled:opacity-50">
@@ -479,7 +733,7 @@ function CloseMonthModal({
         {closedSnapshot ? (
           <>
             <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900">
-              {monthLabel} foi fechado com snapshot. Os gastos continuam preservados no historico.
+              {monthLabel} foi fechado com snapshot. Os gastos continuam preservados no histórico.
             </div>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
               <button disabled={isSaving} onClick={onClose} className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50">
@@ -493,8 +747,9 @@ function CloseMonthModal({
         ) : (
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <SummaryLine label="Renda" value={data.income} />
-              <SummaryLine label="Gastos variaveis" value={data.variableSpent} />
+              <SummaryLine label="Renda real" value={data.income} />
+              <SummaryLine label="Rendas extras" value={data.extraIncome} />
+              <SummaryLine label="Gastos variáveis" value={data.variableSpent} />
               <SummaryLine label="Contas fixas" value={data.fixedTotal} />
               <SummaryLine label="Parcelas/compromissos" value={data.installmentsTotal} />
               <SummaryLine label="Saldo restante" value={data.available} strong />
@@ -506,7 +761,7 @@ function CloseMonthModal({
             </div>
 
             <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
-              Ao confirmar, este mes sera salvo no historico. Voce podera reabrir o mes pelo historico se tiver fechado sem querer.
+              Ao confirmar, este mês será salvo no histórico. Você poderá reabrir o mês pelo histórico se tiver fechado sem querer.
             </div>
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
@@ -538,7 +793,7 @@ function SummaryList({ title, rows }: { title: string; rows: Array<{ name: strin
     <div className="rounded-xl border border-stone-100 p-3">
       <p className="mb-2 text-xs font-medium uppercase tracking-wider text-stone-500">{title}</p>
       {rows.length === 0 ? (
-        <p className="text-sm text-stone-500">Sem dados neste mes.</p>
+        <p className="text-sm text-stone-500">Sem dados neste mês.</p>
       ) : (
         <div className="space-y-2">
           {rows.slice(0, 6).map((row) => (
@@ -552,3 +807,5 @@ function SummaryList({ title, rows }: { title: string; rows: Array<{ name: strin
     </div>
   );
 }
+
+

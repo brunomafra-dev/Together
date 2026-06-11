@@ -89,7 +89,7 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
       await deleteExpense(expense.id);
       toast.success("Gasto apagado.");
     } catch (err) {
-      toast.error((err as Error)?.message || "Nao foi possivel apagar o gasto.");
+      toast.error((err as Error)?.message || "Não foi possível apagar o gasto.");
     } finally {
       setDeletingId(null);
     }
@@ -97,7 +97,7 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
 
   const exportCsv = () => {
     const rows = [
-      ["data", "descricao", "categoria", "forma de pagamento", "quem pagou", "valor"],
+      ["data", "descrição", "categoria", "forma de pagamento", "quem pagou", "valor"],
       ...filtered.map((expense) => [
         expense.date,
         expense.description || "",
@@ -122,7 +122,7 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
     <div className="bg-white rounded-2xl p-6 border border-stone-200">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h2 className="font-medium text-stone-900 mb-1">Ultimos gastos</h2>
+          <h2 className="font-medium text-stone-900 mb-1">Últimos gastos</h2>
           <p className="text-xs text-stone-500">Filtre, edite e exporte os lancamentos</p>
         </div>
         <button

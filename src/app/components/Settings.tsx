@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 import { Layout } from "./Layout";
+import { ExpandableSection } from "./ExpandableSection";
 import { Expense, FixedExpense, FixedExpenseMonthlyValueModel, useFinance, formatBRL, MonthlySnapshotModel } from "../context/FinanceContext";
 import { Camera, LogOut, Mail, Plus, Trash2, Save, X, Edit2 } from "lucide-react";
 import { toast } from "sonner";
@@ -22,7 +23,7 @@ const csvCell = (value: string | number) => {
 const exportSnapshotExpensesCsv = (snapshot: MonthlySnapshotModel, monthLabel: string, expenses: Expense[]) => {
   const monthKey = `${snapshot.year}-${String(snapshot.month).padStart(2, "0")}`;
   const rows = [
-    ["data", "descricao", "categoria", "forma de pagamento", "quem pagou", "valor"],
+    ["data", "descrição", "categoria", "forma de pagamento", "quem pagou", "valor"],
     ...expenses
       .filter((expense) => expense.date.slice(0, 7) === monthKey)
       .map((expense) => [
@@ -86,6 +87,9 @@ export function Settings() {
   const defaultPaymentMethodNames = new Set(["Pix", "Dinheiro", "Débito"]);
   const coupleName = [partner1, partner2].filter(Boolean).join(" & ") || profile?.name || "Perfil";
   const accountEmail = profile?.email || user?.email || "";
+  const plannedIncome = parseFloat(monthlyIncome) || 0;
+  const fixedExpensesTotal = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+  const creditCardCount = paymentMethods.filter((method) => method.type === "credit_card").length;
   const initials = [partner1, partner2]
     .map((name) => name.trim()[0])
     .filter(Boolean)
@@ -162,7 +166,7 @@ export function Settings() {
           </p>
         </div>
 
-        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+        <ExpandableSection title="Perfil" summary={accountEmail || "Conta conectada"} defaultOpen>
           <h2 className="font-medium text-stone-900 mb-5">Perfil</h2>
           <div className="flex items-center gap-4">
             <div className="relative h-20 w-20 shrink-0 overflow-visible rounded-2xl bg-emerald-500">
@@ -201,9 +205,9 @@ export function Settings() {
             </div>
           </div>
           {profileError && <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{profileError}</p>}
-        </div>
+        </ExpandableSection>
 
-        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+        <ExpandableSection title="Família" summary={coupleName}>
           <h2 className="font-medium text-stone-900 mb-4">Família</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
@@ -225,12 +229,12 @@ export function Settings() {
               />
             </div>
           </div>
-        </div>
+        </ExpandableSection>
 
-        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+        <ExpandableSection title="Planejamento financeiro" summary={`Renda planejada ${formatBRL(plannedIncome)}`}>
           <h2 className="font-medium text-stone-900 mb-4">Planejamento Financeiro</h2>
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Renda mensal combinada (R$)</label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Renda mensal planejada (R$)</label>
             <input
               type="number"
               step="0.01"
@@ -246,9 +250,9 @@ export function Settings() {
             <Save className="w-4 h-4" />
             {saved ? "Salvo!" : "Salvar perfil"}
           </button>
-        </div>
+        </ExpandableSection>
 
-        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+        <ExpandableSection title="Formas de pagamento" summary={`${paymentMethods.length} formas · ${creditCardCount} cartões`}>
           <h2 className="font-medium text-stone-900 mb-4">Formas de Pagamento</h2>
 
           <div className="space-y-4">
@@ -303,9 +307,9 @@ export function Settings() {
             </div>
 
           </div>
-        </div>
+        </ExpandableSection>
 
-        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+        <ExpandableSection title="Contas fixas" summary={`${fixedExpenses.length} contas · ${formatBRL(fixedExpensesTotal)}/mês`}>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-medium text-stone-900">Contas Fixas</h2>
             <button
@@ -348,7 +352,7 @@ export function Settings() {
                       ? "bg-amber-50 text-amber-700"
                       : "bg-emerald-50 text-emerald-700"
                   }`}>
-                    {expense.amountType === "variable" ? "Variavel" : "Fixa"}
+                    {expense.amountType === "variable" ? "Variável" : "Fixa"}
                   </span>
                   <p className="break-words text-sm font-medium text-stone-900">
                     {formatBRL(expense.amount)}
@@ -379,9 +383,9 @@ export function Settings() {
               </p>
             )}
           </div>
-        </div>
+        </ExpandableSection>
 
-        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+        <ExpandableSection title="Histórico financeiro" summary={`${monthlySnapshots.length} fechamentos`}>
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <h2 className="font-medium text-stone-900">Histórico Financeiro</h2>
@@ -419,9 +423,9 @@ export function Settings() {
               ))}
             </div>
           )}
-        </div>
+        </ExpandableSection>
 
-        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+        <ExpandableSection title="Conta" summary="Sair ou excluir conta">
           <h2 className="font-medium text-stone-900 mb-4">Conta</h2>
           <div className="grid gap-3 sm:grid-cols-2">
             <button
@@ -441,7 +445,7 @@ export function Settings() {
               Excluir conta
             </button>
           </div>
-        </div>
+        </ExpandableSection>
       </div>
 
       {showAddPaymentMethod && (
@@ -499,7 +503,7 @@ export function Settings() {
             setSelectedSnapshot(null);
           }}
           onReopen={async () => {
-            if (!window.confirm(`Reabrir ${monthLabel(selectedSnapshot)}? Esse mes voltara a ser o mes aberto e os gastos variaveis poderao ser editados novamente.`)) return;
+            if (!window.confirm(`Reabrir ${monthLabel(selectedSnapshot)}? Esse mês voltará a ser o mês aberto e os gastos variáveis poderão ser editados novamente.`)) return;
             await reopenMonth(selectedSnapshot);
             setSelectedSnapshot(null);
           }}
@@ -559,7 +563,7 @@ function FixedExpenseRow({
               : "bg-emerald-50 text-emerald-700"
           }`}
         >
-          {expense.amountType === "variable" ? "Variavel" : "Fixa"}
+          {expense.amountType === "variable" ? "Variável" : "Fixa"}
         </span>
         <p className="break-words text-sm font-medium text-stone-900">{formatBRL(displayedAmount)}</p>
         {expense.amountType === "variable" && (
@@ -641,7 +645,7 @@ function FixedExpenseMonthlyValueModal({
       >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-stone-900">Valor real do mes</h2>
+            <h2 className="text-xl font-semibold text-stone-900">Valor real do mês</h2>
             <p className="mt-1 text-xs text-stone-500">
               {fixedExpense.name} - {monthLabel}
             </p>
@@ -653,7 +657,7 @@ function FixedExpenseMonthlyValueModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
-            Estimado: {formatBRL(fixedExpense.amount)}. Ao salvar, o dashboard e o fechamento deste mes passam a usar o valor real.
+            Estimado: {formatBRL(fixedExpense.amount)}. Ao salvar, o dashboard e o fechamento deste mês passam a usar o valor real.
           </div>
           <div>
             <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
@@ -923,7 +927,7 @@ function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalPro
                     : "text-stone-500 hover:text-stone-800"
                 }`}
               >
-                Variavel mensal
+                Variável mensal
               </button>
             </div>
           </div>
@@ -956,7 +960,7 @@ function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalPro
               />
               {amountType === "variable" && (
                 <p className="mt-1 text-xs text-stone-500">
-                  Use uma media para projecao. O valor real por mes entra na proxima etapa.
+                  Use uma média para projeção. O valor real por mês entra na próxima etapa.
                 </p>
               )}
             </div>
@@ -1000,7 +1004,7 @@ function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalPro
               disabled={saving}
               className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-60 transition-colors font-medium"
             >
-              {saving ? "Salvando..." : fixedExpense ? "Salvar edicao" : "Salvar"}
+              {saving ? "Salvando..." : fixedExpense ? "Salvar edição" : "Salvar"}
             </button>
           </div>
         </form>

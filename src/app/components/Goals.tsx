@@ -1,6 +1,7 @@
-﻿import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { endOfMonth, getDate, getDaysInMonth, isWithinInterval, parseISO, startOfMonth } from "date-fns";
 import { Edit3, Plus, Sparkles, Target, TrendingDown, Wallet, X, Save, Trash2 } from "lucide-react";
+import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
 import * as financeService from "../../services/financeService";
@@ -185,6 +186,7 @@ export function Goals() {
   const {
     household,
     settings,
+    incomeEntries,
     expenses,
     fixedExpenses,
     fixedExpenseMonthlyValues,
@@ -216,6 +218,9 @@ export function Goals() {
     const monthExpenses = expenses.filter((expense) =>
       isWithinInterval(parseISO(expense.date), currentMonth),
     );
+    const monthIncomeEntries = incomeEntries.filter((entry) =>
+      isWithinInterval(parseISO(entry.date), currentMonth),
+    );
     const fixedExpenseAmount = (expense: typeof fixedExpenses[number]) => {
       const monthlyValue = fixedExpenseMonthlyValues.find(
         (value) =>
@@ -233,11 +238,13 @@ export function Goals() {
       .filter((commitment) => commitment.status !== "finished")
       .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
     const totalSpent = fixedSpent + variableSpent + installmentSpent;
-    const remainingBalance = income - totalSpent;
+    const extraIncome = monthIncomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
+    const realIncome = income + extraIncome;
+    const remainingBalance = realIncome - totalSpent;
     const dayOfMonth = Math.max(getDate(referenceDate), 1);
     const daysInMonth = getDaysInMonth(cycleDate);
     const projectedVariable = (variableSpent / dayOfMonth) * daysInMonth;
-    const projectedEndBalance = income - fixedSpent - installmentSpent - projectedVariable;
+    const projectedEndBalance = realIncome - fixedSpent - installmentSpent - projectedVariable;
     const categoryTotals = new Map<string, number>();
 
     for (const expense of monthExpenses) {
@@ -251,7 +258,8 @@ export function Goals() {
     }
 
     for (const commitment of financialCommitments.filter((item) => item.status !== "finished")) {
-      categoryTotals.set("Parcelas", (categoryTotals.get("Parcelas") || 0) + commitment.installmentValue);
+      const name = categoryNames.get(commitment.categoryId) || commitment.categoryId || "Parcelas";
+      categoryTotals.set(name, (categoryTotals.get(name) || 0) + commitment.installmentValue);
     }
 
     const sortedCategories = Array.from(categoryTotals.entries())
@@ -259,7 +267,7 @@ export function Goals() {
       .sort((left, right) => right.amount - left.amount);
     const highestCategory = sortedCategories[0] ?? null;
     const lowestCategory = sortedCategories.length > 1 ? sortedCategories[sortedCategories.length - 1] : null;
-    const healthScore = income > 0 ? Math.max(0, Math.min(100, Math.round((remainingBalance / income) * 100))) : 0;
+    const healthScore = realIncome > 0 ? Math.max(0, Math.min(100, Math.round((remainingBalance / realIncome) * 100))) : 0;
     const spendingTrend =
       projectedEndBalance >= remainingBalance
         ? "Ritmo estável para o restante do mês."
@@ -271,6 +279,8 @@ export function Goals() {
       variableSpent,
       fixedSpent,
       installmentSpent,
+      extraIncome,
+      realIncome,
       totalSpent,
       categoryTotals: sortedCategories,
       remainingBalance,
@@ -280,7 +290,7 @@ export function Goals() {
       healthScore,
       spendingTrend,
     };
-  }, [activeCycle.month, activeCycle.year, categories, expenses, financialCommitments, fixedExpenseMonthlyValues, fixedExpenses, income]);
+  }, [activeCycle.month, activeCycle.year, categories, expenses, financialCommitments, fixedExpenseMonthlyValues, fixedExpenses, income, incomeEntries]);
 
   const [title, setTitle] = useState(snapshot.title);
   const [label, setLabel] = useState(snapshot.label);
@@ -610,7 +620,7 @@ export function Goals() {
       }
       closeContribution();
     } catch (error) {
-      setFormError(error instanceof Error ? error.message : "Nao foi possivel adicionar o valor.");
+      setFormError(error instanceof Error ? error.message : "Não foi possível adicionar o valor.");
     } finally {
       setSaving(false);
     }
@@ -721,7 +731,9 @@ export function Goals() {
                 </div>
                 <h3 className="break-words text-xl font-medium text-stone-950 sm:text-2xl">{formatBRL(financialData.remainingBalance)} livres neste mês</h3>
                 <p className="text-sm text-stone-600">
-                  Renda {formatBRL(income)} - fixas {formatBRL(financialData.fixedSpent)} - variáveis {formatBRL(financialData.variableSpent)} - parcelas {formatBRL(financialData.installmentSpent)}.
+                  Renda real {formatBRL(financialData.realIncome)}
+                  {financialData.extraIncome > 0 ? ` (${formatBRL(income)} planejada + ${formatBRL(financialData.extraIncome)} entradas)` : ""}
+                  {" - "}fixas {formatBRL(financialData.fixedSpent)} - variáveis {formatBRL(financialData.variableSpent)} - parcelas {formatBRL(financialData.installmentSpent)}.
                 </p>
               </div>
               <div className="text-left sm:text-right">
@@ -796,8 +808,20 @@ export function Goals() {
           </div>
         </section>
 
-        <section className="space-y-4">
-          <SectionHeader icon={Wallet} title="Planejamento do casal" actionLabel="Ajustar plano" onAction={openPlanningEdit} />
+        <ExpandableSection
+          title="Planejamento do casal"
+          summary={`${planCards.length} categorias · ${buildPercentText(planCards.reduce((sum, item) => sum + item.percent, 0))} da renda`}
+          actions={
+            <button
+              type="button"
+              onClick={openPlanningEdit}
+              className="inline-flex items-center gap-2 rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm font-medium text-stone-600 shadow-sm transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-[0_0_18px_rgba(16,185,129,0.16)]"
+            >
+              <Edit3 className="h-4 w-4" />
+              Ajustar plano
+            </button>
+          }
+        >
           <p className="text-sm text-stone-600">Como vocês decidiram dividir a renda mensal de {formatBRL(snapshot.householdIncome)}</p>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {planCards.map((card) => (
@@ -838,17 +862,27 @@ export function Goals() {
               Essa base inicial é inspirada em práticas comuns de organização financeira e soma {buildPercentText(planCards.reduce((sum, item) => sum + item.percent, 0))} da renda mensal. Ela é só um ponto de partida: vocês podem editar percentuais, adicionar categorias ou remover itens conforme a realidade do casal.
             </p>
           </div>
-        </section>
+        </ExpandableSection>
 
-        <section className="space-y-4">
-          <SectionHeader
-            icon={TrendingDown}
-            title="Metas futuras"
-            actionLabel="Nova meta"
-            actionIcon={Plus}
-            actionTone="primary"
-            onAction={openFutureGoalAdd}
-          />
+        <ExpandableSection
+          title="Metas futuras"
+          summary={
+            progressRows.length > 0
+              ? `${progressRows.length} metas · ${formatBRL(progressRows.reduce((sum, row) => sum + row.planned, 0))} em objetivos`
+              : "Nenhuma meta futura cadastrada"
+          }
+          defaultOpen={progressRows.length > 0}
+          actions={
+            <button
+              type="button"
+              onClick={openFutureGoalAdd}
+              className="inline-flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+            >
+              <Plus className="h-4 w-4" />
+              Nova meta
+            </button>
+          }
+        >
           <div className="overflow-hidden rounded-[2rem] border border-stone-200 bg-white shadow-sm">
             {progressRows.length > 0 ? (
               progressRows.map((row, index) => {
@@ -913,7 +947,7 @@ export function Goals() {
               </div>
             )}
           </div>
-        </section>
+        </ExpandableSection>
 
       </div>
 

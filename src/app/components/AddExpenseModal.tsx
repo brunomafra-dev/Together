@@ -92,7 +92,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
 
       onClose();
     } catch (err) {
-      toast.error((err as Error)?.message || "Nao foi possivel salvar o gasto.");
+      toast.error((err as Error)?.message || "Não foi possível salvar o gasto.");
     } finally {
       setIsSaving(false);
     }
@@ -115,7 +115,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
           <div>
             <h2 className="text-xl font-semibold text-stone-900">{isEditing ? "Editar gasto" : "Novo gasto"}</h2>
             <p className="text-xs text-stone-500 mt-0.5">
-              {isEditing ? "Ajuste os dados do lancamento." : "Adicione rapido, ajustes depois."}
+              {isEditing ? "Ajuste os dados do lançamento." : "Adicione rápido, ajustes depois."}
             </p>
           </div>
           <button disabled={isSaving} onClick={handleClose} className="text-stone-400 hover:text-stone-600 disabled:opacity-50 transition-colors">
@@ -177,7 +177,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Descricao (opcional)</label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Descrição (opcional)</label>
             <input
               type="text"
               value={description}
@@ -202,7 +202,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
             />
             <span>
               <span className="block font-medium text-stone-900">Recorrente mensal</span>
-              <span className="text-xs text-stone-500">Marca para revisao mensal, sem lancar duplicado automaticamente.</span>
+              <span className="text-xs text-stone-500">Marca para revisão mensal, sem lançar duplicado automaticamente.</span>
             </span>
           </label>
 
@@ -220,7 +220,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
               disabled={isSaving || !amount || parseFloat(amount.replace(",", ".")) <= 0 || !paidBy}
               className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             >
-              {isSaving ? "Salvando..." : isEditing ? "Salvar edicao" : "Salvar"}
+              {isSaving ? "Salvando..." : isEditing ? "Salvar edição" : "Salvar"}
             </button>
           </div>
         </form>

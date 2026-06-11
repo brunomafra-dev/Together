@@ -114,6 +114,17 @@ export interface FixedExpenseMonthlyValue extends TimestampedRow {
   status: 'estimated' | 'confirmed' | null
 }
 
+export interface IncomeEntry extends TimestampedRow {
+  id: string
+  household_id: string | null
+  amount: number | null
+  entry_date: string | null
+  description: string | null
+  source_type: string | null
+  received_by: string | null
+  recurring_monthly: boolean | null
+}
+
 export interface Goal extends TimestampedRow {
   id: string
   household_id: string | null
@@ -146,6 +157,7 @@ export interface FinancialCommitment extends TimestampedRow {
   id: string
   household_id: string | null
   payment_method_id: string | null
+  category_id: string | null
   item_name: string | null
   installment_value: number | null
   current_installment: number | null
@@ -185,6 +197,7 @@ export interface Database {
       installments: TableDef<Installment, NewRow<Installment>, PatchRow<Installment>>
       fixed_expenses: TableDef<FixedExpense, NewRow<FixedExpense>, PatchRow<FixedExpense>>
       fixed_expense_monthly_values: TableDef<FixedExpenseMonthlyValue, NewRow<FixedExpenseMonthlyValue>, PatchRow<FixedExpenseMonthlyValue>>
+      income_entries: TableDef<IncomeEntry, NewRow<IncomeEntry>, PatchRow<IncomeEntry>>
       goals: TableDef<Goal, NewRow<Goal>, PatchRow<Goal>>
       goal_plan_items: TableDef<GoalPlanItem, NewRow<GoalPlanItem>, PatchRow<GoalPlanItem>>
       goal_progress_rows: TableDef<GoalProgressRow, NewRow<GoalProgressRow>, PatchRow<GoalProgressRow>>

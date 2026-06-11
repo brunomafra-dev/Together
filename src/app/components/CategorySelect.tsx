@@ -1,6 +1,6 @@
 import { useFinance } from "../context/FinanceContext";
 
-const DEFAULT_CATEGORY_NAMES = ["Moradia", "Alimentacao", "Gasolina", "Lazer", "Saude", "Assinaturas", "Investimentos", "Outros"];
+const DEFAULT_CATEGORY_NAMES = ["Moradia", "Alimentação", "Gasolina", "Lazer", "Saúde", "Assinaturas", "Investimentos", "Outros"];
 
 interface CategorySelectProps {
   value: string;

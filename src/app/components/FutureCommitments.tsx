@@ -2,6 +2,7 @@
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar, TrendingDown, TrendingUp } from "lucide-react";
+import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
 
@@ -67,50 +68,63 @@ export function FutureCommitments() {
           </p>
         </div>
 
-        <div className="grid gap-3">
-          {futureMonths.map((month, index) => {
-            const change = index === 0 ? 0 : month.total - prevMonth;
-            const isRelief = index > 0 && month.total < futureMonths[index - 1].total;
+        <ExpandableSection
+          title="Próximos meses"
+          summary={
+            futureMonths[0]
+              ? `${futureMonths.length} meses · ${formatBRL(futureMonths[0].total)} no próximo ciclo`
+              : "Sem projeção futura"
+          }
+          defaultOpen
+        >
+          <div className="grid gap-3">
+            {futureMonths.map((month, index) => {
+              const change = index === 0 ? 0 : month.total - prevMonth;
+              const isRelief = index > 0 && month.total < futureMonths[index - 1].total;
 
-            return (
-              <div key={index} className="bg-white rounded-2xl p-5 border border-stone-200">
-                <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="flex min-w-0 items-center gap-2">
-                    <Calendar className="w-4 h-4 text-stone-500" />
-                    <h3 className="min-w-0 break-words font-medium capitalize text-stone-900">{month.label}</h3>
+              return (
+                <div key={index} className="bg-white rounded-2xl p-5 border border-stone-200">
+                  <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-2">
+                      <Calendar className="w-4 h-4 text-stone-500" />
+                      <h3 className="min-w-0 break-words font-medium capitalize text-stone-900">{month.label}</h3>
+                    </div>
+                    {isRelief && (
+                      <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full flex items-center gap-1">
+                        <TrendingDown className="w-3 h-3" />
+                        Mais leve
+                      </span>
+                    )}
                   </div>
-                  {isRelief && (
-                    <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full flex items-center gap-1">
-                      <TrendingDown className="w-3 h-3" />
-                      Mais leve
-                    </span>
-                  )}
+
+                  <div className="grid gap-3 sm:grid-cols-4">
+                    <div className="bg-stone-50 rounded-xl p-3">
+                      <p className="text-xs text-stone-500 mb-1">Contas fixas</p>
+                      <p className="break-words font-semibold text-stone-900">{formatBRL(month.fixed)}</p>
+                    </div>
+                    <div className="bg-indigo-50 rounded-xl p-3">
+                      <p className="text-xs text-indigo-700 mb-1">Compromissos</p>
+                      <p className="break-words font-semibold text-indigo-900">{formatBRL(month.commitments)}</p>
+                    </div>
+                    <div className="bg-amber-50 rounded-xl p-3">
+                      <p className="text-xs text-amber-700 mb-1">Assinaturas</p>
+                      <p className="break-words font-semibold text-amber-900">{formatBRL(month.subscriptions)}</p>
+                    </div>
+                    <div className="bg-emerald-50 rounded-xl p-3">
+                      <p className="text-xs text-emerald-700 mb-1">Sobra estimada</p>
+                      <p className="break-words font-semibold text-emerald-900">{formatBRL(month.free)}</p>
+                    </div>
+                  </div>
                 </div>
+              );
+            })}
+          </div>
+        </ExpandableSection>
 
-                <div className="grid gap-3 sm:grid-cols-4">
-                  <div className="bg-stone-50 rounded-xl p-3">
-                    <p className="text-xs text-stone-500 mb-1">Contas fixas</p>
-                    <p className="break-words font-semibold text-stone-900">{formatBRL(month.fixed)}</p>
-                  </div>
-                  <div className="bg-indigo-50 rounded-xl p-3">
-                    <p className="text-xs text-indigo-700 mb-1">Compromissos</p>
-                    <p className="break-words font-semibold text-indigo-900">{formatBRL(month.commitments)}</p>
-                  </div>
-                  <div className="bg-amber-50 rounded-xl p-3">
-                    <p className="text-xs text-amber-700 mb-1">Assinaturas</p>
-                    <p className="break-words font-semibold text-amber-900">{formatBRL(month.subscriptions)}</p>
-                  </div>
-                  <div className="bg-emerald-50 rounded-xl p-3">
-                    <p className="text-xs text-emerald-700 mb-1">Sobra estimada</p>
-                    <p className="break-words font-semibold text-emerald-900">{formatBRL(month.free)}</p>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-
-        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+        <ExpandableSection
+          title="Contas fixas ativas"
+          summary={`${fixedExpenses.length} contas · ${formatBRL(fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0))}/mês`}
+        >
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp className="w-4 h-4 text-stone-600" />
             <h3 className="font-medium text-stone-900">Contas fixas ativas</h3>
@@ -128,9 +142,12 @@ export function FutureCommitments() {
               </div>
             ))}
           </div>
-        </div>
+        </ExpandableSection>
 
-        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+        <ExpandableSection
+          title="Resumo das recorrentes"
+          summary={`${formatBRL(fixedRecurringExpenses.reduce((sum, expense) => sum + expense.amount, 0))} fixas · ${formatBRL(variableRecurringExpenses.reduce((sum, expense) => sum + expense.amount, 0))} variáveis`}
+        >
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-stone-600" />
@@ -151,9 +168,13 @@ export function FutureCommitments() {
               </p>
             </div>
           </div>
-        </div>
+        </ExpandableSection>
 
-        <div className="bg-white rounded-2xl p-6 border border-stone-200">
+        <ExpandableSection
+          title="Assinaturas ativas"
+          summary={`${activeSubscriptions.length} assinaturas · ${formatBRL(subscriptionTotal)}/mês`}
+          defaultOpen={activeSubscriptions.length > 0}
+        >
           <div className="flex items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-amber-600" />
@@ -187,7 +208,7 @@ export function FutureCommitments() {
               })
             )}
           </div>
-        </div>
+        </ExpandableSection>
       </div>
     </Layout>
   );

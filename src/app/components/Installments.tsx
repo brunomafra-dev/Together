@@ -11,12 +11,15 @@ import {
   Wallet,
   X,
 } from "lucide-react";
+import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
+import { CategorySelect } from "./CategorySelect";
 
 type Commitment = {
   id: string;
   paymentMethodId: string | null;
+  categoryId: string;
   itemName: string;
   installmentValue: number;
   currentInstallment: number;
@@ -90,7 +93,7 @@ function currentCommitmentDue(commitment: Commitment) {
 
 function commitmentEndDate(commitment: Commitment, nextBillDate: Date) {
   const remaining = remainingInstallments(commitment);
-  if (remaining === 0) return "Concluido";
+  if (remaining === 0) return "Concluído";
 
   return format(addMonths(nextBillDate, remaining - 1), "MMM/yyyy", {
     locale: ptBR,
@@ -103,6 +106,7 @@ export function Installments() {
     financialCommitments: commitments,
     expenses,
     household,
+    categories,
     activeCycle,
     deleteFinancialCommitment,
   } = useFinance();
@@ -165,6 +169,10 @@ export function Installments() {
     (sum, bucket) => sum + bucket.billExpenses + bucket.billInstallments,
     0,
   );
+  const noCardMonthlyTotal = noCardCommitments.reduce(
+    (sum, commitment) => sum + currentCommitmentDue(commitment),
+    0,
+  );
   const activeInstallments = commitments.filter((commitment) => commitment.status !== "finished").length;
   const totalRemainingInstallments = commitments.reduce(
     (sum, commitment) => sum + remainingInstallments(commitment),
@@ -182,7 +190,7 @@ export function Installments() {
       : "Sem parcelas abertas";
 
   const handleDeleteCommitment = async (id: string) => {
-    if (!window.confirm("Excluir este compromisso?")) return;
+    if (!window.confirm("Excluir este parcelamento?")) return;
 
     setDeletingId(id);
     try {
@@ -199,7 +207,7 @@ export function Installments() {
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-stone-900">Parcelas</h1>
             <p className="mt-1 text-sm text-stone-600">
-              Cartoes, limite usado hoje e proxima fatura.
+              Cartões, limite usado hoje e próxima fatura.
             </p>
           </div>
           <button
@@ -207,37 +215,32 @@ export function Installments() {
             className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 font-medium text-emerald-700 transition-colors hover:bg-emerald-100 sm:w-auto"
           >
             <Plus className="h-4 w-4" />
-            Novo compromisso
+            Novo parcelamento
           </button>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard icon={Layers3} label="Compromissos ativos" value={String(activeInstallments)} />
+          <SummaryCard icon={Layers3} label="Parcelamentos ativos" value={String(activeInstallments)} />
           <SummaryCard
             icon={CalendarCheck}
             label="Parcelas restantes"
             value={String(totalRemainingInstallments)}
           />
           <SummaryCard icon={Wallet} label={`Fatura ${nextBillLabel}`} value={formatBRL(currentBillTotal)} />
-          <SummaryCard icon={Clock3} label="Termino estimado" value={estimatedEndDate} capitalize />
+          <SummaryCard icon={Clock3} label="Término estimado" value={estimatedEndDate} capitalize />
         </div>
 
-        <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h2 className="text-xl font-semibold text-stone-950">Resumo geral</h2>
-              <p className="mt-1 text-sm text-stone-600">
-                Limite usado soma compras ainda nao pagas e saldo restante das parcelas.
-              </p>
-            </div>
-          </div>
-
+        <ExpandableSection
+          title="Resumo geral"
+          summary={`${buckets.length} cartões · ${formatBRL(currentBillTotal)} próxima fatura · ${formatBRL(availableLimit)} livre`}
+          defaultOpen
+        >
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricBlock label="Limite total" value={formatBRL(totalLimit)} />
             <MetricBlock label="Usado em compras" value={formatBRL(expensesLimitUsed)} />
             <MetricBlock label="Usado em parcelas" value={formatBRL(installmentsLimitUsed)} />
             <MetricBlock
-              label="Limite disponivel"
+              label="Limite disponível"
               value={formatBRL(availableLimit)}
               className={limitTone(availableLimit, totalLimit)}
             />
@@ -246,7 +249,7 @@ export function Installments() {
           <div className="mt-6 space-y-5">
             {buckets.length === 0 ? (
               <div className="rounded-2xl border border-stone-200 bg-stone-50 p-8 text-center">
-                <p className="text-sm text-stone-500">Nenhum cartao cadastrado ainda.</p>
+                <p className="text-sm text-stone-500">Nenhum cartão cadastrado ainda.</p>
               </div>
             ) : (
               buckets.map((bucket) => (
@@ -257,24 +260,27 @@ export function Installments() {
                   onDelete={handleDeleteCommitment}
                   onEdit={setEditingCommitment}
                   nextBillDate={nextBillDate}
+                  categories={categories}
                   nextBillLabel={nextBillLabel}
                 />
               ))
             )}
           </div>
-        </section>
+        </ExpandableSection>
 
-        <section className="rounded-[2rem] border border-stone-200 bg-white p-5 shadow-sm sm:p-6">
-          <div className="mb-4">
-            <h2 className="text-xl font-semibold text-stone-950">Fora do cartao</h2>
-            <p className="mt-1 text-sm text-stone-600">
-              IPVA, emprestimos e acordos parcelados que nao consomem limite de cartao.
-            </p>
-          </div>
+        <ExpandableSection
+          title="Fora do cartão"
+          summary={
+            noCardCommitments.length > 0
+              ? `${noCardCommitments.length} parcelamentos · ${formatBRL(noCardMonthlyTotal)}/mês`
+              : "Nenhum parcelamento fora do cartão"
+          }
+          defaultOpen={noCardCommitments.length > 0}
+        >
           <div className="space-y-3">
             {noCardCommitments.length === 0 ? (
               <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-500">
-                Nenhum compromisso fora do cartao cadastrado.
+                Nenhum parcelamento fora do cartão cadastrado.
               </p>
             ) : (
               noCardCommitments.map((commitment) => (
@@ -283,13 +289,14 @@ export function Installments() {
                   commitment={commitment}
                   deletingId={deletingId}
                   nextBillDate={nextBillDate}
+                  categories={categories}
                   onEdit={setEditingCommitment}
                   onDelete={handleDeleteCommitment}
                 />
               ))
             )}
           </div>
-        </section>
+        </ExpandableSection>
       </div>
 
       {showAddForm && (
@@ -369,6 +376,7 @@ function CardSummary({
   onEdit,
   onDelete,
   nextBillDate,
+  categories,
   nextBillLabel,
 }: {
   bucket: PaymentMethodBucket;
@@ -376,6 +384,7 @@ function CardSummary({
   onEdit: (commitment: Commitment) => void;
   onDelete: (id: string) => Promise<void>;
   nextBillDate: Date;
+  categories: ReturnType<typeof useFinance>["categories"];
   nextBillLabel: string;
 }) {
   const used = bucket.expenseLimitUsed + bucket.commitmentLimitUsed;
@@ -398,7 +407,7 @@ function CardSummary({
           <MiniMetric label="Limite" value={formatBRL(bucket.totalLimit)} />
           <MiniMetric label="Compras" value={formatBRL(bucket.expenseLimitUsed)} />
           <MiniMetric label="Parcelas" value={formatBRL(bucket.commitmentLimitUsed)} />
-          <MiniMetric label="Disponivel" value={formatBRL(available)} />
+          <MiniMetric label="Disponível" value={formatBRL(available)} />
         </div>
       </div>
 
@@ -408,7 +417,7 @@ function CardSummary({
 
       <div className="mt-5">
         <div className="mb-3 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
-          <h4 className="text-sm font-semibold text-stone-900">Parcelas deste cartao</h4>
+          <h4 className="text-sm font-semibold text-stone-900">Parcelas deste cartão</h4>
           <p className="text-xs text-stone-500">
             A cada parcela paga, o saldo em aberto reduz e o limite volta.
           </p>
@@ -416,7 +425,7 @@ function CardSummary({
         <div className="space-y-3">
           {bucket.commitments.length === 0 ? (
             <p className="rounded-xl bg-white p-4 text-sm text-stone-500">
-              Nenhuma parcela cadastrada neste cartao.
+              Nenhuma parcela cadastrada neste cartão.
             </p>
           ) : (
             bucket.commitments.map((commitment) => (
@@ -425,6 +434,7 @@ function CardSummary({
                 commitment={commitment}
                 deletingId={deletingId}
                 nextBillDate={nextBillDate}
+                categories={categories}
                 onEdit={onEdit}
                 onDelete={onDelete}
               />
@@ -440,12 +450,14 @@ function CommitmentRow({
   commitment,
   deletingId,
   nextBillDate,
+  categories,
   onEdit,
   onDelete,
 }: {
   commitment: Commitment;
   deletingId: string | null;
   nextBillDate: Date;
+  categories: ReturnType<typeof useFinance>["categories"];
   onEdit: (commitment: Commitment) => void;
   onDelete: (id: string) => Promise<void>;
 }) {
@@ -455,6 +467,7 @@ function CommitmentRow({
     commitment.totalInstallments > 0
       ? Math.min((commitment.currentInstallment / commitment.totalInstallments) * 100, 100)
       : 0;
+  const categoryName = categories.find((category) => category.id === commitment.categoryId)?.name || "Sem categoria";
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-4">
@@ -468,14 +481,14 @@ function CommitmentRow({
               )}`}
             >
               {commitment.status === "finished"
-                ? "Concluido"
+                ? "Concluído"
                 : commitment.status === "late"
                   ? "Em atraso"
                   : "Ativo"}
             </span>
           </div>
           <p className="mt-1 text-xs text-stone-500">
-            {commitment.currentInstallment} de {commitment.totalInstallments} pagas, {remaining} restantes
+            {categoryName} - {commitment.currentInstallment} de {commitment.totalInstallments} pagas, {remaining} restantes
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -483,7 +496,7 @@ function CommitmentRow({
             type="button"
             onClick={() => onEdit(commitment)}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-[0_0_18px_rgba(16,185,129,0.16)]"
-            aria-label="Editar compromisso"
+            aria-label="Editar parcelamento"
           >
             <Pencil className="h-4 w-4" />
           </button>
@@ -492,7 +505,7 @@ function CommitmentRow({
             onClick={() => void onDelete(commitment.id)}
             disabled={deletingId === commitment.id}
             className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 hover:shadow-[0_0_18px_rgba(244,63,94,0.16)] disabled:cursor-not-allowed disabled:opacity-50"
-            aria-label="Excluir compromisso"
+            aria-label="Excluir parcelamento"
           >
             <Trash2 className="h-4 w-4" />
           </button>
@@ -501,10 +514,10 @@ function CommitmentRow({
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MiniMetric label="Valor da parcela" value={formatBRL(commitment.installmentValue)} />
-        <MiniMetric label="Proxima fatura" value={formatBRL(currentCommitmentDue(commitment))} />
+        <MiniMetric label="Próxima fatura" value={formatBRL(currentCommitmentDue(commitment))} />
         <MiniMetric label="Saldo em aberto" value={formatBRL(remainingAmount)} />
         <MiniMetric label="Termina em" value={commitmentEndDate(commitment, nextBillDate)} />
-        <MiniMetric label="Responsavel" value={commitment.responsiblePerson || "Sem responsavel"} />
+        <MiniMetric label="Responsável" value={commitment.responsiblePerson || "Sem responsável"} />
       </div>
 
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-100">
@@ -529,6 +542,7 @@ function AddCommitmentModal({
     commitment?.paymentMethodId ?? "",
   );
   const [itemName, setItemName] = useState(commitment?.itemName ?? "");
+  const [categoryId, setCategoryId] = useState(commitment?.categoryId ?? "");
   const [installmentValue, setInstallmentValue] = useState(
     commitment ? String(commitment.installmentValue).replace(".", ",") : "",
   );
@@ -544,11 +558,16 @@ function AddCommitmentModal({
   const [notes, setNotes] = useState(commitment?.notes ?? "");
   const [saving, setSaving] = useState(false);
 
+  const partnerOptions = useMemo(
+    () => (household?.partnerNames ?? []).filter((name) => name.trim().length > 0),
+    [household?.partnerNames],
+  );
+
   useEffect(() => {
-    if (!responsiblePerson && household?.partnerNames[0]) {
-      setResponsiblePerson(household.partnerNames[0]);
+    if (!responsiblePerson && partnerOptions[0]) {
+      setResponsiblePerson(partnerOptions[0]);
     }
-  }, [household?.partnerNames, responsiblePerson]);
+  }, [partnerOptions, responsiblePerson]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -561,11 +580,12 @@ function AddCommitmentModal({
     try {
       const payload = {
         paymentMethodId: paymentMethodId || null,
+        categoryId,
         itemName: itemName.trim(),
         installmentValue: amount,
         currentInstallment: current,
         totalInstallments: total,
-        responsiblePerson: responsiblePerson.trim() || "Sem responsavel",
+        responsiblePerson: responsiblePerson.trim() || "Sem responsável",
         notes: notes.trim(),
         startedAt: commitment?.startedAt ?? new Date().toISOString().split("T")[0],
         status: commitment?.status ?? "active",
@@ -594,7 +614,7 @@ function AddCommitmentModal({
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
           <div>
             <h2 className="text-xl font-semibold text-stone-950">
-              {commitment ? "Editar compromisso" : "Novo compromisso"}
+              {commitment ? "Editar parcelamento" : "Novo parcelamento"}
             </h2>
             <p className="mt-0.5 text-xs text-stone-500">
               Ajuste parcelas, valor e forma de pagamento.
@@ -619,6 +639,12 @@ function AddCommitmentModal({
             </div>
             <div>
               <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">
+                Categoria
+              </label>
+              <CategorySelect value={categoryId} onChange={setCategoryId} placeholder="Selecione a categoria" />
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">
                 Valor da parcela
               </label>
               <input
@@ -637,7 +663,7 @@ function AddCommitmentModal({
                 onChange={(e) => setPaymentMethodId(e.target.value)}
                 className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
               >
-                <option value="">Fora do cartao / boleto / acordo</option>
+                <option value="">Fora do cartão / boleto / acordo</option>
                 {paymentMethods.map((method) => (
                   <option key={method.id} value={method.id}>
                     {method.name}
@@ -674,17 +700,23 @@ function AddCommitmentModal({
             </div>
             <div>
               <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">
-                Responsavel
+                Responsável
               </label>
-              <input
+              <select
                 value={responsiblePerson}
                 onChange={(e) => setResponsiblePerson(e.target.value)}
-                className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-              />
+                className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              >
+                {partnerOptions.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
             </div>
             <div className="md:col-span-2">
               <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">
-                Observacoes
+                Observações
               </label>
               <textarea
                 value={notes}
@@ -709,7 +741,7 @@ function AddCommitmentModal({
               className="inline-flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60"
             >
               <Plus className="h-4 w-4" />
-              {saving ? "Salvando..." : commitment ? "Salvar edicao" : "Salvar compromisso"}
+              {saving ? "Salvando..." : commitment ? "Salvar edição" : "Salvar parcelamento"}
             </button>
           </div>
         </form>
