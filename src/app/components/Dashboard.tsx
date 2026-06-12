@@ -265,24 +265,24 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="rounded-3xl border border-stone-200 bg-gradient-to-br from-white to-stone-50 p-5 sm:p-8">
-          <p className="mb-2 text-sm text-stone-600">Livre para gastar</p>
-          <h2 className={`break-words text-4xl font-semibold leading-tight sm:text-5xl lg:text-6xl ${availableColor}`}>{formatBRL(data.available)}</h2>
-          <p className="mt-3 text-sm text-stone-500">
+        <div className="rounded-2xl border border-stone-200 bg-gradient-to-br from-white to-stone-50 p-4 sm:rounded-3xl sm:p-8">
+          <p className="mb-1.5 text-xs text-stone-600 sm:mb-2 sm:text-sm">Livre para gastar</p>
+          <h2 className={`break-words text-3xl font-semibold leading-tight sm:text-5xl lg:text-6xl ${availableColor}`}>{formatBRL(data.available)}</h2>
+          <p className="mt-2 text-xs leading-5 text-stone-500 sm:mt-3 sm:text-sm sm:leading-6">
             Calculado com renda planejada, rendas extras do mês, contas fixas, compromissos e gastos reais.
           </p>
 
-          <div className="mt-6">
+          <div className="mt-4 sm:mt-6">
             <div className="mb-2 flex flex-wrap justify-between gap-2 text-xs text-stone-500">
               <span>Uso do orcamento</span>
               <span>{data.income > 0 ? `${((data.totalSpent / data.income) * 100).toFixed(0)}%` : "0%"}</span>
             </div>
-            <div className="flex h-2.5 overflow-hidden rounded-full bg-stone-100">
+            <div className="flex h-2 overflow-hidden rounded-full bg-stone-100 sm:h-2.5">
               <div className="bg-stone-400" style={{ width: `${data.income > 0 ? (data.fixedTotal / data.income) * 100 : 0}%` }} />
               <div className="bg-indigo-400" style={{ width: `${data.income > 0 ? (data.installmentsTotal / data.income) * 100 : 0}%` }} />
               <div className="bg-emerald-400" style={{ width: `${data.income > 0 ? (data.variableSpent / data.income) * 100 : 0}%` }} />
             </div>
-            <div className="mt-3 flex flex-wrap gap-4 text-xs text-stone-600">
+            <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-stone-600 sm:mt-3 sm:gap-4 sm:text-xs">
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-stone-400" /> Fixas</span>
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-indigo-400" /> Compromissos</span>
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" /> Variaveis</span>

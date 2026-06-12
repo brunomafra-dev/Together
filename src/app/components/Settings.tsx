@@ -207,8 +207,8 @@ export function Settings() {
           {profileError && <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{profileError}</p>}
         </ExpandableSection>
 
-        <ExpandableSection title="Família" summary={coupleName}>
-          <h2 className="font-medium text-stone-900 mb-4">Família</h2>
+        <ExpandableSection title="Casal e rendimento" summary={`${coupleName} · renda ${formatBRL(plannedIncome)}`}>
+          <h2 className="font-medium text-stone-900 mb-4">Casal e rendimento</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Parceiro 1</label>
@@ -228,20 +228,16 @@ export function Settings() {
                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
-          </div>
-        </ExpandableSection>
-
-        <ExpandableSection title="Planejamento financeiro" summary={`Renda planejada ${formatBRL(plannedIncome)}`}>
-          <h2 className="font-medium text-stone-900 mb-4">Planejamento Financeiro</h2>
-          <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Renda mensal planejada (R$)</label>
-            <input
-              type="number"
-              step="0.01"
-              value={monthlyIncome}
-              onChange={(e) => setMonthlyIncome(e.target.value)}
-              className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
-            />
+            <div className="sm:col-span-2">
+              <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Renda mensal planejada (R$)</label>
+              <input
+                type="number"
+                step="0.01"
+                value={monthlyIncome}
+                onChange={(e) => setMonthlyIncome(e.target.value)}
+                className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+            </div>
           </div>
           <button
             onClick={handleSaveSettings}
