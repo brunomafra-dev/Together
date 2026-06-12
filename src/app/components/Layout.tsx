@@ -1,6 +1,7 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
 import { Home, CreditCard, Calendar, UserCircle, Heart, Target, Moon, Sun } from "lucide-react";
+import { useFinance } from "../context/FinanceContext";
 
 interface LayoutProps {
   children: ReactNode;
@@ -8,8 +9,17 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
   const location = useLocation();
+  const { household, settings } = useFinance();
   const isActive = (path: string) => location.pathname === path;
   const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem("together:theme") === "dark");
+  const partnerNames = (household?.partnerNames ?? settings.partnerNames).filter(Boolean);
+  const coupleName = partnerNames.length > 0 ? partnerNames.join(" & ") : "";
+  const initials = partnerNames
+    .map((name) => name.trim()[0])
+    .filter(Boolean)
+    .join("")
+    .slice(0, 2)
+    .toUpperCase() || "T";
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -29,11 +39,27 @@ export function Layout({ children }: LayoutProps) {
       <nav className="bg-white/80 backdrop-blur border-b border-stone-200 sticky top-0 z-10">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2">
-              <div className="w-8 h-8 bg-gradient-to-br from-emerald-400 to-teal-600 rounded-lg flex items-center justify-center">
-                <Heart className="w-4 h-4 text-white" fill="white" />
+            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
+              <div className="flex shrink-0 items-center gap-1.5">
+                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600">
+                  <Heart className="h-3.5 w-3.5 text-white" fill="white" />
+                </div>
+                <span className="hidden text-sm font-medium text-stone-900 min-[380px]:inline">Together</span>
               </div>
-              <span className="font-medium text-stone-900">Together</span>
+              {coupleName ? (
+                <div className="flex min-w-0 items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-2 py-1.5 sm:gap-2.5 sm:px-3">
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">
+                    {household?.avatarUrl ? (
+                      <img src={household.avatarUrl} alt={coupleName} className="h-full w-full object-cover" />
+                    ) : (
+                      initials
+                    )}
+                  </div>
+                  <span className="block max-w-[128px] truncate text-sm font-semibold text-stone-700 sm:max-w-[260px]">
+                    {coupleName}
+                  </span>
+                </div>
+              ) : null}
             </div>
 
             <div className="flex items-center gap-2">

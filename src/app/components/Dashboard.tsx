@@ -215,7 +215,6 @@ export function Dashboard() {
       ? `Nesse ritmo, a previsão é fechar o mês com ${formatBRL(data.projectedLeftover)} livres.`
       : `Atenção: nesse ritmo, vocês podem ultrapassar em ${formatBRL(Math.abs(data.projectedLeftover))} até o fim do mês.`;
 
-  const greetingNames = household?.partnerNames?.filter(Boolean) ?? settings.partnerNames.filter(Boolean);
   const hasVisibleData = Boolean(household) || expenses.length > 0 || categories.length > 0 || paymentMethods.length > 0;
   const goalPercent = goalSummary?.targetAmount
     ? Math.min(Math.round((goalSummary.currentAmount / goalSummary.targetAmount) * 100), 100)
@@ -239,9 +238,7 @@ export function Dashboard() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wider text-stone-500">{monthLabel}</p>
-            <h1 className="mt-1 break-words text-2xl font-semibold text-stone-900">
-              {greetingNames.length > 0 ? `Oi, ${greetingNames.join(" e ")}` : "Oi"}
-            </h1>
+            <h1 className="mt-1 break-words text-2xl font-semibold text-stone-900">Resumo do mês</h1>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
             <button
