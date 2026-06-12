@@ -5,6 +5,7 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Download, Pencil, Trash2 } from "lucide-react";
 import { AddExpenseModal } from "./AddExpenseModal";
+import { dedupeCategories } from "../utils/categories";
 
 interface RecentExpensesProps {
   expenses: Expense[];
@@ -36,6 +37,7 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
   }, [defaultMonth]);
 
   const categoryNames = useMemo(() => new Map(categories.map((category) => [category.id, category.name])), [categories]);
+  const categoryOptions = useMemo(() => dedupeCategories(categories), [categories]);
   const paymentMethodNames = useMemo(() => new Map(paymentMethods.map((method) => [method.id, method.name])), [paymentMethods]);
   const householdMembers = useMemo(() => {
     const names = [
@@ -159,7 +161,7 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
           className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
         >
           <option value="all">Todas as categorias</option>
-          {categories.map((category) => (
+          {categoryOptions.map((category) => (
             <option key={category.id} value={category.id}>{category.name}</option>
           ))}
         </select>

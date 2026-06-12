@@ -11,6 +11,12 @@ type ExpandableSectionProps = {
   actions?: ReactNode;
 };
 
+const shouldOpenByDefault = (defaultOpen: boolean) => {
+  if (!defaultOpen) return false;
+  if (typeof window === "undefined") return defaultOpen;
+  return window.matchMedia("(min-width: 640px)").matches;
+};
+
 export function ExpandableSection({
   title,
   summary,
@@ -20,7 +26,7 @@ export function ExpandableSection({
   contentClassName = "",
   actions,
 }: ExpandableSectionProps) {
-  const [open, setOpen] = useState(defaultOpen);
+  const [open, setOpen] = useState(() => shouldOpenByDefault(defaultOpen));
   const contentId = `section-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
   return (

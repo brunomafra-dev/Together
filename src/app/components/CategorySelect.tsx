@@ -1,6 +1,7 @@
 import { useFinance } from "../context/FinanceContext";
+import { dedupeCategories } from "../utils/categories";
 
-const DEFAULT_CATEGORY_NAMES = ["Moradia", "Alimentação", "Gasolina", "Lazer", "Saúde", "Assinaturas", "Investimentos", "Outros"];
+const DEFAULT_CATEGORY_NAMES = ["Moradia", "Alimenta\u00e7\u00e3o", "Gasolina", "Lazer", "Sa\u00fade", "Assinaturas", "Investimentos", "Outros"];
 
 interface CategorySelectProps {
   value: string;
@@ -16,7 +17,10 @@ export function CategorySelect({
   className = "",
 }: CategorySelectProps) {
   const { categories } = useFinance();
-  const categoryOptions = categories.length > 0 ? categories : DEFAULT_CATEGORY_NAMES.map((name, index) => ({ id: `default-${index}`, name }));
+  const rawOptions = categories.length > 0
+    ? categories
+    : DEFAULT_CATEGORY_NAMES.map((name, index) => ({ id: `default-${index}`, name }));
+  const categoryOptions = dedupeCategories(rawOptions);
 
   return (
     <select

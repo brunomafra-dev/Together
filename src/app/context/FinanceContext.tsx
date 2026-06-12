@@ -1,6 +1,7 @@
 ﻿import { createContext, useContext, useEffect, useMemo, useState, ReactNode } from "react";
 import { useAuth } from "./AuthContext";
 import * as financeService from "../../services/financeService";
+import { canonicalCategoryName, normalizeCategoryName } from "../utils/categories";
 import type {
   CategoryModel,
   FinancialCommitmentModel,
@@ -180,19 +181,40 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const cacheKey = user ? `together:finance:${user.id}:v${FINANCE_CACHE_VERSION}` : null;
 
-  // Obter household_id na primeira renderização
   useEffect(() => {
+    if (authLoading) return;
+
+    if (!user) {
+      setHouseholdId(null);
+      setHousehold(null);
+      setExpenses([]);
+      setInstallments([]);
+      setFinancialCommitments([]);
+      setIncomeEntries([]);
+      setFixedExpenses([]);
+      setFixedExpenseMonthlyValues([]);
+      setCategories([]);
+      setPaymentMethods([]);
+      setMonthlySnapshots([]);
+      setActiveCycle(currentCycle());
+      setSettings(EMPTY_SETTINGS);
+      setLoading(false);
+      return;
+    }
+
     const getHouseholdId = async () => {
+      setLoading(true);
       try {
         const id = await financeService.getUserHouseholdId();
         setHouseholdId(id);
       } catch (err) {
         console.error("Erro ao obter household_id:", err);
         setError("Erro ao carregar dados do usuário");
+        setLoading(false);
       }
     };
     void getHouseholdId();
-  }, []);
+  }, [authLoading, user?.id]);
 
   useEffect(() => {
     if (authLoading || !cacheKey) return;
@@ -280,7 +302,36 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         currentMonth: i.totalMonths - i.remainingMonths,
         category: i.categoryId,
       })));
-      setCategories(categoriesRes);
+      let resolvedCategories = categoriesRes;
+      const categoryFixes = categoriesRes
+        .map((category) => ({ category, canonicalName: canonicalCategoryName(category.name) }))
+        .filter(({ category, canonicalName }) => category.name !== canonicalName);
+
+      if (categoryFixes.length > 0) {
+        for (const { category, canonicalName } of categoryFixes) {
+          const canonical = resolvedCategories.find(
+            (item) => item.id !== category.id && item.name === canonicalName,
+          );
+          if (canonical) {
+            await financeService.replaceCategoryUsage(category.id, canonical.id);
+            await financeService.deleteCategory(category.id);
+            resolvedCategories = resolvedCategories.filter((item) => item.id !== category.id);
+          } else {
+            const updated = await financeService.updateCategory(category.id, { name: canonicalName });
+            resolvedCategories = resolvedCategories.map((item) => (item.id === category.id ? updated : item));
+          }
+        }
+      }
+
+      const uniqueCategories = Array.from(
+        resolvedCategories.reduce((acc, category) => {
+          const key = normalizeCategoryName(category.name);
+          if (!acc.has(key)) acc.set(key, category);
+          return acc;
+        }, new Map<string, CategoryModel>()).values(),
+      ).sort((a, b) => a.name.localeCompare(b.name));
+
+      setCategories(uniqueCategories);
       setFinancialCommitments(financialCommitmentsRes);
       setIncomeEntries(incomeEntriesRes);
       setPaymentMethods(paymentMethodsRes);
@@ -311,19 +362,19 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       });
 
       if (householdId) {
-        if (categoriesRes.length === 0) {
+        if (uniqueCategories.length === 0) {
           const seededCategories = await Promise.all(
             DEFAULT_CATEGORY_NAMES.map((name) => financeService.addCategory(name, householdId)),
           );
           setCategories(seededCategories);
         } else {
-          const existingNames = new Set(categoriesRes.map((category) => category.name.trim().toLowerCase()));
-          const missingNames = DEFAULT_CATEGORY_NAMES.filter((name) => !existingNames.has(name.toLowerCase()));
+          const existingNames = new Set(uniqueCategories.map((category) => normalizeCategoryName(category.name)));
+          const missingNames = DEFAULT_CATEGORY_NAMES.filter((name) => !existingNames.has(normalizeCategoryName(name)));
           if (missingNames.length > 0) {
             const newCategories = await Promise.all(
               missingNames.map((name) => financeService.addCategory(name, householdId)),
             );
-            setCategories([...categoriesRes, ...newCategories].sort((a, b) => a.name.localeCompare(b.name)));
+            setCategories([...uniqueCategories, ...newCategories].sort((a, b) => a.name.localeCompare(b.name)));
           }
         }
 

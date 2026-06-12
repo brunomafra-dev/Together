@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { endOfMonth, getDate, getDaysInMonth, isWithinInterval, parseISO, startOfMonth } from "date-fns";
 import { Edit3, Plus, Sparkles, Target, TrendingDown, Wallet, X, Save, Trash2 } from "lucide-react";
+import { useLocation, useNavigate } from "react-router";
 import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
@@ -183,6 +184,8 @@ function buildPercentText(percent: number) {
 }
 
 export function Goals() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const {
     household,
     settings,
@@ -298,12 +301,21 @@ export function Goals() {
   const [total, setTotal] = useState(String(snapshot.total || income || 0));
   const [progressRows, setProgressRows] = useState<ProgressRow[]>(snapshot.progressRows);
   const [planningAllocations, setPlanningAllocations] = useState<PlanCard[]>(planCards);
+  const planningItemRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [futureGoalName, setFutureGoalName] = useState("");
   const [futureGoalPlanned, setFutureGoalPlanned] = useState("");
   const [futureGoalRealized, setFutureGoalRealized] = useState("");
   const [contributionTarget, setContributionTarget] = useState<ContributionTarget | null>(null);
   const [contributionAmount, setContributionAmount] = useState("");
   const planningTotalPercent = planningAllocations.reduce((sum, item) => sum + (Number(item.percent) || 0), 0);
+
+  useEffect(() => {
+    const state = location.state as { openContribution?: "main" } | null;
+    if (state?.openContribution !== "main" || !goal?.id || contributionTarget) return;
+
+    setContributionTarget({ kind: "main" });
+    navigate(location.pathname, { replace: true, state: null });
+  }, [contributionTarget, goal?.id, location.pathname, location.state, navigate]);
 
   useEffect(() => {
     const load = async () => {
@@ -651,6 +663,25 @@ export function Goals() {
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleAddPlanningCategory = () => {
+    const localId = crypto.randomUUID();
+    setPlanningAllocations((prev) => [
+      ...prev,
+      {
+        localId,
+        name: "",
+        share: "0%",
+        percent: 0,
+        amount: 0,
+        currentAmount: 0,
+        tone: nextPlanTone(prev.length),
+      },
+    ]);
+    window.setTimeout(() => {
+      planningItemRefs.current[localId]?.scrollIntoView({ behavior: "smooth", block: "center" });
+    }, 80);
   };
 
   const handleSavePlanning = async () => {
@@ -1107,68 +1138,88 @@ export function Goals() {
       )}
 
       {editingPlanning && (
-        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onClick={closePlanningEdit}>
-          <div className="w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-            <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
-              <h2 className="text-xl font-semibold text-stone-950">Ajustar plano</h2>
-              <button type="button" onClick={closePlanningEdit} className="text-stone-400 hover:text-stone-700"><X className="h-5 w-5" /></button>
+        <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-0 sm:items-center sm:p-4" onClick={closePlanningEdit}>
+          <div className="max-h-[100dvh] w-full max-w-3xl overflow-hidden rounded-t-3xl bg-white shadow-2xl sm:max-h-[calc(100vh-2rem)] sm:rounded-3xl" onClick={(e) => e.stopPropagation()}>
+            <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-stone-100 bg-white px-5 py-4 sm:px-6">
+              <div className="min-w-0">
+                <h2 className="break-words text-xl font-semibold text-stone-950">Ajustar planejamento</h2>
+                <p className="mt-1 text-xs text-stone-500 sm:hidden">Edite uma categoria por vez. Novas categorias aparecem no final.</p>
+              </div>
+              <button type="button" onClick={closePlanningEdit} className="shrink-0 text-stone-400 hover:text-stone-700"><X className="h-5 w-5" /></button>
             </div>
 
-            <div className="max-h-[calc(100vh-8rem)] overflow-y-auto px-6 py-5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0">
-                  <p className="text-sm text-stone-600">Distribuição definida por vocês com base na renda mensal: {formatBRL(income)}</p>
-                  <p className="mt-1 text-xs text-stone-500">Total informado: {buildPercentText(planningTotalPercent)}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() =>
-                    setPlanningAllocations((prev) => [
-                      ...prev,
-                      {
-                        localId: crypto.randomUUID(),
-                        name: "",
-                        share: "0%",
-                        percent: 0,
-                        amount: 0,
-                        currentAmount: 0,
-                        tone: nextPlanTone(prev.length),
-                      },
-                    ])
-                  }
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
-                >
-                  <Plus className="h-4 w-4" />
-                  Adicionar categoria
-                </button>
-              </div>
-              <div className="mt-6 space-y-3">
-                {planningAllocations.map((item, index) => (
-                  <div key={item.id ?? item.localId ?? `plan-${index}`} className="grid gap-2 sm:grid-cols-[1.1fr_0.5fr_0.8fr_auto]">
-                    <input
-                      value={item.name}
-                      onChange={(e) => setPlanningAllocations((prev) => prev.map((row, i) => i === index ? { ...row, name: e.target.value } : row))}
-                      placeholder="Categoria"
-                      className="min-w-0 rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                    />
-                    <input
-                      type="number"
-                      value={item.percent}
-                      onChange={(e) => setPlanningAllocations((prev) => prev.map((row, i) => i === index ? { ...row, percent: Number(e.target.value) || 0, share: buildPercentText(Number(e.target.value) || 0), amount: income * ((Number(e.target.value) || 0) / 100) } : row))}
-                      placeholder="%"
-                      className="min-w-0 rounded-xl border border-stone-200 px-3 py-2 text-sm"
-                    />
-                    <div className={`min-w-0 break-words rounded-xl border px-3 py-2 text-sm ${toneClass(item.tone)}`}>{formatBRL(income * (item.percent / 100))}</div>
-                    <button
-                      type="button"
-                      onClick={() => setPlanningAllocations((prev) => prev.filter((_, i) => i !== index))}
-                      className="inline-flex items-center justify-center rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-rose-700 transition-colors hover:bg-rose-100"
-                      aria-label="Remover categoria"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
+            <div className="max-h-[calc(100dvh-8rem)] overflow-y-auto px-5 py-5 sm:max-h-[calc(100vh-8rem)] sm:px-6">
+              <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-sm text-stone-600">Distribuição definida por vocês com base na renda mensal: {formatBRL(income)}</p>
+                    <p className="mt-1 text-xs text-stone-500">Total informado: {buildPercentText(planningTotalPercent)}</p>
                   </div>
-                ))}
+                  <button
+                    type="button"
+                    onClick={handleAddPlanningCategory}
+                    className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100 sm:w-auto"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Adicionar categoria
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-6 space-y-3">
+                {planningAllocations.map((item, index) => {
+                  const itemKey = item.id ?? item.localId ?? `plan-${index}`;
+                  return (
+                    <div
+                      key={itemKey}
+                      ref={(node) => {
+                        planningItemRefs.current[itemKey] = node;
+                      }}
+                      className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="mb-3 flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-xs font-medium uppercase tracking-wider text-stone-500">Categoria {index + 1}</p>
+                          <p className="mt-1 text-sm text-stone-600">{formatBRL(income * ((Number(item.percent) || 0) / 100))} planejados</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setPlanningAllocations((prev) => prev.filter((_, i) => i !== index))}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-rose-200 bg-rose-50 text-rose-700 transition-colors hover:bg-rose-100"
+                          aria-label="Remover categoria"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      <div className="grid gap-3 sm:grid-cols-[1fr_140px_180px] sm:items-end">
+                        <label className="block">
+                          <span className="mb-1.5 block text-xs uppercase tracking-wider text-stone-500">Nome</span>
+                          <input
+                            value={item.name}
+                            onChange={(e) => setPlanningAllocations((prev) => prev.map((row, i) => i === index ? { ...row, name: e.target.value } : row))}
+                            placeholder="Ex: Moradia"
+                            className="w-full min-w-0 rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </label>
+                        <label className="block">
+                          <span className="mb-1.5 block text-xs uppercase tracking-wider text-stone-500">Percentual</span>
+                          <input
+                            type="number"
+                            value={item.percent}
+                            onChange={(e) => setPlanningAllocations((prev) => prev.map((row, i) => i === index ? { ...row, percent: Number(e.target.value) || 0, share: buildPercentText(Number(e.target.value) || 0), amount: income * ((Number(e.target.value) || 0) / 100) } : row))}
+                            placeholder="%"
+                            className="w-full min-w-0 rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          />
+                        </label>
+                        <div className={`min-w-0 break-words rounded-xl border px-3 py-2.5 text-sm ${toneClass(item.tone)}`}>
+                          <span className="block text-xs opacity-70">Valor mensal</span>
+                          <span className="font-semibold">{formatBRL(income * ((Number(item.percent) || 0) / 100))}</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
                 {planningAllocations.length === 0 && (
                   <p className="rounded-2xl border border-dashed border-stone-300 px-4 py-5 text-center text-sm text-stone-500">
                     Adicione uma categoria para começar a divisão.
@@ -1178,9 +1229,9 @@ export function Goals() {
 
               {formError && <p className="mt-4 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{formError}</p>}
 
-              <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-end">
+              <div className="sticky bottom-0 -mx-5 mt-6 flex flex-col-reverse gap-3 border-t border-stone-100 bg-white px-5 py-4 sm:-mx-6 sm:flex-row sm:items-center sm:justify-end sm:px-6">
                 <button type="button" onClick={closePlanningEdit} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">Cancelar</button>
-                <button type="button" disabled={saving} onClick={() => void handleSavePlanning()} className="inline-flex items-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
+                <button type="button" disabled={saving} onClick={() => void handleSavePlanning()} className="inline-flex items-center justify-center gap-2 rounded-xl bg-stone-900 px-4 py-2.5 text-sm font-medium text-white disabled:opacity-60">
                   <Save className="h-4 w-4" />
                   {saving ? "Salvando..." : "Salvar plano"}
                 </button>

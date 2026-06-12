@@ -798,6 +798,27 @@ export async function deleteCategory(id: string): Promise<void> {
   throwIfError(error);
 }
 
+export async function replaceCategoryUsage(fromCategoryId: string, toCategoryId: string): Promise<void> {
+  const { error: expensesError } = await supabase
+    .from("expenses")
+    .update({ category_id: toCategoryId })
+    .eq("category_id", fromCategoryId);
+  throwIfError(expensesError);
+
+  const { error: commitmentsError } = await supabase
+    .from("financial_commitments")
+    .update({ category_id: toCategoryId } as any)
+    .eq("category_id", fromCategoryId);
+  if (
+    commitmentsError &&
+    (String(commitmentsError.message || "").includes("category_id") ||
+      String(commitmentsError.message || "").includes("schema cache"))
+  ) {
+    return;
+  }
+  throwIfError(commitmentsError);
+}
+
 export async function addPaymentMethod(name: string, limitAmount?: number, householdId?: string, type: PaymentMethodModel["type"] = "credit_card", closingDay?: number | null, dueDay?: number | null): Promise<PaymentMethodModel> {
   const payload: any = {
     name,
@@ -976,6 +997,14 @@ export async function addFinancialCommitment(commitment: Omit<FinancialCommitmen
     started_at: commitment.startedAt,
     status: commitment.status,
   }).select("*").single();
+  if (
+    error &&
+    commitment.categoryId &&
+    (String(error.message || "").includes("category_id") ||
+      String(error.message || "").includes("schema cache"))
+  ) {
+    throw new Error("Para salvar categoria em parcelamentos, rode o SQL supabase_financial_commitments_category.sql no Supabase.");
+  }
   throwIfError(error);
   return mapFinancialCommitmentRow(data as FinancialCommitmentRow);
 }
@@ -993,6 +1022,14 @@ export async function updateFinancialCommitment(id: string, changes: Partial<Omi
     started_at: changes.startedAt,
     status: changes.status,
   }).eq("id", id).select("*").single();
+  if (
+    error &&
+    changes.categoryId &&
+    (String(error.message || "").includes("category_id") ||
+      String(error.message || "").includes("schema cache"))
+  ) {
+    throw new Error("Para salvar categoria em parcelamentos, rode o SQL supabase_financial_commitments_category.sql no Supabase.");
+  }
   throwIfError(error);
   return mapFinancialCommitmentRow(data as FinancialCommitmentRow);
 }

@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { endOfMonth, format, getDate, getDaysInMonth, isWithinInterval, parseISO, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarCheck, Plus, Sparkles, Trash2, TrendingDown, Users, Wallet, X } from "lucide-react";
+import { Link } from "react-router";
 import { toast } from "sonner";
 import { AddExpenseModal } from "./AddExpenseModal";
 import { CategoryBreakdown } from "./CategoryBreakdown";
@@ -41,6 +42,8 @@ export function Dashboard() {
   const [goalSummary, setGoalSummary] = useState<{
     title: string;
     label: string;
+    currentAmount: number;
+    targetAmount: number;
     planNames: string[];
   } | null>(null);
 
@@ -61,6 +64,8 @@ export function Dashboard() {
       setGoalSummary({
         title: currentGoal.title,
         label: currentGoal.label,
+        currentAmount: currentGoal.currentAmount,
+        targetAmount: currentGoal.targetAmount,
         planNames: subGoals.map((item) => item.name).filter(Boolean),
       });
     };
@@ -212,6 +217,10 @@ export function Dashboard() {
 
   const greetingNames = household?.partnerNames?.filter(Boolean) ?? settings.partnerNames.filter(Boolean);
   const hasVisibleData = Boolean(household) || expenses.length > 0 || categories.length > 0 || paymentMethods.length > 0;
+  const goalPercent = goalSummary?.targetAmount
+    ? Math.min(Math.round((goalSummary.currentAmount / goalSummary.targetAmount) * 100), 100)
+    : 0;
+  const goalRemaining = goalSummary ? Math.max(goalSummary.targetAmount - goalSummary.currentAmount, 0) : 0;
 
   return (
     <Layout>
@@ -367,31 +376,66 @@ export function Dashboard() {
           )}
         </ExpandableSection>
 
-        <div className="rounded-2xl border border-stone-200 bg-white p-5">
-          <div className="mb-3 flex items-center gap-2 text-xs text-stone-500">
-            <Sparkles className="h-4 w-4" />
-            Meta salva
-          </div>
+        <ExpandableSection
+          title="Meta principal"
+          summary={
+            goalSummary
+              ? `${goalSummary.title} · ${goalPercent}% · faltam ${formatBRL(goalRemaining)}`
+              : "Sem meta cadastrada"
+          }
+          defaultOpen
+          actions={
+            goalSummary ? (
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                {goalPercent}%
+              </span>
+            ) : null
+          }
+        >
           {goalSummary ? (
-            <div className="space-y-2">
-              <p className="break-words text-sm font-medium text-stone-900">{goalSummary.title}</p>
-              <p className="text-xs text-stone-500">{goalSummary.label}</p>
-              <div className="flex flex-wrap gap-2 pt-1">
-                {goalSummary.planNames.length > 0 ? (
-                  goalSummary.planNames.map((name) => (
-                    <span key={name} className="max-w-full break-words rounded-full border border-stone-200 bg-stone-50 px-3 py-1 text-xs text-stone-700">
-                      {name}
-                    </span>
-                  ))
-                ) : (
-                  <span className="text-sm text-stone-500">Sem plano salvo ainda.</span>
-                )}
+            <div className="space-y-4">
+              <div>
+                <p className="break-words text-base font-semibold text-stone-900">{goalSummary.title}</p>
+                <p className="mt-1 text-xs text-stone-500">{goalSummary.label}</p>
+              </div>
+              <div>
+                <div className="flex items-center justify-between gap-3 text-sm">
+                  <span className="font-medium text-stone-900">
+                    {formatBRL(goalSummary.currentAmount)} de {formatBRL(goalSummary.targetAmount)}
+                  </span>
+                  <span className="text-xs text-stone-500">Faltam {formatBRL(goalRemaining)}</span>
+                </div>
+                <div className="mt-2 h-2 rounded-full bg-stone-100">
+                  <div className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${goalPercent}%` }} />
+                </div>
+              </div>
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-xs text-stone-500">
+                  {goalSummary.planNames.length} {goalSummary.planNames.length === 1 ? "meta futura cadastrada" : "metas futuras cadastradas"}
+                </p>
+                <Link
+                  to="/goals"
+                  state={{ openContribution: "main" }}
+                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+                >
+                  <Plus className="h-4 w-4" />
+                  Adicionar valor
+                </Link>
               </div>
             </div>
           ) : (
-            <p className="text-sm text-stone-500">Sem meta cadastrada</p>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-sm text-stone-500">Sem meta cadastrada</p>
+              <Link
+                to="/goals"
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+              >
+                <Plus className="h-4 w-4" />
+                Criar meta
+              </Link>
+            </div>
           )}
-        </div>
+        </ExpandableSection>
 
         <ExpandableSection
           title="Quem gastou"

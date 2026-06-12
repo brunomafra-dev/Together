@@ -200,6 +200,11 @@ export function Installments() {
     }
   };
 
+  const closeCommitmentModal = () => {
+    setShowAddForm(false);
+    setEditingCommitment(null);
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -301,15 +306,17 @@ export function Installments() {
 
       {showAddForm && (
         <AddCommitmentModal
+          key="new-commitment"
           paymentMethods={creditCardMethods}
-          onClose={() => setShowAddForm(false)}
+          onClose={closeCommitmentModal}
         />
       )}
       {editingCommitment && (
         <AddCommitmentModal
+          key={`edit-${editingCommitment.id}`}
           paymentMethods={creditCardMethods}
           commitment={editingCommitment}
-          onClose={() => setEditingCommitment(null)}
+          onClose={closeCommitmentModal}
         />
       )}
     </Layout>
@@ -557,6 +564,7 @@ function AddCommitmentModal({
   );
   const [notes, setNotes] = useState(commitment?.notes ?? "");
   const [saving, setSaving] = useState(false);
+  const [closedAfterSave, setClosedAfterSave] = useState(false);
 
   const partnerOptions = useMemo(
     () => (household?.partnerNames ?? []).filter((name) => name.trim().length > 0),
@@ -591,16 +599,24 @@ function AddCommitmentModal({
         status: commitment?.status ?? "active",
       };
 
+      setClosedAfterSave(true);
+      onClose();
+
       if (commitment) {
         await updateFinancialCommitment(commitment.id, payload);
+        toast.success("Parcelamento atualizado.");
       } else {
         await addFinancialCommitment(payload);
+        toast.success("Parcelamento salvo.");
       }
-      onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o parcelamento.");
     } finally {
       setSaving(false);
     }
   };
+
+  if (closedAfterSave) return null;
 
   return (
     <div
