@@ -749,76 +749,76 @@ export function Goals() {
       <div className="space-y-5 sm:space-y-7">
         <header className="space-y-1.5 sm:space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-stone-950 sm:text-3xl">Metas</h1>
-          <p className="text-xs leading-5 text-stone-600 sm:text-sm sm:leading-6">Como o ritmo de vocês conversa com os planos do casal</p>
+          <p className="hidden text-sm leading-6 text-stone-600 sm:block">Como o ritmo de vocês conversa com os planos do casal</p>
         </header>
 
-        <section className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-          <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
-            <div className="flex items-start justify-between gap-4">
-              <div className="min-w-0 space-y-2 sm:space-y-3">
-                <div className="inline-flex items-center gap-2 rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-700 sm:px-3 sm:text-sm">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 sm:h-2.5 sm:w-2.5" />
+        <section className="grid gap-3 sm:gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+          <div className="rounded-2xl border border-emerald-100 bg-gradient-to-br from-emerald-50 to-white p-3.5 shadow-sm sm:rounded-[2rem] sm:p-6">
+            <div className="flex items-start justify-between gap-3 sm:gap-4">
+              <div className="min-w-0 space-y-1.5 sm:space-y-3">
+                <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-medium text-emerald-700 sm:gap-2 sm:px-3 sm:py-1 sm:text-sm">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 sm:h-2.5 sm:w-2.5" />
                   Saúde financeira
                 </div>
-                <h3 className="break-words text-lg font-semibold text-stone-950 sm:text-2xl sm:font-medium">{formatBRL(financialData.remainingBalance)} livres neste mês</h3>
-                <p className="text-xs leading-5 text-stone-600 sm:text-sm sm:leading-6">
+                <h3 className="break-words text-base font-semibold text-stone-950 sm:text-2xl sm:font-medium">{formatBRL(financialData.remainingBalance)} livres neste mês</h3>
+                <p className="hidden text-sm leading-6 text-stone-600 sm:block">
                   Renda real {formatBRL(financialData.realIncome)}
                   {financialData.extraIncome > 0 ? ` (${formatBRL(income)} planejada + ${formatBRL(financialData.extraIncome)} entradas)` : ""}
                   {" - "}fixas {formatBRL(financialData.fixedSpent)} - variáveis {formatBRL(financialData.variableSpent)} - parcelas {formatBRL(financialData.installmentSpent)}.
                 </p>
               </div>
               <div className="shrink-0 text-right">
-                <div className="break-words text-3xl font-semibold text-teal-700 sm:text-5xl">{financialData.healthScore}%</div>
-                <p className="text-xs text-stone-500 sm:text-sm">da renda livre</p>
+                <div className="break-words text-2xl font-semibold text-teal-700 sm:text-5xl">{financialData.healthScore}%</div>
+                <p className="text-[11px] text-stone-500 sm:text-sm">da renda livre</p>
               </div>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
-            <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-emerald-100 text-emerald-700 sm:h-12 sm:w-12">
-                <Sparkles className="h-4 w-4 sm:h-5 sm:w-5" />
+          <div className="rounded-2xl border border-emerald-100 bg-emerald-50/70 p-3.5 shadow-sm sm:rounded-[2rem] sm:p-6">
+            <div className="flex items-center gap-2.5 sm:gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-emerald-100 text-emerald-700 sm:h-12 sm:w-12 sm:rounded-2xl">
+                <Sparkles className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
               </div>
               <div className="min-w-0">
-                <h3 className="text-lg font-semibold text-stone-950 sm:text-xl sm:font-medium">Radar do mês</h3>
-                <p className="text-xs leading-5 text-stone-600 sm:text-sm sm:leading-6">Categorias, tendência e saldo projetado</p>
+                <h3 className="text-base font-semibold text-stone-950 sm:text-xl sm:font-medium">Radar do mês</h3>
+                <p className="hidden text-sm leading-6 text-stone-600 sm:block">Categorias, tendência e saldo projetado</p>
               </div>
             </div>
-            <div className="mt-4 grid gap-2 sm:mt-5 sm:grid-cols-3 sm:gap-3">
-              <div className="rounded-xl border border-emerald-100 bg-white/70 p-3 sm:rounded-2xl sm:p-4">
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:mt-5 sm:gap-3">
+              <div className="min-w-0 rounded-xl border border-emerald-100 bg-white/70 p-2 sm:rounded-2xl sm:p-4">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500 sm:text-xs sm:tracking-[0.16em]">Maior gasto</p>
-                <p className="mt-1 break-words text-sm font-semibold text-stone-950 sm:mt-2">{financialData.highestCategory?.name ?? "Sem gastos"}</p>
-                <p className="break-words text-xs text-stone-600 sm:text-sm">{formatBRL(financialData.highestCategory?.amount ?? 0)}</p>
+                <p className="mt-1 truncate text-xs font-semibold text-stone-950 sm:mt-2 sm:break-words sm:text-sm">{financialData.highestCategory?.name ?? "Sem gastos"}</p>
+                <p className="break-words text-[11px] text-stone-600 sm:text-sm">{formatBRL(financialData.highestCategory?.amount ?? 0)}</p>
               </div>
-              <div className="rounded-xl border border-emerald-100 bg-white/70 p-3 sm:rounded-2xl sm:p-4">
+              <div className="min-w-0 rounded-xl border border-emerald-100 bg-white/70 p-2 sm:rounded-2xl sm:p-4">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500 sm:text-xs sm:tracking-[0.16em]">Menor gasto</p>
-                <p className="mt-1 break-words text-sm font-semibold text-stone-950 sm:mt-2">{financialData.lowestCategory?.name ?? "Sem comparação"}</p>
-                <p className="break-words text-xs text-stone-600 sm:text-sm">{formatBRL(financialData.lowestCategory?.amount ?? 0)}</p>
+                <p className="mt-1 truncate text-xs font-semibold text-stone-950 sm:mt-2 sm:break-words sm:text-sm">{financialData.lowestCategory?.name ?? "Sem comparação"}</p>
+                <p className="break-words text-[11px] text-stone-600 sm:text-sm">{formatBRL(financialData.lowestCategory?.amount ?? 0)}</p>
               </div>
-              <div className="rounded-xl border border-emerald-100 bg-white/70 p-3 sm:rounded-2xl sm:p-4">
+              <div className="min-w-0 rounded-xl border border-emerald-100 bg-white/70 p-2 sm:rounded-2xl sm:p-4">
                 <p className="text-[11px] uppercase tracking-[0.14em] text-stone-500 sm:text-xs sm:tracking-[0.16em]">Saldo projetado</p>
-                <p className="mt-1 break-words text-sm font-semibold text-stone-950 sm:mt-2">{formatBRL(financialData.projectedEndBalance)}</p>
-                <p className="break-words text-xs text-stone-600 sm:text-sm">{financialData.spendingTrend}</p>
+                <p className="mt-1 truncate text-xs font-semibold text-stone-950 sm:mt-2 sm:break-words sm:text-sm">{formatBRL(financialData.projectedEndBalance)}</p>
+                <p className="hidden break-words text-sm text-stone-600 sm:block">{financialData.spendingTrend}</p>
               </div>
             </div>
           </div>
         </section>
 
-        <section className="space-y-3 sm:space-y-4">
+        <section className="space-y-2.5 sm:space-y-4">
           <SectionHeader icon={Target} title="Objetivo principal" actionLabel={goal ? "Editar objetivo" : "Criar objetivo"} onAction={openGoalEdit} />
-          <div className="rounded-2xl border border-stone-200 bg-gradient-to-br from-white via-emerald-50/40 to-emerald-50 p-4 shadow-sm sm:rounded-[2rem] sm:p-6">
-            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-              <div className="min-w-0 space-y-3 sm:space-y-4">
-                <div className="inline-flex max-w-full break-words rounded-full bg-emerald-100 px-2.5 py-1 text-[11px] font-medium uppercase tracking-[0.14em] text-emerald-700 sm:px-3 sm:text-xs sm:tracking-[0.18em]">{snapshot.label}</div>
+          <div className="rounded-2xl border border-stone-200 bg-gradient-to-br from-white via-emerald-50/40 to-emerald-50 p-3.5 shadow-sm sm:rounded-[2rem] sm:p-6">
+            <div className="flex items-start justify-between gap-3 lg:gap-4">
+              <div className="min-w-0 space-y-2 sm:space-y-4">
+                <div className="inline-flex max-w-full break-words rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-medium uppercase tracking-[0.12em] text-emerald-700 sm:px-3 sm:py-1 sm:text-xs sm:tracking-[0.18em]">{snapshot.label}</div>
                 <div>
-                  <h2 className="break-words text-xl font-semibold text-stone-950 sm:text-3xl">{snapshot.title}</h2>
-                  <p className="mt-2 break-words text-sm text-stone-600">{goal ? `${formatBRL(snapshot.current)} de ${formatBRL(snapshot.total)}` : "Sem meta cadastrada"}</p>
+                  <h2 className="break-words text-lg font-semibold text-stone-950 sm:text-3xl">{snapshot.title}</h2>
+                  <p className="mt-1 break-words text-xs text-stone-600 sm:mt-2 sm:text-sm">{goal ? `${formatBRL(snapshot.current)} de ${formatBRL(snapshot.total)}` : "Sem meta cadastrada"}</p>
                 </div>
                 {goal && (
                   <button
                     type="button"
                     onClick={() => setContributionTarget({ kind: "main" })}
-                    className="inline-flex w-fit items-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50"
+                    className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-emerald-200 bg-white px-2.5 py-1.5 text-xs font-medium text-emerald-700 transition-colors hover:bg-emerald-50 sm:gap-2 sm:rounded-xl sm:px-3 sm:py-2 sm:text-sm"
                   >
                     <Plus className="h-4 w-4" />
                     Adicionar valor
@@ -828,12 +828,12 @@ export function Goals() {
                   <div className="h-2.5 rounded-full bg-stone-100 sm:h-3">
                     <div className="h-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 sm:h-3" style={{ width: `${mainGoalPercent}%` }} />
                   </div>
-                  <p className="mt-2 break-words text-xs text-stone-600 sm:mt-3 sm:text-sm">{goal ? `Faltam ${formatBRL(mainGoalRemaining)} para completar.` : "Cadastre uma meta para ver progresso e projeções."}</p>
+                  <p className="hidden mt-3 break-words text-sm text-stone-600 sm:block">{goal ? `Faltam ${formatBRL(mainGoalRemaining)} para completar.` : "Cadastre uma meta para ver progresso e projeções."}</p>
                 </div>
               </div>
-              <div className="text-left lg:min-w-[140px] lg:text-right">
-                <div className="break-words text-3xl font-semibold text-teal-700 sm:text-5xl">{mainGoalPercent}%</div>
-                <p className="mt-1 text-xs text-stone-500 sm:text-sm">concluído</p>
+              <div className="shrink-0 text-right lg:min-w-[140px]">
+                <div className="break-words text-2xl font-semibold text-teal-700 sm:text-5xl">{mainGoalPercent}%</div>
+                <p className="mt-0.5 text-[11px] text-stone-500 sm:mt-1 sm:text-sm">concluído</p>
               </div>
             </div>
           </div>
@@ -853,7 +853,7 @@ export function Goals() {
             </button>
           }
         >
-          <p className="text-xs leading-5 text-stone-600 sm:text-sm sm:leading-6">Como vocês decidiram dividir a renda mensal de {formatBRL(snapshot.householdIncome)}</p>
+          <p className="hidden text-sm leading-6 text-stone-600 sm:block">Como vocês decidiram dividir a renda mensal de {formatBRL(snapshot.householdIncome)}</p>
           <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
             {planCards.map((card) => (
               <article key={card.id ?? card.localId ?? card.name} className={`rounded-2xl border p-4 ${toneClass(card.tone)}`}>
@@ -864,7 +864,7 @@ export function Goals() {
                     <>
                 <div className="flex items-start justify-between gap-3">
                   <h3 className="min-w-0 break-words text-base font-medium">{card.name}</h3>
-                  <span className="text-xs text-stone-500 sm:text-sm">{card.share}</span>
+                  <span className="text-[11px] text-stone-500 sm:text-sm">{card.share}</span>
                 </div>
                 <p className="mt-5 break-words text-xl font-semibold sm:text-2xl">{formatBRL(card.amount)}</p>
                 <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
@@ -966,7 +966,7 @@ export function Goals() {
               })
             ) : (
               <div className="p-8 text-center">
-                <p className="text-xs text-stone-500 sm:text-sm">Nenhuma meta futura cadastrada.</p>
+                <p className="text-[11px] text-stone-500 sm:text-sm">Nenhuma meta futura cadastrada.</p>
                 <button
                   type="button"
                   onClick={openFutureGoalAdd}
@@ -995,11 +995,11 @@ export function Goals() {
                 </p>
               </div>
               <button type="button" onClick={closeContribution} className="text-stone-400 hover:text-stone-700">
-                <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                <X className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
               </button>
             </div>
 
-            <div className="space-y-3 sm:space-y-4">
+            <div className="space-y-2.5 sm:space-y-4">
               <div>
                 <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Valor</label>
                 <input
@@ -1032,7 +1032,7 @@ export function Goals() {
           <div className="w-full max-w-3xl max-h-[calc(100vh-2rem)] overflow-hidden rounded-3xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-stone-100 bg-white px-6 py-4">
               <h2 className="text-xl font-semibold text-stone-950">Editar meta</h2>
-              <button type="button" onClick={closeGoalEdit} className="text-stone-400 hover:text-stone-700"><X className="h-4 w-4 sm:h-5 sm:w-5" /></button>
+              <button type="button" onClick={closeGoalEdit} className="text-stone-400 hover:text-stone-700"><X className="h-3.5 w-3.5 sm:h-5 sm:w-5" /></button>
             </div>
 
             <div className="max-h-[calc(100vh-8rem)] overflow-y-auto px-6 py-5">
@@ -1087,11 +1087,11 @@ export function Goals() {
                 {editingFutureGoalIndex >= 0 ? "Editar meta" : "Nova meta"}
               </h2>
               <button type="button" onClick={closeFutureGoalEdit} className="text-stone-400 hover:text-stone-700">
-                <X className="h-4 w-4 sm:h-5 sm:w-5" />
+                <X className="h-3.5 w-3.5 sm:h-5 sm:w-5" />
               </button>
             </div>
 
-            <div className="space-y-3 sm:space-y-4">
+            <div className="space-y-2.5 sm:space-y-4">
               <div>
                 <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">Nome</label>
                 <input
@@ -1145,14 +1145,14 @@ export function Goals() {
                 <h2 className="break-words text-xl font-semibold text-stone-950">Ajustar planejamento</h2>
                 <p className="mt-1 text-xs text-stone-500 sm:hidden">Edite uma categoria por vez. Novas categorias aparecem no final.</p>
               </div>
-              <button type="button" onClick={closePlanningEdit} className="shrink-0 text-stone-400 hover:text-stone-700"><X className="h-4 w-4 sm:h-5 sm:w-5" /></button>
+              <button type="button" onClick={closePlanningEdit} className="shrink-0 text-stone-400 hover:text-stone-700"><X className="h-3.5 w-3.5 sm:h-5 sm:w-5" /></button>
             </div>
 
             <div className="max-h-[calc(100dvh-8rem)] overflow-y-auto px-5 py-5 sm:max-h-[calc(100vh-8rem)] sm:px-6">
               <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
-                    <p className="text-xs leading-5 text-stone-600 sm:text-sm sm:leading-6">Distribuição definida por vocês com base na renda mensal: {formatBRL(income)}</p>
+                    <p className="hidden text-sm leading-6 text-stone-600 sm:block">Distribuição definida por vocês com base na renda mensal: {formatBRL(income)}</p>
                     <p className="mt-1 text-xs text-stone-500">Total informado: {buildPercentText(planningTotalPercent)}</p>
                   </div>
                   <button
