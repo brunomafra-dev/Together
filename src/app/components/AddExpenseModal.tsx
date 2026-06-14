@@ -28,6 +28,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
   const [purchaseDate, setPurchaseDate] = useState(expense?.date ?? todayLocalDate());
   const [description, setDescription] = useState(expense?.description ?? "");
   const [recurringMonthly, setRecurringMonthly] = useState(Boolean(expense?.recurringMonthly));
+  const [showSubscriptionSuggestion, setShowSubscriptionSuggestion] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   const householdMembers = useMemo(() => {
@@ -52,6 +53,14 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
     () => categories.find((category) => category.name.trim().toLowerCase() === "assinaturas")?.id ?? "",
     [categories],
   );
+  const handleCategoryChange = (value: string) => {
+    setCategoryId(value);
+    if (value && value === subscriptionCategoryId) {
+      setRecurringMonthly(true);
+      setShowSubscriptionSuggestion(false);
+    }
+  };
+  const isSubscriptionCategory = Boolean(subscriptionCategoryId && categoryId === subscriptionCategoryId);
 
   useEffect(() => {
     if ((!paidBy || !householdMembers.some((member) => member.value === paidBy)) && householdMembers[0]) {
@@ -142,7 +151,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
 
           <div>
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Categoria</label>
-            <CategorySelect value={categoryId} onChange={setCategoryId} placeholder="Selecione a categoria" />
+            <CategorySelect value={categoryId} onChange={handleCategoryChange} placeholder="Selecione a categoria" />
           </div>
 
           <div>
@@ -194,9 +203,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
               onChange={(e) => {
                 const checked = e.target.checked;
                 setRecurringMonthly(checked);
-                if (checked && subscriptionCategoryId) {
-                  setCategoryId(subscriptionCategoryId);
-                }
+                setShowSubscriptionSuggestion(checked && Boolean(subscriptionCategoryId) && !isSubscriptionCategory);
               }}
               className="mt-1 h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
             />
@@ -205,6 +212,34 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
               <span className="text-xs text-stone-500">Marca para revisão mensal, sem lançar duplicado automaticamente.</span>
             </span>
           </label>
+
+          {showSubscriptionSuggestion && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              <p className="font-medium">Quer classificar como assinatura?</p>
+              <p className="mt-1 text-xs text-amber-800">
+                Se for uma compra recorrente, como fralda ou remédio, mantenha a categoria atual.
+              </p>
+              <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={() => setShowSubscriptionSuggestion(false)}
+                  className="rounded-lg border border-amber-200 bg-white px-3 py-2 text-xs font-medium text-amber-900"
+                >
+                  Manter categoria
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCategoryId(subscriptionCategoryId);
+                    setShowSubscriptionSuggestion(false);
+                  }}
+                  className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-medium text-white"
+                >
+                  Trocar para Assinaturas
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col gap-3 pt-2 sm:flex-row">
             <button
