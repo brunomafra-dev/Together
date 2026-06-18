@@ -36,31 +36,34 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-stone-50">
-      <nav className="bg-white/80 backdrop-blur border-b border-stone-200 sticky top-0 z-10">
+      <nav className="sticky top-0 z-10 border-b border-stone-200 bg-white/85 backdrop-blur">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-              <div className="flex shrink-0 items-center gap-1.5">
-                <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-emerald-400 to-teal-600">
-                  <Heart className="h-3.5 w-3.5 text-white" fill="white" />
-                </div>
-                <span className="hidden text-sm font-medium text-stone-900 min-[380px]:inline">Together</span>
+          <div className="relative flex h-20 items-center justify-between lg:h-16">
+            <Link to="/" className="flex shrink-0 items-center gap-2">
+              <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 shadow-sm lg:h-8 lg:w-8 lg:rounded-xl">
+                <Heart className="h-5 w-5 text-white lg:h-4 lg:w-4" fill="white" />
               </div>
-              {coupleName ? (
-                <div className="flex min-w-0 items-center gap-2 rounded-full border border-stone-200 bg-stone-50 px-2 py-1.5 sm:gap-2.5 sm:px-3">
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700">
-                    {household?.avatarUrl ? (
-                      <img src={household.avatarUrl} alt={coupleName} className="h-full w-full object-cover" />
-                    ) : (
-                      initials
-                    )}
-                  </div>
-                  <span className="block max-w-[128px] truncate text-sm font-semibold text-stone-700 sm:max-w-[260px]">
-                    {coupleName}
-                  </span>
+              <span className="text-base font-semibold text-stone-900 lg:text-sm">Together</span>
+            </Link>
+
+            {coupleName ? (
+              <Link
+                to="/settings"
+                className="absolute left-1/2 top-1/2 flex max-w-[48vw] -translate-x-1/2 -translate-y-1/2 items-center gap-2 rounded-full border border-stone-200 bg-white px-2 py-1.5 shadow-sm transition-colors hover:bg-stone-50 sm:max-w-[320px] lg:static lg:max-w-[260px] lg:translate-x-0 lg:translate-y-0"
+                aria-label="Abrir perfil do casal"
+              >
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700 lg:h-8 lg:w-8">
+                  {household?.avatarUrl ? (
+                    <img src={household.avatarUrl} alt={coupleName} className="h-full w-full object-cover" />
+                  ) : (
+                    initials
+                  )}
                 </div>
-              ) : null}
-            </div>
+                <span className="block min-w-0 truncate text-base font-semibold text-stone-800 lg:text-sm">
+                  {coupleName}
+                </span>
+              </Link>
+            ) : null}
 
             <div className="flex items-center gap-2">
               <div className="hidden gap-1 lg:flex">

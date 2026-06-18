@@ -1,9 +1,11 @@
 ﻿import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
+import type { FormEvent, ReactNode } from "react";
+import { useRef } from "react";
 import { endOfMonth, format, getDate, getDaysInMonth, isWithinInterval, parseISO, startOfMonth } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { CalendarCheck, Plus, Sparkles, Trash2, TrendingDown, Users, Wallet, X } from "lucide-react";
-import { Link } from "react-router";
+import { ArrowRight, BarChart3, CalendarCheck, Clock3, Plus, Sparkles, Target, Trash2, TrendingDown, Users, Wallet, X } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { AddExpenseModal } from "./AddExpenseModal";
 import { CategoryBreakdown } from "./CategoryBreakdown";
@@ -17,6 +19,7 @@ const nextCycle = (cycle: { month: number; year: number }) =>
   cycle.month === 12 ? { month: 1, year: cycle.year + 1 } : { month: cycle.month + 1, year: cycle.year };
 
 export function Dashboard() {
+  const navigate = useNavigate();
   const {
     household,
     expenses,
@@ -39,6 +42,8 @@ export function Dashboard() {
   const [showAddIncome, setShowAddIncome] = useState(false);
   const [showCloseMonth, setShowCloseMonth] = useState(false);
   const [closedSnapshot, setClosedSnapshot] = useState<MonthlySnapshotModel | null>(null);
+  const [openDetail, setOpenDetail] = useState<"income" | "commitments" | "expenses" | "goal" | "people" | "categories" | null>(null);
+  const detailPanelRef = useRef<HTMLDivElement | null>(null);
   const [goalSummary, setGoalSummary] = useState<{
     title: string;
     label: string;
@@ -220,6 +225,25 @@ export function Dashboard() {
     ? Math.min(Math.round((goalSummary.currentAmount / goalSummary.targetAmount) * 100), 100)
     : 0;
   const goalRemaining = goalSummary ? Math.max(goalSummary.targetAmount - goalSummary.currentAmount, 0) : 0;
+  const budgetUsage = data.income > 0 ? Math.round((data.totalSpent / data.income) * 100) : 0;
+  const topCategory = data.categoryTotals[0];
+  const peopleSummary =
+    data.peopleTotals.length >= 2
+      ? `${data.peopleTotals[0].name} ${formatBRL(data.peopleTotals[0].amount)} · ${data.peopleTotals[1].name} ${formatBRL(data.peopleTotals[1].amount)}`
+      : data.peopleTotals[0]
+        ? `${data.peopleTotals[0].name} ${formatBRL(data.peopleTotals[0].amount)}`
+        : "Nenhum gasto real";
+  const toggleDetail = (detail: NonNullable<typeof openDetail>) => {
+    setOpenDetail((current) => (current === detail ? null : detail));
+  };
+
+  useEffect(() => {
+    if (!openDetail) return;
+
+    window.requestAnimationFrame(() => {
+      detailPanelRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }, [openDetail]);
 
   return (
     <Layout>
@@ -235,12 +259,12 @@ export function Dashboard() {
       )}
 
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wider text-stone-500">{monthLabel}</p>
-            <h1 className="mt-1 break-words text-2xl font-semibold text-stone-900">Resumo do mês</h1>
+            <h1 className="mt-1 break-words text-2xl font-semibold text-stone-900">Hoje no Together</h1>
           </div>
-          <div className="flex flex-col gap-2 sm:flex-row">
+          <div className="hidden">
             <button
               onClick={() => setShowAddExpense(true)}
               className="flex w-full items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2.5 font-medium text-emerald-700 shadow-sm transition-colors hover:bg-emerald-100 sm:w-auto"
@@ -265,14 +289,20 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="rounded-2xl border border-stone-200 bg-gradient-to-br from-white to-stone-50 p-3.5 sm:rounded-3xl sm:p-8">
+        <div className="grid grid-cols-3 gap-3">
+          <QuickActionCard icon={Plus} label="Novo gasto" helper="Registre um novo gasto" onClick={() => setShowAddExpense(true)} tone="emerald" />
+          <QuickActionCard icon={Plus} label="Adicionar renda" helper="Adicione uma nova renda" onClick={() => setShowAddIncome(true)} tone="emerald" />
+          <QuickActionCard icon={CalendarCheck} label="Fechar mês" helper="Finalize e veja o resumo do mês" onClick={() => setShowCloseMonth(true)} tone="stone" />
+        </div>
+
+        <div className="rounded-[1.75rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4 shadow-sm sm:rounded-3xl sm:p-8">
           <div className="flex items-start justify-between gap-3 sm:block">
             <div className="min-w-0">
               <p className="mb-1 text-xs text-stone-600 sm:mb-2 sm:text-sm">Livre para gastar</p>
-              <h2 className={`break-words text-2xl font-semibold leading-tight sm:text-5xl lg:text-6xl ${availableColor}`}>{formatBRL(data.available)}</h2>
+              <h2 className={`break-words text-3xl font-semibold leading-tight sm:text-5xl lg:text-6xl ${availableColor}`}>{formatBRL(data.available)}</h2>
             </div>
-            <span className="shrink-0 rounded-full bg-stone-100 px-2.5 py-1 text-xs text-stone-600 sm:hidden">
-              {data.income > 0 ? `${((data.totalSpent / data.income) * 100).toFixed(0)}%` : "0%"}
+            <span className="shrink-0 rounded-full border border-white/80 bg-white/80 px-3 py-1 text-sm font-medium text-stone-700 shadow-sm sm:hidden">
+              {budgetUsage}%
             </span>
           </div>
           <p className="mt-3 hidden text-sm leading-6 text-stone-500 sm:block">
@@ -282,7 +312,7 @@ export function Dashboard() {
           <div className="mt-3 sm:mt-6">
             <div className="mb-2 hidden flex-wrap justify-between gap-2 text-xs text-stone-500 sm:flex">
               <span>Uso do orcamento</span>
-              <span>{data.income > 0 ? `${((data.totalSpent / data.income) * 100).toFixed(0)}%` : "0%"}</span>
+              <span>{budgetUsage}%</span>
             </div>
             <div className="flex h-2 overflow-hidden rounded-full bg-stone-100 sm:h-2.5">
               <div className="bg-stone-400" style={{ width: `${data.income > 0 ? (data.fixedTotal / data.income) * 100 : 0}%` }} />
@@ -295,197 +325,213 @@ export function Dashboard() {
               <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" /> Variaveis</span>
             </div>
           </div>
-        </div>
 
-        <div className={`rounded-2xl border p-5 ${projectionTone}`}>
-          <div className="flex items-start gap-3">
-            <Sparkles className="mt-0.5 h-5 w-5 shrink-0" />
-            <div>
-              <p className="text-sm font-medium">{projectionMessage}</p>
-              <p className="mt-1 text-xs opacity-75">
-                Faltam {data.daysLeft} dias. Ritmo atual: {formatBRL(data.dailyPace)} por dia.
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div className="rounded-2xl border border-stone-200 bg-white p-5">
-            <div className="mb-2 flex items-center gap-2 text-xs text-stone-500">
-              <Wallet className="h-4 w-4" />
-              Renda do mês
-            </div>
-            <p className="break-words text-lg font-semibold text-stone-900 sm:text-xl">{formatBRL(data.income)}</p>
-            <p className="mt-1 text-xs text-stone-500">
-              {formatBRL(data.baseIncome)} planejada + {formatBRL(data.extraIncome)} rendas extras
-            </p>
-          </div>
-          <div className="rounded-2xl border border-stone-200 bg-white p-5">
-            <div className="mb-2 flex items-center gap-2 text-xs text-stone-500">
-              <TrendingDown className="h-4 w-4" />
-              Comprometimento
-            </div>
-            <p className="break-words text-lg font-semibold text-stone-900 sm:text-xl">{formatBRL(data.committed)}</p>
-            <p className="mt-1 text-xs text-stone-500">
-              {formatBRL(data.fixedTotal)} fixas - {formatBRL(data.installmentsTotal)} compromissos
-            </p>
-          </div>
-          <div className="rounded-2xl border border-stone-200 bg-white p-5">
-            <div className="mb-2 flex items-center gap-2 text-xs text-stone-500">
-              <Plus className="h-4 w-4" />
-              Gastos do mês
-            </div>
-            <p className="break-words text-lg font-semibold text-stone-900 sm:text-xl">{formatBRL(data.categorySpent)}</p>
-          </div>
-        </div>
-
-        <ExpandableSection
-          title="Rendas do mês"
-          summary={`${data.monthIncomeEntries.length} rendas · ${formatBRL(data.extraIncome)}`}
-          defaultOpen={data.monthIncomeEntries.length > 0}
-        >
-          {data.monthIncomeEntries.length === 0 ? (
-            <p className="text-sm text-stone-500">Nenhuma renda extra lançada neste mês.</p>
-          ) : (
-            <div className="space-y-2">
-              {data.monthIncomeEntries.map((entry) => (
-                <div key={entry.id} className="flex flex-col gap-3 rounded-xl border border-stone-100 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="min-w-0">
-                    <p className="break-words text-sm font-medium text-stone-900">{entry.description || "Renda"}</p>
-                    <p className="break-words text-xs text-stone-500">
-                      {format(parseISO(entry.date), "dd 'de' MMM", { locale: ptBR })} · {entry.sourceType} {entry.receivedBy ? `· ${entry.receivedBy}` : ""}
-                    </p>
-                  </div>
-                  <div className="flex items-center justify-between gap-3 sm:justify-end">
-                    <span className="font-semibold text-emerald-700">{formatBRL(entry.amount)}</span>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        try {
-                          await deleteIncomeEntry(entry.id);
-                          toast.success("Renda removida.");
-                        } catch (err) {
-                          toast.error((err as Error)?.message || "Não foi possível remover a renda.");
-                        }
-                      }}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
-                      aria-label="Excluir renda"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </ExpandableSection>
-
-        <ExpandableSection
-          title="Meta principal"
-          summary={
-            goalSummary
-              ? `${goalSummary.title} · ${goalPercent}% · faltam ${formatBRL(goalRemaining)}`
-              : "Sem meta cadastrada"
-          }
-          defaultOpen
-          actions={
-            goalSummary ? (
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
-                {goalPercent}%
-              </span>
-            ) : null
-          }
-        >
-          {goalSummary ? (
-            <div className="space-y-4">
-              <div>
-                <p className="break-words text-base font-semibold text-stone-900">{goalSummary.title}</p>
-                <p className="mt-1 text-xs text-stone-500">{goalSummary.label}</p>
-              </div>
-              <div>
-                <div className="flex items-center justify-between gap-3 text-sm">
-                  <span className="font-medium text-stone-900">
-                    {formatBRL(goalSummary.currentAmount)} de {formatBRL(goalSummary.targetAmount)}
-                  </span>
-                  <span className="text-xs text-stone-500">Faltam {formatBRL(goalRemaining)}</span>
-                </div>
-                <div className="mt-2 h-2 rounded-full bg-stone-100">
-                  <div className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${goalPercent}%` }} />
-                </div>
-              </div>
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-xs text-stone-500">
-                  {goalSummary.planNames.length} {goalSummary.planNames.length === 1 ? "meta futura cadastrada" : "metas futuras cadastradas"}
+          <div className={`mt-4 rounded-2xl border p-4 ${projectionTone}`}>
+            <div className="flex items-start gap-3">
+              <Sparkles className="mt-0.5 h-5 w-5 shrink-0" />
+              <div className="min-w-0">
+                <p className="break-words text-sm font-medium">{projectionMessage}</p>
+                <p className="mt-1 text-xs opacity-75">
+                  Faltam {data.daysLeft} dias. Ritmo atual: {formatBRL(data.dailyPace)} por dia.
                 </p>
-                <Link
-                  to="/goals"
-                  state={{ openContribution: "main" }}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
-                >
-                  <Plus className="h-4 w-4" />
-                  Adicionar valor
-                </Link>
               </div>
             </div>
-          ) : (
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <p className="text-sm text-stone-500">Sem meta cadastrada</p>
-              <Link
-                to="/goals"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
-              >
-                <Plus className="h-4 w-4" />
-                Criar meta
-              </Link>
-            </div>
-          )}
-        </ExpandableSection>
+          </div>
+        </div>
 
-        <ExpandableSection
-          title="Quem gastou"
-          summary={
-            data.peopleTotals.length >= 2
-              ? `${data.peopleTotals[0].name} ${formatBRL(data.peopleTotals[0].amount)} · ${data.peopleTotals[1].name} ${formatBRL(data.peopleTotals[1].amount)}`
-              : data.peopleTotals[0]
-                ? `${data.peopleTotals[0].name} ${formatBRL(data.peopleTotals[0].amount)}`
-                : "Nenhum gasto real no mês"
-          }
-        >
-          {data.peopleTotals.length > 0 ? (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {data.peopleTotals.slice(0, 2).map((person, index) => (
-                <PartnerCard
-                  key={person.name}
-                  name={person.name}
-                  amount={person.amount}
-                  total={data.variableSpent}
-                  tone={index % 2 === 0 ? "emerald" : "indigo"}
-                />
-              ))}
-            </div>
-          ) : (
-            <p className="text-sm text-stone-500">Nenhum gasto real encontrado para mostrar este card.</p>
-          )}
-        </ExpandableSection>
+        <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+          <SummaryShortcutCard
+            icon={Wallet}
+            title="Renda do mês"
+            value={formatBRL(data.income)}
+            detail={`${formatBRL(data.baseIncome)} planejada + ${formatBRL(data.extraIncome)} extras`}
+            tone="emerald"
+            active={openDetail === "income"}
+            onClick={() => toggleDetail("income")}
+          />
+          <SummaryShortcutCard
+            icon={TrendingDown}
+            title="Comprometimento"
+            value={formatBRL(data.committed)}
+            detail={`${formatBRL(data.fixedTotal)} fixas · ${formatBRL(data.installmentsTotal)} compromissos`}
+            tone="indigo"
+            active={openDetail === "commitments"}
+            onClick={() => toggleDetail("commitments")}
+          />
+          <SummaryShortcutCard
+            icon={Plus}
+            title="Gastos do mês"
+            value={formatBRL(data.categorySpent)}
+            detail={`${data.monthExpenses.length} lançamentos`}
+            tone="amber"
+            active={openDetail === "expenses"}
+            onClick={() => toggleDetail("expenses")}
+          />
+          <SummaryShortcutCard
+            icon={Wallet}
+            title="Rendas do mês"
+            value={formatBRL(data.extraIncome)}
+            detail={`${data.monthIncomeEntries.length} rendas extras`}
+            tone="blue"
+            active={openDetail === "income"}
+            onClick={() => toggleDetail("income")}
+          />
+          <SummaryShortcutCard
+            icon={Target}
+            title="Meta principal"
+            value={goalSummary?.title || "Sem meta"}
+            detail={goalSummary ? `Faltam ${formatBRL(goalRemaining)}` : "Criar meta"}
+            badge={`${goalPercent}%`}
+            tone="rose"
+            active={openDetail === "goal"}
+            onClick={() => toggleDetail("goal")}
+          />
+          <SummaryShortcutCard
+            icon={Users}
+            title="Quem gastou"
+            value={peopleSummary}
+            detail="Por pessoa no mês"
+            tone="yellow"
+            active={openDetail === "people"}
+            onClick={() => toggleDetail("people")}
+          />
+          <SummaryShortcutCard
+            icon={BarChart3}
+            title="Onde está indo"
+            value={topCategory?.name || "Sem categoria"}
+            detail={topCategory ? formatBRL(topCategory.amount) : "Sem dados"}
+            tone="teal"
+            active={openDetail === "categories"}
+            onClick={() => toggleDetail("categories")}
+          />
+          <SummaryShortcutCard
+            icon={Clock3}
+            title="Últimos gastos"
+            value={formatBRL(data.variableSpent)}
+            detail={`${data.monthExpenses.length} lançamentos`}
+            tone="pink"
+            active={openDetail === "expenses"}
+            onClick={() => toggleDetail("expenses")}
+          />
+        </div>
 
-        <ExpandableSection
-          title="Onde está indo"
-          summary={
-            data.categoryTotals[0]
-              ? `Maior categoria: ${data.categoryTotals[0].name} · ${formatBRL(data.categoryTotals[0].amount)}`
-              : "Sem categorias no ciclo"
-          }
-        >
-          <CategoryBreakdown expenses={data.categoryExpenses} />
-        </ExpandableSection>
+        {openDetail ? (
+          <div ref={detailPanelRef} className="scroll-mt-24 rounded-[1.5rem] border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+            {openDetail === "income" ? (
+              <DetailPanel title="Rendas do mês" icon={Wallet} tone="blue" actionLabel="Adicionar renda" onAction={() => setShowAddIncome(true)}>
+                {data.monthIncomeEntries.length === 0 ? (
+                  <p className="text-sm text-stone-500">Nenhuma renda extra lançada neste mês.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {data.monthIncomeEntries.map((entry) => (
+                      <div key={entry.id} className="flex flex-col gap-3 rounded-xl border border-stone-100 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-medium text-stone-900">{entry.description || "Renda"}</p>
+                          <p className="break-words text-xs text-stone-500">
+                            {format(parseISO(entry.date), "dd 'de' MMM", { locale: ptBR })} · {entry.sourceType} {entry.receivedBy ? `· ${entry.receivedBy}` : ""}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 sm:justify-end">
+                          <span className="font-semibold text-emerald-700">{formatBRL(entry.amount)}</span>
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                await deleteIncomeEntry(entry.id);
+                                toast.success("Renda removida.");
+                              } catch (err) {
+                                toast.error((err as Error)?.message || "Não foi possível remover a renda.");
+                              }
+                            }}
+                            className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                            aria-label="Excluir renda"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </DetailPanel>
+            ) : null}
 
-        <ExpandableSection
-          title="Últimos gastos"
-          summary={`${monthLabel} · ${data.monthExpenses.length} lançamentos · ${formatBRL(data.variableSpent)}`}
-          defaultOpen
-        >
-          <RecentExpenses expenses={expenses} defaultMonth={activeMonthKey} />
-        </ExpandableSection>
+            {openDetail === "commitments" ? (
+              <DetailPanel title="Comprometimento" icon={TrendingDown} tone="indigo" actionLabel="Ver parcelas" onAction={() => navigate("/installments")}>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  <MiniMetric title="Contas fixas" value={formatBRL(data.fixedTotal)} />
+                  <MiniMetric title="Compromissos" value={formatBRL(data.installmentsTotal)} />
+                </div>
+              </DetailPanel>
+            ) : null}
+
+            {openDetail === "goal" ? (
+              <DetailPanel title="Meta principal" icon={Target} tone="rose" actionLabel="Abrir metas" onAction={() => navigate("/goals")}>
+                {goalSummary ? (
+                  <div className="space-y-4">
+                    <div>
+                      <p className="break-words text-base font-semibold text-stone-900">{goalSummary.title}</p>
+                      <p className="mt-1 text-xs text-stone-500">{goalSummary.label}</p>
+                    </div>
+                    <div>
+                      <div className="flex items-center justify-between gap-3 text-sm">
+                        <span className="font-medium text-stone-900">
+                          {formatBRL(goalSummary.currentAmount)} de {formatBRL(goalSummary.targetAmount)}
+                        </span>
+                        <span className="text-xs text-stone-500">Faltam {formatBRL(goalRemaining)}</span>
+                      </div>
+                      <div className="mt-2 h-2 rounded-full bg-stone-100">
+                        <div className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${goalPercent}%` }} />
+                      </div>
+                    </div>
+                    <Link
+                      to="/goals"
+                      state={{ openContribution: "main" }}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+                    >
+                      <Plus className="h-4 w-4" />
+                      Adicionar valor
+                    </Link>
+                  </div>
+                ) : (
+                  <Link
+                    to="/goals"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-100"
+                  >
+                    <Plus className="h-4 w-4" />
+                    Criar meta
+                  </Link>
+                )}
+              </DetailPanel>
+            ) : null}
+
+            {openDetail === "people" ? (
+              <DetailPanel title="Quem gastou" icon={Users} tone="yellow">
+                {data.peopleTotals.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    {data.peopleTotals.slice(0, 2).map((person, index) => (
+                      <PartnerCard key={person.name} name={person.name} amount={person.amount} total={data.variableSpent} tone={index % 2 === 0 ? "emerald" : "indigo"} />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-stone-500">Nenhum gasto real encontrado para mostrar este card.</p>
+                )}
+              </DetailPanel>
+            ) : null}
+
+            {openDetail === "categories" ? (
+              <DetailPanel title="Onde está indo" icon={BarChart3} tone="teal">
+                <CategoryBreakdown expenses={data.categoryExpenses} />
+              </DetailPanel>
+            ) : null}
+
+            {openDetail === "expenses" ? (
+              <DetailPanel title="Últimos gastos" icon={Clock3} tone="pink">
+                <RecentExpenses expenses={expenses} defaultMonth={activeMonthKey} />
+              </DetailPanel>
+            ) : null}
+          </div>
+        ) : null}
       </div>
 
       {showAddIncome && (
@@ -552,6 +598,169 @@ function PartnerCard({
       <div className="h-1.5 overflow-hidden rounded-full bg-white/60">
         <div className={`h-full rounded-full transition-all ${toneMap[tone].bar}`} style={{ width: `${pct}%` }} />
       </div>
+    </div>
+  );
+}
+
+function QuickActionCard({
+  icon: Icon,
+  label,
+  helper,
+  tone,
+  onClick,
+}: {
+  icon: LucideIcon;
+  label: string;
+  helper: string;
+  tone: "emerald" | "blue" | "stone";
+  onClick: () => void;
+}) {
+  const toneMap = {
+    emerald: {
+      card: "border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50 text-emerald-700",
+      icon: "text-emerald-700",
+      helper: "text-stone-600",
+    },
+    blue: {
+      card: "border-sky-100 bg-gradient-to-br from-sky-50 via-white to-sky-50 text-sky-700",
+      icon: "text-sky-700",
+      helper: "text-stone-600",
+    },
+    stone: {
+      card: "border-stone-200 bg-white text-stone-900",
+      icon: "text-stone-700",
+      helper: "text-stone-600",
+    },
+  } as const;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex min-h-[11.5rem] flex-col items-center justify-start rounded-[1.65rem] border px-2.5 pb-4 pt-5 text-center shadow-sm transition-transform active:scale-[0.98] ${toneMap[tone].card}`}
+    >
+      <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-stone-100 bg-white shadow-[0_10px_24px_rgba(28,25,23,0.08)]">
+        <Icon className={`h-8 w-8 ${toneMap[tone].icon}`} strokeWidth={1.8} />
+      </span>
+      <span className="block min-h-[2.5rem] text-[1.05rem] font-semibold leading-tight">{label}</span>
+      <span className={`mt-2 block text-[0.95rem] leading-snug ${toneMap[tone].helper}`}>{helper}</span>
+    </button>
+  );
+}
+
+function SummaryShortcutCard({
+  icon: Icon,
+  title,
+  value,
+  detail,
+  badge,
+  tone,
+  active = false,
+  onClick,
+}: {
+  icon: LucideIcon;
+  title: string;
+  value: string;
+  detail: string;
+  badge?: string;
+  tone: "emerald" | "indigo" | "amber" | "blue" | "rose" | "yellow" | "teal" | "pink";
+  active?: boolean;
+  onClick: () => void;
+}) {
+  const toneMap = {
+    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",
+    amber: "border-amber-100 bg-amber-50 text-amber-700",
+    blue: "border-sky-100 bg-sky-50 text-sky-700",
+    rose: "border-rose-100 bg-rose-50 text-rose-700",
+    yellow: "border-yellow-100 bg-yellow-50 text-yellow-700",
+    teal: "border-teal-100 bg-teal-50 text-teal-700",
+    pink: "border-pink-100 bg-pink-50 text-pink-700",
+  } as const;
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`group flex min-h-[10rem] flex-col justify-between rounded-[1.5rem] border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99] ${toneMap[tone]} ${active ? "ring-2 ring-stone-900/10" : ""}`}
+    >
+      <span className="flex items-start justify-between gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <Icon className="h-5 w-5 shrink-0" />
+          <span className="break-words text-sm font-medium leading-tight">{title}</span>
+        </span>
+        {badge ? (
+          <span className="shrink-0 rounded-full bg-white/75 px-2 py-0.5 text-xs font-semibold text-stone-700 shadow-sm">{badge}</span>
+        ) : null}
+      </span>
+      <span>
+        <span className="line-clamp-2 block break-words text-xl font-semibold leading-tight text-stone-950">{value}</span>
+        <span className="mt-2 line-clamp-2 block break-words text-xs leading-snug text-stone-600">{detail}</span>
+      </span>
+      <span className="mt-3 inline-flex items-center gap-2 text-sm font-medium">
+        Ver detalhes
+        <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+      </span>
+    </button>
+  );
+}
+
+function DetailPanel({
+  icon: Icon,
+  title,
+  tone,
+  actionLabel,
+  onAction,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  tone: "emerald" | "indigo" | "amber" | "blue" | "rose" | "yellow" | "teal" | "pink";
+  actionLabel?: string;
+  onAction?: () => void;
+  children: ReactNode;
+}) {
+  const toneMap = {
+    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",
+    amber: "border-amber-100 bg-amber-50 text-amber-700",
+    blue: "border-sky-100 bg-sky-50 text-sky-700",
+    rose: "border-rose-100 bg-rose-50 text-rose-700",
+    yellow: "border-yellow-100 bg-yellow-50 text-yellow-700",
+    teal: "border-teal-100 bg-teal-50 text-teal-700",
+    pink: "border-pink-100 bg-pink-50 text-pink-700",
+  } as const;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
+          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${toneMap[tone]}`}>
+            <Icon className="h-5 w-5" />
+          </span>
+          <h2 className="break-words text-lg font-semibold text-stone-950">{title}</h2>
+        </div>
+        {actionLabel && onAction ? (
+          <button
+            type="button"
+            onClick={onAction}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-stone-200 bg-white px-4 py-2 text-sm font-medium text-stone-700 transition-colors hover:bg-stone-50"
+          >
+            {actionLabel}
+            <ArrowRight className="h-4 w-4" />
+          </button>
+        ) : null}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function MiniMetric({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="rounded-2xl border border-stone-100 bg-stone-50 p-4">
+      <p className="text-xs text-stone-500">{title}</p>
+      <p className="mt-1 break-words text-xl font-semibold text-stone-950">{value}</p>
     </div>
   );
 }
