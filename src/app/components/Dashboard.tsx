@@ -416,7 +416,7 @@ export function Dashboard() {
         </div>
 
         {openDetail ? (
-          <div ref={detailPanelRef} className="scroll-mt-24 rounded-[1.5rem] border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
+          <div ref={detailPanelRef} className="scroll-mt-24 rounded-[1.5rem] border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-950 sm:p-5">
             {openDetail === "income" ? (
               <DetailPanel title="Rendas do mês" icon={Wallet} tone="blue" actionLabel="Adicionar renda" onAction={() => setShowAddIncome(true)}>
                 {data.monthIncomeEntries.length === 0 ? (
@@ -584,17 +584,17 @@ function PartnerCard({
 }) {
   const pct = total > 0 ? (amount / total) * 100 : 0;
   const toneMap = {
-    emerald: { bar: "bg-emerald-400", bg: "bg-emerald-50" },
-    indigo: { bar: "bg-indigo-400", bg: "bg-indigo-50" },
+    emerald: { bar: "bg-emerald-400", bg: "bg-emerald-50 dark:bg-emerald-950/55" },
+    indigo: { bar: "bg-indigo-400", bg: "bg-indigo-50 dark:bg-indigo-950/55" },
   } as const;
 
   return (
     <div className={`${toneMap[tone].bg} rounded-xl p-4`}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="min-w-0 break-words text-sm font-medium text-stone-800">{name}</p>
-        <p className="text-xs text-stone-500">{pct.toFixed(0)}%</p>
+        <p className="min-w-0 break-words text-sm font-medium text-stone-800 dark:text-stone-100">{name}</p>
+        <p className="text-xs text-stone-500 dark:text-stone-300">{pct.toFixed(0)}%</p>
       </div>
-      <p className="mb-3 break-words text-xl font-semibold text-stone-900 sm:text-2xl">{formatBRL(amount)}</p>
+      <p className="mb-3 break-words text-xl font-semibold text-stone-900 dark:text-white sm:text-2xl">{formatBRL(amount)}</p>
       <div className="h-1.5 overflow-hidden rounded-full bg-white/60">
         <div className={`h-full rounded-full transition-all ${toneMap[tone].bar}`} style={{ width: `${pct}%` }} />
       </div>
@@ -617,19 +617,19 @@ function QuickActionCard({
 }) {
   const toneMap = {
     emerald: {
-      card: "border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50 text-emerald-700",
+      card: "border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-emerald-50 text-emerald-700 dark:border-emerald-500/35 dark:from-emerald-950/70 dark:via-stone-950 dark:to-emerald-950/45 dark:text-emerald-200",
       icon: "text-emerald-700",
-      helper: "text-stone-600",
+      helper: "text-stone-600 dark:text-stone-300",
     },
     blue: {
-      card: "border-sky-100 bg-gradient-to-br from-sky-50 via-white to-sky-50 text-sky-700",
+      card: "border-sky-100 bg-gradient-to-br from-sky-50 via-white to-sky-50 text-sky-700 dark:border-sky-500/35 dark:from-sky-950/70 dark:via-stone-950 dark:to-sky-950/45 dark:text-sky-200",
       icon: "text-sky-700",
-      helper: "text-stone-600",
+      helper: "text-stone-600 dark:text-stone-300",
     },
     stone: {
-      card: "border-stone-200 bg-white text-stone-900",
+      card: "border-stone-200 bg-white text-stone-900 dark:border-stone-700 dark:bg-stone-950 dark:text-stone-100",
       icon: "text-stone-700",
-      helper: "text-stone-600",
+      helper: "text-stone-600 dark:text-stone-300",
     },
   } as const;
 
@@ -639,8 +639,8 @@ function QuickActionCard({
       onClick={onClick}
       className={`flex min-h-[11.5rem] flex-col items-center justify-start rounded-[1.65rem] border px-2.5 pb-4 pt-5 text-center shadow-sm transition-transform active:scale-[0.98] ${toneMap[tone].card}`}
     >
-      <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-stone-100 bg-white shadow-[0_10px_24px_rgba(28,25,23,0.08)]">
-        <Icon className={`h-8 w-8 ${toneMap[tone].icon}`} strokeWidth={1.8} />
+      <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-stone-100 bg-white shadow-[0_10px_24px_rgba(28,25,23,0.08)] dark:border-white/10 dark:bg-white/10">
+        <Icon className={`h-8 w-8 ${toneMap[tone].icon} dark:text-stone-100`} strokeWidth={1.8} />
       </span>
       <span className="block min-h-[2.5rem] text-[1.05rem] font-semibold leading-tight">{label}</span>
       <span className={`mt-2 block text-[0.95rem] leading-snug ${toneMap[tone].helper}`}>{helper}</span>
@@ -668,14 +668,14 @@ function SummaryShortcutCard({
   onClick: () => void;
 }) {
   const toneMap = {
-    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
-    indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",
-    amber: "border-amber-100 bg-amber-50 text-amber-700",
-    blue: "border-sky-100 bg-sky-50 text-sky-700",
-    rose: "border-rose-100 bg-rose-50 text-rose-700",
-    yellow: "border-yellow-100 bg-yellow-50 text-yellow-700",
-    teal: "border-teal-100 bg-teal-50 text-teal-700",
-    pink: "border-pink-100 bg-pink-50 text-pink-700",
+    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700 dark:!border-emerald-500/40 dark:!bg-emerald-950/70 dark:!text-emerald-100",
+    indigo: "border-indigo-100 bg-indigo-50 text-indigo-700 dark:!border-indigo-500/40 dark:!bg-indigo-950/70 dark:!text-indigo-100",
+    amber: "border-amber-100 bg-amber-50 text-amber-700 dark:!border-amber-500/40 dark:!bg-amber-950/70 dark:!text-amber-100",
+    blue: "border-sky-100 bg-sky-50 text-sky-700 dark:!border-sky-500/40 dark:!bg-sky-950/70 dark:!text-sky-100",
+    rose: "border-rose-100 bg-rose-50 text-rose-700 dark:!border-rose-500/40 dark:!bg-rose-950/70 dark:!text-rose-100",
+    yellow: "border-yellow-100 bg-yellow-50 text-yellow-700 dark:!border-yellow-500/40 dark:!bg-yellow-950/70 dark:!text-yellow-100",
+    teal: "border-teal-100 bg-teal-50 text-teal-700 dark:!border-teal-500/40 dark:!bg-teal-950/70 dark:!text-teal-100",
+    pink: "border-pink-100 bg-pink-50 text-pink-700 dark:!border-pink-500/40 dark:!bg-pink-950/70 dark:!text-pink-100",
   } as const;
 
   return (
@@ -686,18 +686,18 @@ function SummaryShortcutCard({
     >
       <span className="flex items-start justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
-          <Icon className="h-5 w-5 shrink-0" />
-          <span className="break-words text-sm font-medium leading-tight">{title}</span>
+          <Icon className="h-5 w-5 shrink-0 dark:text-current" />
+          <span className="break-words text-sm font-medium leading-tight dark:!text-current">{title}</span>
         </span>
         {badge ? (
-          <span className="shrink-0 rounded-full bg-white/75 px-2 py-0.5 text-xs font-semibold text-stone-700 shadow-sm">{badge}</span>
+          <span className="shrink-0 rounded-full bg-white/75 px-2 py-0.5 text-xs font-semibold text-stone-700 shadow-sm dark:bg-white/10 dark:text-stone-100">{badge}</span>
         ) : null}
       </span>
       <span>
-        <span className="line-clamp-2 block break-words text-xl font-semibold leading-tight text-stone-950">{value}</span>
-        <span className="mt-2 line-clamp-2 block break-words text-xs leading-snug text-stone-600">{detail}</span>
+        <span className="line-clamp-2 block break-words text-xl font-semibold leading-tight text-stone-950 dark:text-white">{value}</span>
+        <span className="mt-2 line-clamp-2 block break-words text-xs leading-snug text-stone-600 dark:text-stone-300">{detail}</span>
       </span>
-      <span className="mt-3 inline-flex items-center gap-2 text-sm font-medium">
+      <span className="mt-3 inline-flex items-center gap-2 text-sm font-medium dark:!text-current">
         Ver detalhes
         <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
       </span>
