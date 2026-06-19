@@ -49,17 +49,17 @@ export function Layout({ children }: LayoutProps) {
             {coupleName ? (
               <Link
                 to="/settings"
-                className="mx-auto flex min-w-0 max-w-full items-center gap-2 rounded-full border border-stone-200 bg-white px-2 py-1.5 shadow-sm transition-colors hover:bg-stone-50 dark:border-stone-700 dark:bg-stone-900 dark:hover:bg-stone-800 lg:max-w-[260px]"
+                className="mx-auto flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-stone-200 bg-white px-1.5 py-1 shadow-sm transition-colors hover:bg-stone-50 dark:!border-stone-700 dark:!bg-stone-950 dark:hover:!bg-stone-900 lg:max-w-[250px]"
                 aria-label="Abrir perfil do casal"
               >
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700 lg:h-8 lg:w-8">
+                <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700 dark:bg-emerald-900 dark:text-emerald-100 lg:h-8 lg:w-8">
                   {household?.avatarUrl ? (
                     <img src={household.avatarUrl} alt={coupleName} className="h-full w-full object-cover" />
                   ) : (
                     initials
                   )}
                 </div>
-                <span className="block min-w-0 truncate text-base font-semibold text-stone-800 dark:text-stone-100 lg:text-sm">
+                <span className="block min-w-0 truncate text-[15px] font-semibold text-stone-800 dark:!text-white lg:text-sm">
                   {coupleName}
                 </span>
               </Link>
