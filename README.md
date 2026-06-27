@@ -1,58 +1,121 @@
+<div align="center">
+
 # Together
 
-Together é um app financeiro para casais acompanharem renda, gastos, contas fixas, parcelas, assinaturas, metas e fechamento mensal em um só lugar.
+**Controle financeiro para casais acompanharem gastos, renda, contas fixas, metas e fechamento mensal.**
 
-O foco do projeto é ser simples de usar no celular, com uma visão clara do que está livre para gastar hoje e do impacto das decisões nos próximos meses.
+![React](https://img.shields.io/badge/React-111827?style=for-the-badge&logo=react&logoColor=38bdf8)
+![Vite](https://img.shields.io/badge/Vite-111827?style=for-the-badge&logo=vite&logoColor=facc15)
+![TypeScript](https://img.shields.io/badge/TypeScript-111827?style=for-the-badge&logo=typescript&logoColor=60a5fa)
+![Supabase](https://img.shields.io/badge/Supabase-111827?style=for-the-badge&logo=supabase&logoColor=34d399)
+
+[Demo](https://togetherbr.vercel.app/) · [Portfólio](https://www.brunomafra.website/pt)
+
+</div>
+
+---
+
+## Descrição do problema
+
+Casais costumam dividir decisões financeiras entre conversas, planilhas, extratos e aplicativos separados. Isso dificulta responder perguntas simples: quanto entrou, quanto já foi comprometido, o que ainda está livre para gastar e qual será o impacto nos próximos meses.
+
+O problema não é só registrar gastos; é dar uma visão compartilhada do mês e dos compromissos futuros.
+
+## Solução proposta
+
+O Together centraliza o planejamento financeiro do casal em um fluxo único:
+
+- renda mensal e entradas extras;
+- gastos do mês;
+- contas fixas e valores variáveis;
+- parcelas, assinaturas e compromissos;
+- metas, submetas e aportes;
+- fechamento mensal com histórico e reabertura.
+
+O foco é uma experiência clara no celular, com leitura rápida do estado financeiro atual e projeção dos próximos meses.
+
+## Stack utilizada
+
+| Camada | Tecnologias |
+| --- | --- |
+| Frontend | React, Vite, TypeScript, Tailwind CSS |
+| UI | Lucide React, Sonner, componentes responsivos |
+| Dados | Supabase, SQLs versionados e cache local |
+| Estado | Contextos de autenticação e finanças |
+| Relatórios | Exportação CSV e snapshots mensais |
+
+## Arquitetura resumida
+
+```txt
+src/
+  app/
+    components/
+    context/
+    routes/
+    utils/
+  lib/
+    supabase.ts
+    database.types.ts
+  services/
+    financeService.ts
+supabase_setup.sql
+supabase_*_sql
+```
+
+## Screenshots
+
+| Tela | O que demonstrar |
+| --- | --- |
+| Visão do mês | Renda, gastos, saldo livre e resumo financeiro |
+| Gastos e categorias | Registro, edição, filtros e exportação CSV |
+| Compromissos futuros | Parcelas, assinaturas, contas fixas e projeções |
+| Metas e fechamento | Metas, histórico mensal e fechamento/reabertura |
+
+> As capturas devem ser adicionadas em `docs/screenshots/` quando houver uma rodada visual final da demo pública.
 
 ## Funcionalidades
 
 - Autenticação e dados por casal com Supabase.
 - Registro, edição, filtro e exportação CSV de gastos.
-- Separação entre quem registrou e quem pagou o gasto.
+- Separação entre quem registrou e quem pagou.
 - Categorias, formas de pagamento e cartões com limite.
 - Contas fixas com valores fixos ou variáveis por mês.
-- Parcelamentos, compromissos sem cartão e impacto no limite.
-- Assinaturas e compras recorrentes separadas na projeção futura.
-- Rendas planejadas e entradas extras do mês.
+- Parcelamentos e compromissos sem cartão.
+- Assinaturas e compras recorrentes na projeção futura.
+- Rendas planejadas e entradas extras.
 - Metas, submetas e adição de valores.
 - Fechamento mensal com histórico, reabertura e resumo.
 - Interface responsiva, mobile-first e com modo escuro.
 
-## Stack
+## Roadmap
 
-- React
-- Vite
-- TypeScript
-- Supabase
-- Tailwind CSS
-- Lucide React
-- Sonner
+- Adicionar screenshots reais em `docs/screenshots/`.
+- Refinar onboarding do casal e convite do parceiro.
+- Evoluir relatórios por categoria, método de pagamento e período.
+- Melhorar projeção de longo prazo para compromissos recorrentes.
+- Consolidar testes automatizados para regras financeiras.
+- Criar documentação de decisões de produto e dados.
 
-## Como rodar localmente
+## Aprendizados
 
-Instale as dependências:
+- Produtos financeiros precisam transformar dados em decisão, não apenas em lista.
+- Casais precisam de contexto compartilhado e linguagem simples.
+- Fechamento mensal exige histórico, reabertura e consistência de snapshots.
+- Cache local melhora percepção de velocidade, mas precisa respeitar sincronização.
+- Modelagem de dados define a clareza das telas de projeção.
+
+## Como executar
 
 ```bash
 npm install
+npm run dev
 ```
 
-Copie o arquivo de ambiente:
-
-```bash
-cp .env.example .env.local
-```
-
-Preencha as variáveis:
+Copie `.env.example` para `.env.local` e preencha:
 
 ```env
 VITE_SUPABASE_URL=
 VITE_SUPABASE_ANON_KEY=
-```
-
-Inicie o app:
-
-```bash
-npm run dev
 ```
 
 Valide o build:
@@ -61,42 +124,18 @@ Valide o build:
 npm run build
 ```
 
-## Supabase
-
-O projeto usa SQLs versionados na raiz do repositório. Para configurar um banco novo, rode primeiro:
+Para configurar um banco novo, rode primeiro:
 
 ```text
 supabase_setup.sql
 ```
 
-Depois rode os complementos conforme necessário:
+Depois aplique os SQLs complementares conforme necessário.
 
-```text
-supabase_payment_method_types.sql
-supabase_expense_recurring_monthly.sql
-supabase_financial_commitments_category.sql
-supabase_fixed_expense_amount_type.sql
-supabase_fixed_expense_monthly_values.sql
-supabase_goals_commitments.sql
-supabase_household_finance_state.sql
-supabase_household_profile_photos.sql
-supabase_income_entries.sql
-supabase_monthly_financial_cycle.sql
-```
+## Link para Demo
 
-As variáveis de ambiente devem usar a URL do projeto Supabase e a chave anon/public. Nunca commite `.env`, `.env.local` ou chaves privadas.
+https://togetherbr.vercel.app/
 
-## Estrutura principal
+## Link para Portfólio
 
-```text
-src/app/components      Telas e componentes da aplicação
-src/app/context         Contextos de autenticação e finanças
-src/app/routes          Rotas do app
-src/app/utils           Utilitários de UI/dados
-src/lib                 Cliente Supabase e tipos
-src/services            Camada de acesso ao Supabase
-```
-
-## Status
-
-Projeto em evolução ativa. A versão atual já cobre o fluxo principal de uso real para um casal gerenciar o mês, acompanhar compromissos futuros e revisar histórico financeiro.
+https://www.brunomafra.website/pt
