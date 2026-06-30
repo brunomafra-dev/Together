@@ -7,18 +7,21 @@
 Criado um serviço reutilizável que encapsula todas as operações Supabase:
 
 #### Despesas (Expenses)
+
 - `fetchExpenses()` - Carrega todas as despesas
 - `addExpense()` - Cria nova despesa
 - `updateExpense()` - Edita despesa existente
 - `deleteExpense()` - Remove despesa
 
 #### Parcelas (Installments)
+
 - `fetchInstallments()` - Carrega todas as parcelas
 - `addInstallment()` - Cria nova parcela
 - `updateInstallment()` - Edita parcela existente
 - `deleteInstallment()` - Remove parcela
 
 #### Categorias (Categories)
+
 - `fetchCategories()` - Carrega categorias do Supabase
 - `initializeDefaultCategories()` - Inicializa com 9 categorias padrão se vazio
 - `addCategory()` - Cria nova categoria
@@ -26,6 +29,7 @@ Criado um serviço reutilizável que encapsula todas as operações Supabase:
 - `deleteCategory()` - Remove categoria
 
 **Categorias Padrão:**
+
 1. Alimentação
 2. Mercado
 3. Combustível
@@ -48,6 +52,7 @@ Extensões ao FinanceProvider:
 - **Gerenciamento de Categorias**: `addCategory()`, `updateCategory()`, `deleteCategory()`
 
 **Fluxo de Inicialização:**
+
 1. Carrega despesas, parcelas e categorias do Supabase em paralelo
 2. Se nenhuma categoria existir, cria as 9 categorias padrão
 3. Expõe tudo via hook `useFinance()`
@@ -55,6 +60,7 @@ Extensões ao FinanceProvider:
 ### 3. **Componente de Seleção de Categorias** (`src/app/components/CategorySelect.tsx`)
 
 Dropdown reutilizável para seleção de categorias:
+
 - Props: `value`, `onChange`, `placeholder`, `className`
 - Extrai categorias do contexto
 - Mantém consistência visual com o resto da aplicação
@@ -63,17 +69,20 @@ Dropdown reutilizável para seleção de categorias:
 ### 4. **Modais Atualizadas**
 
 #### `AddExpenseModal.tsx`
+
 - ✅ Categoria digitável **removida**
 - ✅ Dropdown CategorySelect adicionado
 - ✅ Mapeia ID da categoria para nome antes de salvar
 - ✅ Mantém retrocompatibilidade com dados existentes
 
 #### `Installments.tsx` → `AddInstallmentModal`
+
 - ✅ Categoria digitável **removida**
 - ✅ Dropdown CategorySelect adicionado
 - ✅ Mesmo padrão de mapeamento
 
 #### `Settings.tsx` → `AddFixedExpenseModal`
+
 - ✅ Categoria digitável **removida**
 - ✅ Dropdown CategorySelect adicionado
 - ✅ Mesmo padrão de mapeamento
@@ -81,6 +90,7 @@ Dropdown reutilizável para seleção de categorias:
 ### 5. **Propagação de Alterações Automática**
 
 Qualquer alteração em despesas, parcelas ou contas fixas atualiza automaticamente:
+
 - ✅ Dashboard (recalcula totais em tempo real)
 - ✅ FutureCommitments (recalcula projeções)
 - ✅ Estatísticas/CategoryBreakdown (recomputa dados por categoria)
@@ -92,6 +102,7 @@ Isso acontece porque o contexto React propaga mudanças de estado para todos os 
 ## 📊 Estrutura de Dados
 
 ### Categoria (CategoryModel)
+
 ```typescript
 {
   id: string;
@@ -102,6 +113,7 @@ Isso acontece porque o contexto React propaga mudanças de estado para todos os 
 ```
 
 ### Fluxo de Dados
+
 1. **Criação**: ID da categoria → Nome armazenado no banco
 2. **Leitura**: Nome exibido na UI
 3. **Atualização**: Usa ID para editar
@@ -126,6 +138,7 @@ Isso acontece porque o contexto React propaga mudanças de estado para todos os 
 ## 🚀 Como Usar
 
 ### Adicionar Nova Despesa
+
 ```typescript
 const { addExpense, categories } = useFinance();
 // CategorySelect mostra dropdown com categorias
@@ -133,6 +146,7 @@ const { addExpense, categories } = useFinance();
 ```
 
 ### Editar Despesa
+
 ```typescript
 const { updateExpense } = useFinance();
 await updateExpense(expenseId, { category: "Nova categoria" });
@@ -140,6 +154,7 @@ await updateExpense(expenseId, { category: "Nova categoria" });
 ```
 
 ### Gerenciar Categorias
+
 ```typescript
 const { addCategory, updateCategory, deleteCategory } = useFinance();
 await addCategory("Viagens", "#FF6B6B", "plane");

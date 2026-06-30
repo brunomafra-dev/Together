@@ -146,9 +146,24 @@ export interface MonthlySnapshotModel {
   installmentExpensesTotal: number;
   remainingBalance: number;
   categoryTotals: Array<{ name: string; amount: number }>;
-  cardTotals: Array<{ name: string; amount: number; limitAmount: number | null; availableLimit: number | null }>;
-  goalProgress: Array<{ title: string; currentAmount: number; targetAmount: number; percent: number }>;
-  financialHealth: { availablePercent: number; totalSpentPercent: number; baseIncome?: number; extraIncome?: number };
+  cardTotals: Array<{
+    name: string;
+    amount: number;
+    limitAmount: number | null;
+    availableLimit: number | null;
+  }>;
+  goalProgress: Array<{
+    title: string;
+    currentAmount: number;
+    targetAmount: number;
+    percent: number;
+  }>;
+  financialHealth: {
+    availablePercent: number;
+    totalSpentPercent: number;
+    baseIncome?: number;
+    extraIncome?: number;
+  };
   closedAt: string;
 }
 
@@ -178,7 +193,9 @@ const throwIfError = (error: unknown) => {
 
 // Obter household_id do usuário atual
 export async function getUserHouseholdId(): Promise<string | null> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return null;
 
   const { data: members, error } = await supabase
@@ -205,7 +222,9 @@ export async function getUserHouseholdId(): Promise<string | null> {
     userId: user.id,
   });
 
-  const { data: rpcHouseholdId, error: rpcError } = await supabase.rpc("bootstrap_current_user_household");
+  const { data: rpcHouseholdId, error: rpcError } = await supabase.rpc(
+    "bootstrap_current_user_household",
+  );
 
   console.log("[financeService] bootstrap_current_user_household RPC response", {
     data: rpcHouseholdId,
@@ -240,7 +259,10 @@ const mapInstallmentRow = (row: any): InstallmentModel => ({
   name: `Parcela ${row.installment_number ?? 1}`,
   totalAmount: toNumber(row.amount) * toNumber(row.total_installments),
   monthlyAmount: toNumber(row.amount),
-  remainingMonths: Math.max((toNumber(row.total_installments) || 0) - (toNumber(row.installment_number) || 0), 0),
+  remainingMonths: Math.max(
+    (toNumber(row.total_installments) || 0) - (toNumber(row.installment_number) || 0),
+    0,
+  ),
   totalMonths: toNumber(row.total_installments),
   categoryId: toString(row.expenses?.category_id),
   expenseId: row.expense_id,
@@ -262,7 +284,10 @@ const mapPaymentMethodRow = (row: CardRow): PaymentMethodModel => ({
 
 const normalizePaymentMethodType = (type: unknown, name = ""): PaymentMethodModel["type"] => {
   if (type === "credit_card" || type === "debit" || type === "pix" || type === "cash") return type;
-  const normalizedName = name.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  const normalizedName = name
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
   if (normalizedName === "pix") return "pix";
   if (normalizedName === "dinheiro") return "cash";
   if (normalizedName === "debito") return "debit";
@@ -276,7 +301,9 @@ const mapProfileRow = (row: ProfileRow): ProfileModel => ({
 });
 
 export async function fetchCurrentProfile(): Promise<ProfileModel | null> {
-  const { data: { user } } = await supabase.auth.getUser();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   if (!user) return null;
 
   const { data, error } = await supabase
@@ -301,7 +328,10 @@ export async function fetchCurrentProfile(): Promise<ProfileModel | null> {
   return mapProfileRow(inserted as ProfileRow);
 }
 
-export async function updateHouseholdAvatar(householdId: string, avatarUrl: string): Promise<HouseholdModel> {
+export async function updateHouseholdAvatar(
+  householdId: string,
+  avatarUrl: string,
+): Promise<HouseholdModel> {
   const { data, error } = await supabase
     .from("households")
     .update({ avatar_url: avatarUrl })
@@ -337,7 +367,9 @@ const mapFixedExpenseRow = (row: FixedExpenseRow): FixedExpenseModel => ({
   amountType: row.amount_type === "variable" ? "variable" : "fixed",
 });
 
-const mapFixedExpenseMonthlyValueRow = (row: FixedExpenseMonthlyValueRow): FixedExpenseMonthlyValueModel => ({
+const mapFixedExpenseMonthlyValueRow = (
+  row: FixedExpenseMonthlyValueRow,
+): FixedExpenseMonthlyValueModel => ({
   id: row.id,
   householdId: toString(row.household_id),
   fixedExpenseId: toString(row.fixed_expense_id),
@@ -427,16 +459,25 @@ const mapMonthlySnapshotRow = (row: MonthlySnapshotRow): MonthlySnapshotModel =>
   fixedExpensesTotal: toNumber(row.fixed_expenses_total),
   installmentExpensesTotal: toNumber(row.installment_expenses_total),
   remainingBalance: toNumber(row.remaining_balance),
-  categoryTotals: Array.isArray(row.category_totals) ? row.category_totals as MonthlySnapshotModel["categoryTotals"] : [],
-  cardTotals: Array.isArray(row.card_totals) ? row.card_totals as MonthlySnapshotModel["cardTotals"] : [],
-  goalProgress: Array.isArray(row.goal_progress) ? row.goal_progress as MonthlySnapshotModel["goalProgress"] : [],
-  financialHealth: row.financial_health && typeof row.financial_health === "object"
-    ? row.financial_health as MonthlySnapshotModel["financialHealth"]
-    : { availablePercent: 0, totalSpentPercent: 0 },
+  categoryTotals: Array.isArray(row.category_totals)
+    ? (row.category_totals as MonthlySnapshotModel["categoryTotals"])
+    : [],
+  cardTotals: Array.isArray(row.card_totals)
+    ? (row.card_totals as MonthlySnapshotModel["cardTotals"])
+    : [],
+  goalProgress: Array.isArray(row.goal_progress)
+    ? (row.goal_progress as MonthlySnapshotModel["goalProgress"])
+    : [],
+  financialHealth:
+    row.financial_health && typeof row.financial_health === "object"
+      ? (row.financial_health as MonthlySnapshotModel["financialHealth"])
+      : { availablePercent: 0, totalSpentPercent: 0 },
   closedAt: toString(row.closed_at || row.created_at),
 });
 
-const mapHouseholdFinanceStateRow = (row: HouseholdFinanceStateRow): HouseholdFinanceStateModel => ({
+const mapHouseholdFinanceStateRow = (
+  row: HouseholdFinanceStateRow,
+): HouseholdFinanceStateModel => ({
   householdId: toString(row.household_id),
   activeMonth: toNumber(row.active_month),
   activeYear: toNumber(row.active_year),
@@ -507,15 +548,15 @@ export async function addFixedExpense(
     due_day: fixedExpense.dueDate,
     amount_type: fixedExpense.amountType ?? "fixed",
   };
-  let { data, error } = await supabase
-    .from("fixed_expenses")
-    .insert(payload)
-    .select("*")
-    .single();
+  let { data, error } = await supabase.from("fixed_expenses").insert(payload).select("*").single();
   if (error && String(error.message || "").includes("amount_type")) {
     const fallbackPayload = { ...payload } as any;
     delete fallbackPayload.amount_type;
-    const fallback = await supabase.from("fixed_expenses").insert(fallbackPayload).select("*").single();
+    const fallback = await supabase
+      .from("fixed_expenses")
+      .insert(fallbackPayload)
+      .select("*")
+      .single();
     data = fallback.data;
     error = fallback.error;
   }
@@ -543,7 +584,12 @@ export async function updateFixedExpense(
   if (error && String(error.message || "").includes("amount_type")) {
     const fallbackPayload = { ...payload } as any;
     delete fallbackPayload.amount_type;
-    const fallback = await supabase.from("fixed_expenses").update(fallbackPayload).eq("id", id).select("*").single();
+    const fallback = await supabase
+      .from("fixed_expenses")
+      .update(fallbackPayload)
+      .eq("id", id)
+      .select("*")
+      .single();
     data = fallback.data;
     error = fallback.error;
   }
@@ -556,7 +602,9 @@ export async function deleteFixedExpense(id: string): Promise<void> {
   throwIfError(error);
 }
 
-export async function fetchFixedExpenseMonthlyValues(householdId: string): Promise<FixedExpenseMonthlyValueModel[]> {
+export async function fetchFixedExpenseMonthlyValues(
+  householdId: string,
+): Promise<FixedExpenseMonthlyValueModel[]> {
   const { data, error } = await supabase
     .from("fixed_expense_monthly_values")
     .select("*")
@@ -564,7 +612,11 @@ export async function fetchFixedExpenseMonthlyValues(householdId: string): Promi
     .order("year", { ascending: false })
     .order("month", { ascending: false });
   if (error) {
-    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("fixed_expense_monthly_values")) return [];
+    if (
+      String(error.message || "").includes("schema cache") ||
+      String(error.message || "").includes("fixed_expense_monthly_values")
+    )
+      return [];
     throwIfError(error);
   }
   return (data ?? []).map(mapFixedExpenseMonthlyValueRow);
@@ -575,20 +627,28 @@ export async function upsertFixedExpenseMonthlyValue(
 ): Promise<FixedExpenseMonthlyValueModel | null> {
   const { data, error } = await supabase
     .from("fixed_expense_monthly_values")
-    .upsert({
-      household_id: value.householdId,
-      fixed_expense_id: value.fixedExpenseId,
-      month: value.month,
-      year: value.year,
-      estimated_amount: value.estimatedAmount,
-      actual_amount: value.actualAmount,
-      status: value.status,
-    } as any, { onConflict: "fixed_expense_id,month,year" })
+    .upsert(
+      {
+        household_id: value.householdId,
+        fixed_expense_id: value.fixedExpenseId,
+        month: value.month,
+        year: value.year,
+        estimated_amount: value.estimatedAmount,
+        actual_amount: value.actualAmount,
+        status: value.status,
+      } as any,
+      { onConflict: "fixed_expense_id,month,year" },
+    )
     .select("*")
     .single();
   if (error) {
-    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("fixed_expense_monthly_values")) {
-      throw new Error("Tabela fixed_expense_monthly_values não encontrada. Rode o SQL supabase_fixed_expense_monthly_values.sql no Supabase.");
+    if (
+      String(error.message || "").includes("schema cache") ||
+      String(error.message || "").includes("fixed_expense_monthly_values")
+    ) {
+      throw new Error(
+        "Tabela fixed_expense_monthly_values não encontrada. Rode o SQL supabase_fixed_expense_monthly_values.sql no Supabase.",
+      );
     }
     throwIfError(error);
   }
@@ -602,13 +662,19 @@ export async function fetchIncomeEntries(householdId: string): Promise<IncomeEnt
     .eq("household_id", householdId)
     .order("entry_date", { ascending: false });
   if (error) {
-    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("income_entries")) return [];
+    if (
+      String(error.message || "").includes("schema cache") ||
+      String(error.message || "").includes("income_entries")
+    )
+      return [];
     throwIfError(error);
   }
   return (data ?? []).map(mapIncomeEntryRow);
 }
 
-export async function addIncomeEntry(entry: Omit<IncomeEntryModel, "id">): Promise<IncomeEntryModel> {
+export async function addIncomeEntry(
+  entry: Omit<IncomeEntryModel, "id">,
+): Promise<IncomeEntryModel> {
   const { data, error } = await supabase
     .from("income_entries")
     .insert({
@@ -623,8 +689,13 @@ export async function addIncomeEntry(entry: Omit<IncomeEntryModel, "id">): Promi
     .select("*")
     .single();
   if (error) {
-    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("income_entries")) {
-      throw new Error("Tabela income_entries não encontrada. Rode o SQL supabase_income_entries.sql no Supabase.");
+    if (
+      String(error.message || "").includes("schema cache") ||
+      String(error.message || "").includes("income_entries")
+    ) {
+      throw new Error(
+        "Tabela income_entries não encontrada. Rode o SQL supabase_income_entries.sql no Supabase.",
+      );
     }
     throwIfError(error);
   }
@@ -667,9 +738,12 @@ export async function fetchHousehold(householdId: string): Promise<HouseholdMode
   throwIfError(householdError);
   const householdRow = households?.[0];
   if (!householdRow) return null;
-  
+
   const activeHouseholdId = householdRow.id;
-  const { data: members, error: memberError } = await supabase.from("household_members").select("profile_id").eq("household_id", activeHouseholdId);
+  const { data: members, error: memberError } = await supabase
+    .from("household_members")
+    .select("profile_id")
+    .eq("household_id", activeHouseholdId);
   throwIfError(memberError);
 
   const profileIds = (members ?? []).map((member) => member.profile_id).filter(Boolean) as string[];
@@ -677,7 +751,10 @@ export async function fetchHousehold(householdId: string): Promise<HouseholdMode
   let partnerIds: [string, string] = ["", ""];
 
   if (profileIds.length > 0) {
-    const { data: profiles, error: profileError } = await supabase.from("profiles").select("id, name").in("id", profileIds);
+    const { data: profiles, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, name")
+      .in("id", profileIds);
     throwIfError(profileError);
     partnerIds = [
       toString((profiles?.[0] as ProfileRow | undefined)?.id),
@@ -692,8 +769,12 @@ export async function fetchHousehold(householdId: string): Promise<HouseholdMode
   return mapHouseholdRow(householdRow, partnerNames, partnerIds);
 }
 
-export async function addExpense(expense: Omit<ExpenseModel, "id"> & { householdId: string }): Promise<ExpenseModel> {
-  const { data: { user } } = await supabase.auth.getUser();
+export async function addExpense(
+  expense: Omit<ExpenseModel, "id"> & { householdId: string },
+): Promise<ExpenseModel> {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
   const payload: TableInsert<"expenses"> = {
     household_id: expense.householdId,
     category_id: expense.categoryId || null,
@@ -718,7 +799,10 @@ export async function addExpense(expense: Omit<ExpenseModel, "id"> & { household
   return mapExpenseRow(data as ExpenseRow);
 }
 
-export async function updateExpense(id: string, changes: Partial<Omit<ExpenseModel, "id">>): Promise<ExpenseModel> {
+export async function updateExpense(
+  id: string,
+  changes: Partial<Omit<ExpenseModel, "id">>,
+): Promise<ExpenseModel> {
   const payload: Partial<TableInsert<"expenses">> = {};
   if (changes.amount !== undefined) payload.amount = changes.amount;
   if (changes.categoryId !== undefined) payload.category_id = changes.categoryId || null;
@@ -726,12 +810,23 @@ export async function updateExpense(id: string, changes: Partial<Omit<ExpenseMod
   if (changes.date !== undefined) payload.purchase_date = changes.date;
   if (changes.createdBy !== undefined) payload.paid_by = changes.createdBy || null;
   if (changes.cardId !== undefined) payload.card_id = changes.cardId || null;
-  if (changes.recurringMonthly !== undefined) (payload as any).recurring_monthly = changes.recurringMonthly;
-  let { data, error } = await supabase.from("expenses").update(payload).eq("id", id).select("*").single();
+  if (changes.recurringMonthly !== undefined)
+    (payload as any).recurring_monthly = changes.recurringMonthly;
+  let { data, error } = await supabase
+    .from("expenses")
+    .update(payload)
+    .eq("id", id)
+    .select("*")
+    .single();
   if (error && String(error.message || "").includes("recurring_monthly")) {
     const fallbackPayload = { ...payload } as any;
     delete fallbackPayload.recurring_monthly;
-    const fallback = await supabase.from("expenses").update(fallbackPayload).eq("id", id).select("*").single();
+    const fallback = await supabase
+      .from("expenses")
+      .update(fallbackPayload)
+      .eq("id", id)
+      .select("*")
+      .single();
     data = fallback.data;
     error = fallback.error;
   }
@@ -744,7 +839,9 @@ export async function deleteExpense(id: string): Promise<void> {
   throwIfError(error);
 }
 
-export async function addInstallment(installment: Omit<InstallmentModel, "id"> & { householdId: string }): Promise<InstallmentModel> {
+export async function addInstallment(
+  installment: Omit<InstallmentModel, "id"> & { householdId: string },
+): Promise<InstallmentModel> {
   const payload: TableInsert<"installments"> = {
     expense_id: installment.expenseId || null,
     installment_number: 1,
@@ -757,12 +854,20 @@ export async function addInstallment(installment: Omit<InstallmentModel, "id"> &
   return mapInstallmentRow(data as InstallmentRow);
 }
 
-export async function updateInstallment(id: string, changes: Partial<Omit<InstallmentModel, "id">>): Promise<InstallmentModel> {
+export async function updateInstallment(
+  id: string,
+  changes: Partial<Omit<InstallmentModel, "id">>,
+): Promise<InstallmentModel> {
   const payload: Partial<TableInsert<"installments">> = {};
   if (changes.monthlyAmount !== undefined) payload.amount = changes.monthlyAmount;
   if (changes.totalMonths !== undefined) payload.total_installments = changes.totalMonths;
   if (changes.expenseId !== undefined) payload.expense_id = changes.expenseId || null;
-  const { data, error } = await supabase.from("installments").update(payload).eq("id", id).select("*").single();
+  const { data, error } = await supabase
+    .from("installments")
+    .update(payload)
+    .eq("id", id)
+    .select("*")
+    .single();
   throwIfError(error);
   return mapInstallmentRow(data as InstallmentRow);
 }
@@ -782,7 +887,10 @@ export async function addCategory(name: string, householdId: string): Promise<Ca
   return mapCategoryRow(data as TableRow<"categories">);
 }
 
-export async function updateCategory(id: string, changes: Partial<Omit<CategoryModel, "id">>): Promise<CategoryModel> {
+export async function updateCategory(
+  id: string,
+  changes: Partial<Omit<CategoryModel, "id">>,
+): Promise<CategoryModel> {
   const { data, error } = await supabase
     .from("categories")
     .update({ name: changes.name })
@@ -798,7 +906,10 @@ export async function deleteCategory(id: string): Promise<void> {
   throwIfError(error);
 }
 
-export async function replaceCategoryUsage(fromCategoryId: string, toCategoryId: string): Promise<void> {
+export async function replaceCategoryUsage(
+  fromCategoryId: string,
+  toCategoryId: string,
+): Promise<void> {
   const { error: expensesError } = await supabase
     .from("expenses")
     .update({ category_id: toCategoryId })
@@ -819,33 +930,43 @@ export async function replaceCategoryUsage(fromCategoryId: string, toCategoryId:
   throwIfError(commitmentsError);
 }
 
-export async function addPaymentMethod(name: string, limitAmount?: number, householdId?: string, type: PaymentMethodModel["type"] = "credit_card", closingDay?: number | null, dueDay?: number | null): Promise<PaymentMethodModel> {
+export async function addPaymentMethod(
+  name: string,
+  limitAmount?: number,
+  householdId?: string,
+  type: PaymentMethodModel["type"] = "credit_card",
+  closingDay?: number | null,
+  dueDay?: number | null,
+): Promise<PaymentMethodModel> {
   const payload: any = {
     name,
     type,
-    limit_amount: type === "credit_card" ? limitAmount ?? null : null,
-    closing_day: type === "credit_card" ? closingDay ?? null : null,
-    due_day: type === "credit_card" ? dueDay ?? null : null,
+    limit_amount: type === "credit_card" ? (limitAmount ?? null) : null,
+    closing_day: type === "credit_card" ? (closingDay ?? null) : null,
+    due_day: type === "credit_card" ? (dueDay ?? null) : null,
   };
   if (householdId) payload.household_id = householdId;
-  const { data, error } = await supabase
-    .from("cards")
-    .insert(payload)
-    .select("*")
-    .single();
+  const { data, error } = await supabase.from("cards").insert(payload).select("*").single();
   throwIfError(error);
   return mapPaymentMethodRow(data as CardRow);
 }
 
-export async function updatePaymentMethod(id: string, name: string, limitAmount?: number, type: PaymentMethodModel["type"] = "credit_card", closingDay?: number | null, dueDay?: number | null): Promise<PaymentMethodModel> {
+export async function updatePaymentMethod(
+  id: string,
+  name: string,
+  limitAmount?: number,
+  type: PaymentMethodModel["type"] = "credit_card",
+  closingDay?: number | null,
+  dueDay?: number | null,
+): Promise<PaymentMethodModel> {
   const { data, error } = await supabase
     .from("cards")
     .update({
       name,
       type,
-      limit_amount: type === "credit_card" ? limitAmount ?? null : null,
-      closing_day: type === "credit_card" ? closingDay ?? null : null,
-      due_day: type === "credit_card" ? dueDay ?? null : null,
+      limit_amount: type === "credit_card" ? (limitAmount ?? null) : null,
+      closing_day: type === "credit_card" ? (closingDay ?? null) : null,
+      due_day: type === "credit_card" ? (dueDay ?? null) : null,
     })
     .eq("id", id)
     .select("*")
@@ -859,7 +980,11 @@ export async function deletePaymentMethod(id: string): Promise<void> {
   throwIfError(error);
 }
 
-export async function updateHouseholdSettings(householdId: string, monthlyIncome: number, partnerNames: [string, string]): Promise<HouseholdModel | null> {
+export async function updateHouseholdSettings(
+  householdId: string,
+  monthlyIncome: number,
+  partnerNames: [string, string],
+): Promise<HouseholdModel | null> {
   const { data, error } = await supabase
     .from("households")
     .update({
@@ -876,30 +1001,46 @@ export async function updateHouseholdSettings(householdId: string, monthlyIncome
 }
 
 export async function fetchGoals(householdId: string): Promise<GoalModel[]> {
-  const { data, error } = await supabase.from("goals").select("*").eq("household_id", householdId).order("created_at", { ascending: false });
+  const { data, error } = await supabase
+    .from("goals")
+    .select("*")
+    .eq("household_id", householdId)
+    .order("created_at", { ascending: false });
   throwIfError(error);
   return (data ?? []).map(mapGoalRow);
 }
 
 export async function addGoal(goal: Omit<GoalModel, "id">): Promise<GoalModel> {
-  const { data, error } = await supabase.from("goals").insert({
-    household_id: goal.householdId,
-    title: goal.title,
-    label: goal.label,
-    current_amount: goal.currentAmount,
-    target_amount: goal.targetAmount,
-  }).select("*").single();
+  const { data, error } = await supabase
+    .from("goals")
+    .insert({
+      household_id: goal.householdId,
+      title: goal.title,
+      label: goal.label,
+      current_amount: goal.currentAmount,
+      target_amount: goal.targetAmount,
+    })
+    .select("*")
+    .single();
   throwIfError(error);
   return mapGoalRow(data as GoalRow);
 }
 
-export async function updateGoal(id: string, changes: Partial<Omit<GoalModel, "id" | "householdId">>): Promise<GoalModel> {
-  const { data, error } = await supabase.from("goals").update({
-    title: changes.title,
-    label: changes.label,
-    current_amount: changes.currentAmount,
-    target_amount: changes.targetAmount,
-  }).eq("id", id).select("*").single();
+export async function updateGoal(
+  id: string,
+  changes: Partial<Omit<GoalModel, "id" | "householdId">>,
+): Promise<GoalModel> {
+  const { data, error } = await supabase
+    .from("goals")
+    .update({
+      title: changes.title,
+      label: changes.label,
+      current_amount: changes.currentAmount,
+      target_amount: changes.targetAmount,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
   throwIfError(error);
   return mapGoalRow(data as GoalRow);
 }
@@ -910,30 +1051,49 @@ export async function deleteGoal(id: string): Promise<void> {
 }
 
 export async function fetchGoalPlanItems(goalId: string): Promise<GoalPlanItemModel[]> {
-  const { data, error } = await supabase.from("goal_plan_items").select("*").eq("goal_id", goalId).order("created_at", { ascending: true });
+  const { data, error } = await supabase
+    .from("goal_plan_items")
+    .select("*")
+    .eq("goal_id", goalId)
+    .order("created_at", { ascending: true });
   throwIfError(error);
   return (data ?? []).map(mapGoalPlanItemRow);
 }
 
-export async function addGoalPlanItem(goalId: string, item: Omit<GoalPlanItemModel, "id" | "goalId">): Promise<GoalPlanItemModel> {
-  const { data, error } = await supabase.from("goal_plan_items").insert({
-    goal_id: goalId,
-    name: item.name,
-    share: item.share,
-    amount: item.amount,
-    tone: item.tone,
-  }).select("*").single();
+export async function addGoalPlanItem(
+  goalId: string,
+  item: Omit<GoalPlanItemModel, "id" | "goalId">,
+): Promise<GoalPlanItemModel> {
+  const { data, error } = await supabase
+    .from("goal_plan_items")
+    .insert({
+      goal_id: goalId,
+      name: item.name,
+      share: item.share,
+      amount: item.amount,
+      tone: item.tone,
+    })
+    .select("*")
+    .single();
   throwIfError(error);
   return mapGoalPlanItemRow(data as GoalPlanItemRow);
 }
 
-export async function updateGoalPlanItem(id: string, changes: Partial<Omit<GoalPlanItemModel, "id" | "goalId">>): Promise<GoalPlanItemModel> {
-  const { data, error } = await supabase.from("goal_plan_items").update({
-    name: changes.name,
-    share: changes.share,
-    amount: changes.amount,
-    tone: changes.tone,
-  }).eq("id", id).select("*").single();
+export async function updateGoalPlanItem(
+  id: string,
+  changes: Partial<Omit<GoalPlanItemModel, "id" | "goalId">>,
+): Promise<GoalPlanItemModel> {
+  const { data, error } = await supabase
+    .from("goal_plan_items")
+    .update({
+      name: changes.name,
+      share: changes.share,
+      amount: changes.amount,
+      tone: changes.tone,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
   throwIfError(error);
   return mapGoalPlanItemRow(data as GoalPlanItemRow);
 }
@@ -944,30 +1104,49 @@ export async function deleteGoalPlanItem(id: string): Promise<void> {
 }
 
 export async function fetchGoalProgressRows(goalId: string): Promise<GoalProgressRowModel[]> {
-  const { data, error } = await supabase.from("goal_progress_rows").select("*").eq("goal_id", goalId).order("created_at", { ascending: true });
+  const { data, error } = await supabase
+    .from("goal_progress_rows")
+    .select("*")
+    .eq("goal_id", goalId)
+    .order("created_at", { ascending: true });
   throwIfError(error);
   return (data ?? []).map(mapGoalProgressRow);
 }
 
-export async function addGoalProgressRow(goalId: string, row: Omit<GoalProgressRowModel, "id" | "goalId">): Promise<GoalProgressRowModel> {
-  const { data, error } = await supabase.from("goal_progress_rows").insert({
-    goal_id: goalId,
-    name: row.name,
-    planned: row.planned,
-    realized: row.realized,
-    status: row.status,
-  }).select("*").single();
+export async function addGoalProgressRow(
+  goalId: string,
+  row: Omit<GoalProgressRowModel, "id" | "goalId">,
+): Promise<GoalProgressRowModel> {
+  const { data, error } = await supabase
+    .from("goal_progress_rows")
+    .insert({
+      goal_id: goalId,
+      name: row.name,
+      planned: row.planned,
+      realized: row.realized,
+      status: row.status,
+    })
+    .select("*")
+    .single();
   throwIfError(error);
   return mapGoalProgressRow(data as GoalProgressRow);
 }
 
-export async function updateGoalProgressRow(id: string, changes: Partial<Omit<GoalProgressRowModel, "id" | "goalId">>): Promise<GoalProgressRowModel> {
-  const { data, error } = await supabase.from("goal_progress_rows").update({
-    name: changes.name,
-    planned: changes.planned,
-    realized: changes.realized,
-    status: changes.status,
-  }).eq("id", id).select("*").single();
+export async function updateGoalProgressRow(
+  id: string,
+  changes: Partial<Omit<GoalProgressRowModel, "id" | "goalId">>,
+): Promise<GoalProgressRowModel> {
+  const { data, error } = await supabase
+    .from("goal_progress_rows")
+    .update({
+      name: changes.name,
+      planned: changes.planned,
+      realized: changes.realized,
+      status: changes.status,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
   throwIfError(error);
   return mapGoalProgressRow(data as GoalProgressRow);
 }
@@ -977,58 +1156,82 @@ export async function deleteGoalProgressRow(id: string): Promise<void> {
   throwIfError(error);
 }
 
-export async function fetchFinancialCommitments(householdId: string): Promise<FinancialCommitmentModel[]> {
-  const { data, error } = await supabase.from("financial_commitments").select("*").eq("household_id", householdId).order("created_at", { ascending: false });
+export async function fetchFinancialCommitments(
+  householdId: string,
+): Promise<FinancialCommitmentModel[]> {
+  const { data, error } = await supabase
+    .from("financial_commitments")
+    .select("*")
+    .eq("household_id", householdId)
+    .order("created_at", { ascending: false });
   throwIfError(error);
   return (data ?? []).map(mapFinancialCommitmentRow);
 }
 
-export async function addFinancialCommitment(commitment: Omit<FinancialCommitmentModel, "id">): Promise<FinancialCommitmentModel> {
-  const { data, error } = await supabase.from("financial_commitments").insert({
-    household_id: commitment.householdId,
-    payment_method_id: commitment.paymentMethodId || null,
-    category_id: commitment.categoryId || null,
-    item_name: commitment.itemName,
-    installment_value: commitment.installmentValue,
-    current_installment: commitment.currentInstallment,
-    total_installments: commitment.totalInstallments,
-    responsible_person: commitment.responsiblePerson,
-    notes: commitment.notes,
-    started_at: commitment.startedAt,
-    status: commitment.status,
-  }).select("*").single();
+export async function addFinancialCommitment(
+  commitment: Omit<FinancialCommitmentModel, "id">,
+): Promise<FinancialCommitmentModel> {
+  const { data, error } = await supabase
+    .from("financial_commitments")
+    .insert({
+      household_id: commitment.householdId,
+      payment_method_id: commitment.paymentMethodId || null,
+      category_id: commitment.categoryId || null,
+      item_name: commitment.itemName,
+      installment_value: commitment.installmentValue,
+      current_installment: commitment.currentInstallment,
+      total_installments: commitment.totalInstallments,
+      responsible_person: commitment.responsiblePerson,
+      notes: commitment.notes,
+      started_at: commitment.startedAt,
+      status: commitment.status,
+    })
+    .select("*")
+    .single();
   if (
     error &&
     commitment.categoryId &&
     (String(error.message || "").includes("category_id") ||
       String(error.message || "").includes("schema cache"))
   ) {
-    throw new Error("Para salvar categoria em parcelamentos, rode o SQL supabase_financial_commitments_category.sql no Supabase.");
+    throw new Error(
+      "Para salvar categoria em parcelamentos, rode o SQL supabase_financial_commitments_category.sql no Supabase.",
+    );
   }
   throwIfError(error);
   return mapFinancialCommitmentRow(data as FinancialCommitmentRow);
 }
 
-export async function updateFinancialCommitment(id: string, changes: Partial<Omit<FinancialCommitmentModel, "id" | "householdId">>): Promise<FinancialCommitmentModel> {
-  const { data, error } = await supabase.from("financial_commitments").update({
-    payment_method_id: changes.paymentMethodId || null,
-    category_id: changes.categoryId || null,
-    item_name: changes.itemName,
-    installment_value: changes.installmentValue,
-    current_installment: changes.currentInstallment,
-    total_installments: changes.totalInstallments,
-    responsible_person: changes.responsiblePerson,
-    notes: changes.notes,
-    started_at: changes.startedAt,
-    status: changes.status,
-  }).eq("id", id).select("*").single();
+export async function updateFinancialCommitment(
+  id: string,
+  changes: Partial<Omit<FinancialCommitmentModel, "id" | "householdId">>,
+): Promise<FinancialCommitmentModel> {
+  const { data, error } = await supabase
+    .from("financial_commitments")
+    .update({
+      payment_method_id: changes.paymentMethodId || null,
+      category_id: changes.categoryId || null,
+      item_name: changes.itemName,
+      installment_value: changes.installmentValue,
+      current_installment: changes.currentInstallment,
+      total_installments: changes.totalInstallments,
+      responsible_person: changes.responsiblePerson,
+      notes: changes.notes,
+      started_at: changes.startedAt,
+      status: changes.status,
+    })
+    .eq("id", id)
+    .select("*")
+    .single();
   if (
     error &&
     changes.categoryId &&
     (String(error.message || "").includes("category_id") ||
       String(error.message || "").includes("schema cache"))
   ) {
-    throw new Error("Para salvar categoria em parcelamentos, rode o SQL supabase_financial_commitments_category.sql no Supabase.");
+    throw new Error(
+      "Para salvar categoria em parcelamentos, rode o SQL supabase_financial_commitments_category.sql no Supabase.",
+    );
   }
   throwIfError(error);
   return mapFinancialCommitmentRow(data as FinancialCommitmentRow);
@@ -1050,14 +1253,20 @@ export async function fetchMonthlySnapshots(householdId: string): Promise<Monthl
   return (data ?? []).map(mapMonthlySnapshotRow);
 }
 
-export async function fetchHouseholdFinanceState(householdId: string): Promise<HouseholdFinanceStateModel | null> {
+export async function fetchHouseholdFinanceState(
+  householdId: string,
+): Promise<HouseholdFinanceStateModel | null> {
   const { data, error } = await supabase
     .from("household_finance_state")
     .select("*")
     .eq("household_id", householdId)
     .maybeSingle();
   if (error) {
-    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("household_finance_state")) return null;
+    if (
+      String(error.message || "").includes("schema cache") ||
+      String(error.message || "").includes("household_finance_state")
+    )
+      return null;
     throwIfError(error);
   }
   return data ? mapHouseholdFinanceStateRow(data as HouseholdFinanceStateRow) : null;
@@ -1079,30 +1288,39 @@ export async function upsertHouseholdFinanceState(
     .select("*")
     .single();
   if (error) {
-    if (String(error.message || "").includes("schema cache") || String(error.message || "").includes("household_finance_state")) return null;
+    if (
+      String(error.message || "").includes("schema cache") ||
+      String(error.message || "").includes("household_finance_state")
+    )
+      return null;
     throwIfError(error);
   }
   return data ? mapHouseholdFinanceStateRow(data as HouseholdFinanceStateRow) : null;
 }
 
-export async function addMonthlySnapshot(snapshot: MonthlySnapshotInput): Promise<MonthlySnapshotModel> {
+export async function addMonthlySnapshot(
+  snapshot: MonthlySnapshotInput,
+): Promise<MonthlySnapshotModel> {
   const { data, error } = await supabase
     .from("monthly_snapshots")
-    .upsert({
-      household_id: snapshot.householdId,
-      month: snapshot.month,
-      year: snapshot.year,
-      monthly_income: snapshot.monthlyIncome,
-      total_expenses: snapshot.totalExpenses,
-      fixed_expenses_total: snapshot.fixedExpensesTotal,
-      installment_expenses_total: snapshot.installmentExpensesTotal,
-      remaining_balance: snapshot.remainingBalance,
-      category_totals: snapshot.categoryTotals,
-      card_totals: snapshot.cardTotals,
-      goal_progress: snapshot.goalProgress,
-      financial_health: snapshot.financialHealth,
-      closed_at: snapshot.closedAt ?? new Date().toISOString(),
-    }, { onConflict: "household_id,month,year" })
+    .upsert(
+      {
+        household_id: snapshot.householdId,
+        month: snapshot.month,
+        year: snapshot.year,
+        monthly_income: snapshot.monthlyIncome,
+        total_expenses: snapshot.totalExpenses,
+        fixed_expenses_total: snapshot.fixedExpensesTotal,
+        installment_expenses_total: snapshot.installmentExpensesTotal,
+        remaining_balance: snapshot.remainingBalance,
+        category_totals: snapshot.categoryTotals,
+        card_totals: snapshot.cardTotals,
+        goal_progress: snapshot.goalProgress,
+        financial_health: snapshot.financialHealth,
+        closed_at: snapshot.closedAt ?? new Date().toISOString(),
+      },
+      { onConflict: "household_id,month,year" },
+    )
     .select("*")
     .single();
   throwIfError(error);

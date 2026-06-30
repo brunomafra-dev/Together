@@ -36,13 +36,13 @@ O foco é uma experiência clara no celular, com leitura rápida do estado finan
 
 ## Stack utilizada
 
-| Camada | Tecnologias |
-| --- | --- |
-| Frontend | React, Vite, TypeScript, Tailwind CSS |
-| UI | Lucide React, Sonner, componentes responsivos |
-| Dados | Supabase, SQLs versionados e cache local |
-| Estado | Contextos de autenticação e finanças |
-| Relatórios | Exportação CSV e snapshots mensais |
+| Camada     | Tecnologias                                   |
+| ---------- | --------------------------------------------- |
+| Frontend   | React, Vite, TypeScript, Tailwind CSS         |
+| UI         | Lucide React, Sonner, componentes responsivos |
+| Dados      | Supabase, SQLs versionados e cache local      |
+| Estado     | Contextos de autenticação e finanças          |
+| Relatórios | Exportação CSV e snapshots mensais            |
 
 ## Arquitetura resumida
 
@@ -64,12 +64,12 @@ supabase_*_sql
 
 ## Screenshots
 
-| Tela | O que demonstrar |
-| --- | --- |
-| Visão do mês | Renda, gastos, saldo livre e resumo financeiro |
-| Gastos e categorias | Registro, edição, filtros e exportação CSV |
+| Tela                 | O que demonstrar                                |
+| -------------------- | ----------------------------------------------- |
+| Visão do mês         | Renda, gastos, saldo livre e resumo financeiro  |
+| Gastos e categorias  | Registro, edição, filtros e exportação CSV      |
 | Compromissos futuros | Parcelas, assinaturas, contas fixas e projeções |
-| Metas e fechamento | Metas, histórico mensal e fechamento/reabertura |
+| Metas e fechamento   | Metas, histórico mensal e fechamento/reabertura |
 
 > As capturas devem ser adicionadas em `docs/screenshots/` quando houver uma rodada visual final da demo pública.
 
@@ -124,6 +124,25 @@ Valide o build:
 npm run build
 ```
 
+Valide a qualidade completa:
+
+```bash
+npm run check
+npm run format:check
+```
+
+Scripts disponíveis:
+
+| Script                 | Descrição                                  |
+| ---------------------- | ------------------------------------------ |
+| `npm run dev`          | Inicia o ambiente local com Vite.          |
+| `npm run lint`         | Executa ESLint.                            |
+| `npm run typecheck`    | Executa TypeScript sem emitir arquivos.    |
+| `npm run build`        | Gera o build de produção.                  |
+| `npm run check`        | Roda lint, typecheck e build em sequência. |
+| `npm run format`       | Aplica Prettier.                           |
+| `npm run format:check` | Verifica formatação sem alterar arquivos.  |
+
 Para configurar um banco novo, rode primeiro:
 
 ```text
@@ -131,6 +150,14 @@ supabase_setup.sql
 ```
 
 Depois aplique os SQLs complementares conforme necessário.
+
+## Engenharia e manutenção
+
+- A auditoria técnica está em [`docs/ENGINEERING_AUDIT.md`](docs/ENGINEERING_AUDIT.md).
+- O CI executa instalação, lint, typecheck e build no GitHub Actions.
+- Dependabot acompanha dependências npm e GitHub Actions.
+- CodeQL analisa JavaScript e TypeScript.
+- Não commite `.env`, service role keys ou credenciais privadas.
 
 ## Link para Demo
 

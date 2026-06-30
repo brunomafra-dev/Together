@@ -1,6 +1,6 @@
-@import './fonts.css';
-@import './tailwind.css';
-@import './theme.css';
+@import "./fonts.css";
+@import "./tailwind.css";
+@import "./theme.css";
 
 .dark {
   color-scheme: dark;
@@ -17,8 +17,7 @@
 
 .dark body,
 .dark .bg-stone-50 {
-  background:
-    linear-gradient(180deg, #181411 0%, #100e0c 46%, #14110f 100%);
+  background: linear-gradient(180deg, #181411 0%, #100e0c 46%, #14110f 100%);
   color: var(--together-text);
 }
 
@@ -46,7 +45,9 @@
 
 .dark .via-emerald-50\/40 {
   --tw-gradient-to: rgba(6, 78, 59, 0) var(--tw-gradient-to-position);
-  --tw-gradient-stops: var(--tw-gradient-from), rgba(6, 78, 59, 0.22) var(--tw-gradient-via-position), var(--tw-gradient-to);
+  --tw-gradient-stops:
+    var(--tw-gradient-from), rgba(6, 78, 59, 0.22) var(--tw-gradient-via-position),
+    var(--tw-gradient-to);
 }
 
 .dark .to-emerald-50,
@@ -74,8 +75,7 @@
 .dark button.bg-stone-900:disabled,
 .dark button.bg-emerald-600:disabled {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.01)),
-    #2a2521;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.01)), #2a2521;
   color: #8f8780;
   border: 1px solid rgba(168, 162, 158, 0.16);
   opacity: 1;
@@ -126,8 +126,7 @@
 .dark [class*="fixed"] button.border-stone-200,
 .dark [class*="modal"] button.border-stone-200 {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025)),
-    #2b2622;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.025)), #2b2622;
   border-color: rgba(245, 245, 244, 0.34);
   color: #fffaf4;
   box-shadow:
@@ -139,23 +138,20 @@
 .dark [class*="fixed"] button.border-stone-200:hover,
 .dark [class*="modal"] button.border-stone-200:hover {
   background:
-    linear-gradient(180deg, rgba(110, 231, 183, 0.12), rgba(255, 255, 255, 0.035)),
-    #332d28;
+    linear-gradient(180deg, rgba(110, 231, 183, 0.12), rgba(255, 255, 255, 0.035)), #332d28;
   border-color: rgba(110, 231, 183, 0.58);
 }
 
 .dark button[class*="border-stone-200"] {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025)),
-    #332d28;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.09), rgba(255, 255, 255, 0.025)), #332d28;
   border-color: rgba(250, 250, 249, 0.42);
   color: #fffaf4;
 }
 
 .dark button[class*="border-stone-200"]:hover {
   background:
-    linear-gradient(180deg, rgba(110, 231, 183, 0.13), rgba(255, 255, 255, 0.04)),
-    #3b342e;
+    linear-gradient(180deg, rgba(110, 231, 183, 0.13), rgba(255, 255, 255, 0.04)), #3b342e;
   border-color: rgba(110, 231, 183, 0.62);
   color: #ffffff;
 }
@@ -163,8 +159,7 @@
 .dark button:disabled[class*="bg-stone-900"],
 .dark button:disabled[class*="bg-emerald-600"] {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015)),
-    #302a25;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015)), #302a25;
   border: 1px solid rgba(250, 250, 249, 0.16);
   color: #8f8780;
   opacity: 1;
@@ -202,9 +197,7 @@
 .dark input,
 .dark select,
 .dark textarea {
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)),
-    #151210;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), rgba(255, 255, 255, 0)), #151210;
   border-color: rgba(168, 162, 158, 0.22);
   color: var(--together-text);
 }
@@ -248,9 +241,7 @@
 }
 
 .dark .bg-rose-50 {
-  background:
-    linear-gradient(135deg, rgba(68, 25, 25, 0.76), rgba(43, 30, 24, 0.92)),
-    #1c1917;
+  background: linear-gradient(135deg, rgba(68, 25, 25, 0.76), rgba(43, 30, 24, 0.92)), #1c1917;
 }
 
 .dark .border-rose-100,
@@ -412,15 +403,13 @@
 }
 
 .dark nav.sticky {
-  background:
-    linear-gradient(180deg, rgba(29, 25, 22, 0.92), rgba(20, 17, 15, 0.86));
+  background: linear-gradient(180deg, rgba(29, 25, 22, 0.92), rgba(20, 17, 15, 0.86));
   border-color: var(--together-border);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
 }
 
 .dark nav.fixed {
-  background:
-    linear-gradient(180deg, rgba(38, 33, 29, 0.96), rgba(20, 17, 15, 0.98));
+  background: linear-gradient(180deg, rgba(38, 33, 29, 0.96), rgba(20, 17, 15, 0.98));
   border-color: rgba(110, 231, 183, 0.16);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.04),
@@ -432,8 +421,7 @@
 }
 
 .dark nav.fixed a.bg-emerald-50 {
-  background:
-    linear-gradient(180deg, rgba(110, 231, 183, 0.2), rgba(16, 185, 129, 0.1));
+  background: linear-gradient(180deg, rgba(110, 231, 183, 0.2), rgba(16, 185, 129, 0.1));
   color: #a7f3d0;
   box-shadow: inset 0 0 0 1px rgba(110, 231, 183, 0.22);
 }
@@ -444,8 +432,7 @@
 }
 
 .dark .sticky.bottom-0 {
-  background:
-    linear-gradient(180deg, rgba(29, 25, 22, 0.86), rgba(20, 17, 15, 0.98));
+  background: linear-gradient(180deg, rgba(29, 25, 22, 0.86), rgba(20, 17, 15, 0.98));
   border-color: rgba(250, 250, 249, 0.12);
   box-shadow: 0 -18px 38px rgba(0, 0, 0, 0.34);
 }
@@ -470,8 +457,7 @@
 .dark button:disabled[class*="bg-stone-900"],
 .dark button:disabled[class*="bg-emerald-600"] {
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015)),
-    #302a25 !important;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.015)), #302a25 !important;
   border: 1px solid rgba(250, 250, 249, 0.16) !important;
   color: #8f8780 !important;
   opacity: 1 !important;

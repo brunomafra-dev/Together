@@ -1,9 +1,30 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { useRef } from "react";
-import { endOfMonth, format, getDate, getDaysInMonth, isWithinInterval, parseISO, startOfMonth } from "date-fns";
+import {
+  endOfMonth,
+  format,
+  getDate,
+  getDaysInMonth,
+  isWithinInterval,
+  parseISO,
+  startOfMonth,
+} from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ArrowRight, BarChart3, CalendarCheck, Clock3, Plus, Sparkles, Target, Trash2, TrendingDown, Users, Wallet, X } from "lucide-react";
+import {
+  ArrowRight,
+  BarChart3,
+  CalendarCheck,
+  Clock3,
+  Plus,
+  Sparkles,
+  Target,
+  Trash2,
+  TrendingDown,
+  Users,
+  Wallet,
+  X,
+} from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
@@ -16,7 +37,9 @@ import { formatBRL, MonthlySnapshotModel, useFinance } from "../context/FinanceC
 import * as financeService from "../../services/financeService";
 
 const nextCycle = (cycle: { month: number; year: number }) =>
-  cycle.month === 12 ? { month: 1, year: cycle.year + 1 } : { month: cycle.month + 1, year: cycle.year };
+  cycle.month === 12
+    ? { month: 1, year: cycle.year + 1 }
+    : { month: cycle.month + 1, year: cycle.year };
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -42,7 +65,9 @@ export function Dashboard() {
   const [showAddIncome, setShowAddIncome] = useState(false);
   const [showCloseMonth, setShowCloseMonth] = useState(false);
   const [closedSnapshot, setClosedSnapshot] = useState<MonthlySnapshotModel | null>(null);
-  const [openDetail, setOpenDetail] = useState<"income" | "commitments" | "expenses" | "goal" | "people" | "categories" | null>(null);
+  const [openDetail, setOpenDetail] = useState<
+    "income" | "commitments" | "expenses" | "goal" | "people" | "categories" | null
+  >(null);
   const detailPanelRef = useRef<HTMLDivElement | null>(null);
   const [goalSummary, setGoalSummary] = useState<{
     title: string;
@@ -113,7 +138,7 @@ export function Dashboard() {
     const monthIncomeEntries = incomeEntries.filter((entry) =>
       isWithinInterval(parseISO(entry.date), currentMonth),
     );
-    const fixedExpenseAmount = (expense: typeof fixedExpenses[number]) => {
+    const fixedExpenseAmount = (expense: (typeof fixedExpenses)[number]) => {
       const monthlyValue = fixedExpenseMonthlyValues.find(
         (value) =>
           value.fixedExpenseId === expense.id &&
@@ -122,7 +147,7 @@ export function Dashboard() {
       );
       return monthlyValue?.status === "confirmed" && monthlyValue.actualAmount !== null
         ? monthlyValue.actualAmount
-        : monthlyValue?.estimatedAmount ?? expense.amount;
+        : (monthlyValue?.estimatedAmount ?? expense.amount);
     };
 
     const fixedCategoryExpenses = fixedExpenses.map((expense) => ({
@@ -153,10 +178,13 @@ export function Dashboard() {
     const income = baseIncome + extraIncome;
     const available = income - totalSpent;
 
-    const spendByPerson = monthExpenses.reduce((acc, expense) => {
-      acc[expense.paidBy] = (acc[expense.paidBy] || 0) + expense.amount;
-      return acc;
-    }, {} as Record<string, number>);
+    const spendByPerson = monthExpenses.reduce(
+      (acc, expense) => {
+        acc[expense.paidBy] = (acc[expense.paidBy] || 0) + expense.amount;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     const peopleTotals = Object.entries(spendByPerson)
       .map(([name, amount]) => ({ name, amount }))
@@ -197,7 +225,23 @@ export function Dashboard() {
       projectedLeftover,
       dailyPace,
     };
-  }, [activeCycle.month, activeCycle.year, categories, currentMonth, cycleMonthDate, expenses, fixedExpenseMonthlyValues, fixedExpenses, financialCommitments, household?.partnerNames, incomeEntries, paceReferenceDate, paymentMethods, settings.monthlyIncome, settings.partnerNames]);
+  }, [
+    activeCycle.month,
+    activeCycle.year,
+    categories,
+    currentMonth,
+    cycleMonthDate,
+    expenses,
+    fixedExpenseMonthlyValues,
+    fixedExpenses,
+    financialCommitments,
+    household?.partnerNames,
+    incomeEntries,
+    paceReferenceDate,
+    paymentMethods,
+    settings.monthlyIncome,
+    settings.partnerNames,
+  ]);
 
   const monthLabel = format(cycleMonthDate, "MMMM 'de' yyyy", { locale: ptBR });
   const activeMonthKey = `${activeCycle.year}-${String(activeCycle.month).padStart(2, "0")}`;
@@ -220,11 +264,14 @@ export function Dashboard() {
       ? `Nesse ritmo, a previsão é fechar o mês com ${formatBRL(data.projectedLeftover)} livres.`
       : `Atenção: nesse ritmo, vocês podem ultrapassar em ${formatBRL(Math.abs(data.projectedLeftover))} até o fim do mês.`;
 
-  const hasVisibleData = Boolean(household) || expenses.length > 0 || categories.length > 0 || paymentMethods.length > 0;
+  const hasVisibleData =
+    Boolean(household) || expenses.length > 0 || categories.length > 0 || paymentMethods.length > 0;
   const goalPercent = goalSummary?.targetAmount
     ? Math.min(Math.round((goalSummary.currentAmount / goalSummary.targetAmount) * 100), 100)
     : 0;
-  const goalRemaining = goalSummary ? Math.max(goalSummary.targetAmount - goalSummary.currentAmount, 0) : 0;
+  const goalRemaining = goalSummary
+    ? Math.max(goalSummary.targetAmount - goalSummary.currentAmount, 0)
+    : 0;
   const budgetUsage = data.income > 0 ? Math.round((data.totalSpent / data.income) * 100) : 0;
   const topCategory = data.categoryTotals[0];
   const peopleSummary =
@@ -262,7 +309,9 @@ export function Dashboard() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wider text-stone-500">{monthLabel}</p>
-            <h1 className="mt-1 break-words text-2xl font-semibold text-stone-900">Hoje no Together</h1>
+            <h1 className="mt-1 break-words text-2xl font-semibold text-stone-900">
+              Hoje no Together
+            </h1>
           </div>
           <div className="hidden">
             <button
@@ -290,23 +339,46 @@ export function Dashboard() {
         </div>
 
         <div className="grid grid-cols-3 gap-3">
-          <QuickActionCard icon={Plus} label="Novo gasto" helper="Registre um novo gasto" onClick={() => setShowAddExpense(true)} tone="emerald" />
-          <QuickActionCard icon={Plus} label="Adicionar renda" helper="Adicione uma nova renda" onClick={() => setShowAddIncome(true)} tone="emerald" />
-          <QuickActionCard icon={CalendarCheck} label="Fechar mês" helper="Finalize e veja o resumo do mês" onClick={() => setShowCloseMonth(true)} tone="stone" />
+          <QuickActionCard
+            icon={Plus}
+            label="Novo gasto"
+            helper="Registre um novo gasto"
+            onClick={() => setShowAddExpense(true)}
+            tone="emerald"
+          />
+          <QuickActionCard
+            icon={Plus}
+            label="Adicionar renda"
+            helper="Adicione uma nova renda"
+            onClick={() => setShowAddIncome(true)}
+            tone="emerald"
+          />
+          <QuickActionCard
+            icon={CalendarCheck}
+            label="Fechar mês"
+            helper="Finalize e veja o resumo do mês"
+            onClick={() => setShowCloseMonth(true)}
+            tone="stone"
+          />
         </div>
 
         <div className="rounded-[1.75rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4 shadow-sm sm:rounded-3xl sm:p-8">
           <div className="flex items-start justify-between gap-3 sm:block">
             <div className="min-w-0">
               <p className="mb-1 text-xs text-stone-600 sm:mb-2 sm:text-sm">Livre para gastar</p>
-              <h2 className={`break-words text-3xl font-semibold leading-tight sm:text-5xl lg:text-6xl ${availableColor}`}>{formatBRL(data.available)}</h2>
+              <h2
+                className={`break-words text-3xl font-semibold leading-tight sm:text-5xl lg:text-6xl ${availableColor}`}
+              >
+                {formatBRL(data.available)}
+              </h2>
             </div>
             <span className="shrink-0 rounded-full border border-white/80 bg-white/80 px-3 py-1 text-sm font-medium text-stone-700 shadow-sm sm:hidden">
               {budgetUsage}%
             </span>
           </div>
           <p className="mt-3 hidden text-sm leading-6 text-stone-500 sm:block">
-            Calculado com renda planejada, rendas extras do mês, contas fixas, compromissos e gastos reais.
+            Calculado com renda planejada, rendas extras do mês, contas fixas, compromissos e gastos
+            reais.
           </p>
 
           <div className="mt-3 sm:mt-6">
@@ -315,14 +387,33 @@ export function Dashboard() {
               <span>{budgetUsage}%</span>
             </div>
             <div className="flex h-2 overflow-hidden rounded-full bg-stone-100 sm:h-2.5">
-              <div className="bg-stone-400" style={{ width: `${data.income > 0 ? (data.fixedTotal / data.income) * 100 : 0}%` }} />
-              <div className="bg-indigo-400" style={{ width: `${data.income > 0 ? (data.installmentsTotal / data.income) * 100 : 0}%` }} />
-              <div className="bg-emerald-400" style={{ width: `${data.income > 0 ? (data.variableSpent / data.income) * 100 : 0}%` }} />
+              <div
+                className="bg-stone-400"
+                style={{ width: `${data.income > 0 ? (data.fixedTotal / data.income) * 100 : 0}%` }}
+              />
+              <div
+                className="bg-indigo-400"
+                style={{
+                  width: `${data.income > 0 ? (data.installmentsTotal / data.income) * 100 : 0}%`,
+                }}
+              />
+              <div
+                className="bg-emerald-400"
+                style={{
+                  width: `${data.income > 0 ? (data.variableSpent / data.income) * 100 : 0}%`,
+                }}
+              />
             </div>
             <div className="mt-3 hidden flex-wrap gap-4 text-xs text-stone-600 sm:flex">
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-stone-400" /> Fixas</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-indigo-400" /> Compromissos</span>
-              <span className="flex items-center gap-1.5"><span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" /> Variaveis</span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm bg-stone-400" /> Fixas
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm bg-indigo-400" /> Compromissos
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-sm bg-emerald-400" /> Variaveis
+              </span>
             </div>
           </div>
 
@@ -416,23 +507,40 @@ export function Dashboard() {
         </div>
 
         {openDetail ? (
-          <div ref={detailPanelRef} className="scroll-mt-24 rounded-[1.5rem] border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-950 sm:p-5">
+          <div
+            ref={detailPanelRef}
+            className="scroll-mt-24 rounded-[1.5rem] border border-stone-200 bg-white p-4 shadow-sm dark:border-stone-800 dark:bg-stone-950 sm:p-5"
+          >
             {openDetail === "income" ? (
-              <DetailPanel title="Rendas do mês" icon={Wallet} tone="blue" actionLabel="Adicionar renda" onAction={() => setShowAddIncome(true)}>
+              <DetailPanel
+                title="Rendas do mês"
+                icon={Wallet}
+                tone="blue"
+                actionLabel="Adicionar renda"
+                onAction={() => setShowAddIncome(true)}
+              >
                 {data.monthIncomeEntries.length === 0 ? (
                   <p className="text-sm text-stone-500">Nenhuma renda extra lançada neste mês.</p>
                 ) : (
                   <div className="space-y-2">
                     {data.monthIncomeEntries.map((entry) => (
-                      <div key={entry.id} className="flex flex-col gap-3 rounded-xl border border-stone-100 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div
+                        key={entry.id}
+                        className="flex flex-col gap-3 rounded-xl border border-stone-100 bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between"
+                      >
                         <div className="min-w-0">
-                          <p className="break-words text-sm font-medium text-stone-900">{entry.description || "Renda"}</p>
+                          <p className="break-words text-sm font-medium text-stone-900">
+                            {entry.description || "Renda"}
+                          </p>
                           <p className="break-words text-xs text-stone-500">
-                            {format(parseISO(entry.date), "dd 'de' MMM", { locale: ptBR })} · {entry.sourceType} {entry.receivedBy ? `· ${entry.receivedBy}` : ""}
+                            {format(parseISO(entry.date), "dd 'de' MMM", { locale: ptBR })} ·{" "}
+                            {entry.sourceType} {entry.receivedBy ? `· ${entry.receivedBy}` : ""}
                           </p>
                         </div>
                         <div className="flex items-center justify-between gap-3 sm:justify-end">
-                          <span className="font-semibold text-emerald-700">{formatBRL(entry.amount)}</span>
+                          <span className="font-semibold text-emerald-700">
+                            {formatBRL(entry.amount)}
+                          </span>
                           <button
                             type="button"
                             onClick={async () => {
@@ -440,7 +548,9 @@ export function Dashboard() {
                                 await deleteIncomeEntry(entry.id);
                                 toast.success("Renda removida.");
                               } catch (err) {
-                                toast.error((err as Error)?.message || "Não foi possível remover a renda.");
+                                toast.error(
+                                  (err as Error)?.message || "Não foi possível remover a renda.",
+                                );
                               }
                             }}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
@@ -457,7 +567,13 @@ export function Dashboard() {
             ) : null}
 
             {openDetail === "commitments" ? (
-              <DetailPanel title="Comprometimento" icon={TrendingDown} tone="indigo" actionLabel="Ver parcelas" onAction={() => navigate("/installments")}>
+              <DetailPanel
+                title="Comprometimento"
+                icon={TrendingDown}
+                tone="indigo"
+                actionLabel="Ver parcelas"
+                onAction={() => navigate("/installments")}
+              >
                 <div className="grid gap-3 sm:grid-cols-2">
                   <MiniMetric title="Contas fixas" value={formatBRL(data.fixedTotal)} />
                   <MiniMetric title="Compromissos" value={formatBRL(data.installmentsTotal)} />
@@ -466,22 +582,36 @@ export function Dashboard() {
             ) : null}
 
             {openDetail === "goal" ? (
-              <DetailPanel title="Meta principal" icon={Target} tone="rose" actionLabel="Abrir metas" onAction={() => navigate("/goals")}>
+              <DetailPanel
+                title="Meta principal"
+                icon={Target}
+                tone="rose"
+                actionLabel="Abrir metas"
+                onAction={() => navigate("/goals")}
+              >
                 {goalSummary ? (
                   <div className="space-y-4">
                     <div>
-                      <p className="break-words text-base font-semibold text-stone-900">{goalSummary.title}</p>
+                      <p className="break-words text-base font-semibold text-stone-900">
+                        {goalSummary.title}
+                      </p>
                       <p className="mt-1 text-xs text-stone-500">{goalSummary.label}</p>
                     </div>
                     <div>
                       <div className="flex items-center justify-between gap-3 text-sm">
                         <span className="font-medium text-stone-900">
-                          {formatBRL(goalSummary.currentAmount)} de {formatBRL(goalSummary.targetAmount)}
+                          {formatBRL(goalSummary.currentAmount)} de{" "}
+                          {formatBRL(goalSummary.targetAmount)}
                         </span>
-                        <span className="text-xs text-stone-500">Faltam {formatBRL(goalRemaining)}</span>
+                        <span className="text-xs text-stone-500">
+                          Faltam {formatBRL(goalRemaining)}
+                        </span>
                       </div>
                       <div className="mt-2 h-2 rounded-full bg-stone-100">
-                        <div className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500" style={{ width: `${goalPercent}%` }} />
+                        <div
+                          className="h-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500"
+                          style={{ width: `${goalPercent}%` }}
+                        />
                       </div>
                     </div>
                     <Link
@@ -510,11 +640,19 @@ export function Dashboard() {
                 {data.peopleTotals.length > 0 ? (
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     {data.peopleTotals.slice(0, 2).map((person, index) => (
-                      <PartnerCard key={person.name} name={person.name} amount={person.amount} total={data.variableSpent} tone={index % 2 === 0 ? "emerald" : "indigo"} />
+                      <PartnerCard
+                        key={person.name}
+                        name={person.name}
+                        amount={person.amount}
+                        total={data.variableSpent}
+                        tone={index % 2 === 0 ? "emerald" : "indigo"}
+                      />
                     ))}
                   </div>
                 ) : (
-                  <p className="text-sm text-stone-500">Nenhum gasto real encontrado para mostrar este card.</p>
+                  <p className="text-sm text-stone-500">
+                    Nenhum gasto real encontrado para mostrar este card.
+                  </p>
                 )}
               </DetailPanel>
             ) : null}
@@ -591,12 +729,19 @@ function PartnerCard({
   return (
     <div className={`${toneMap[tone].bg} rounded-xl p-4`}>
       <div className="mb-2 flex items-center justify-between gap-2">
-        <p className="min-w-0 break-words text-sm font-medium text-stone-800 dark:text-stone-100">{name}</p>
+        <p className="min-w-0 break-words text-sm font-medium text-stone-800 dark:text-stone-100">
+          {name}
+        </p>
         <p className="text-xs text-stone-500 dark:text-stone-300">{pct.toFixed(0)}%</p>
       </div>
-      <p className="mb-3 break-words text-xl font-semibold text-stone-900 dark:text-white sm:text-2xl">{formatBRL(amount)}</p>
+      <p className="mb-3 break-words text-xl font-semibold text-stone-900 dark:text-white sm:text-2xl">
+        {formatBRL(amount)}
+      </p>
       <div className="h-1.5 overflow-hidden rounded-full bg-white/60">
-        <div className={`h-full rounded-full transition-all ${toneMap[tone].bar}`} style={{ width: `${pct}%` }} />
+        <div
+          className={`h-full rounded-full transition-all ${toneMap[tone].bar}`}
+          style={{ width: `${pct}%` }}
+        />
       </div>
     </div>
   );
@@ -642,8 +787,12 @@ function QuickActionCard({
       <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-stone-100 bg-white shadow-[0_10px_24px_rgba(28,25,23,0.08)] dark:border-white/10 dark:bg-white/10">
         <Icon className={`h-8 w-8 ${toneMap[tone].icon} dark:text-stone-100`} strokeWidth={1.8} />
       </span>
-      <span className="block min-h-[2.5rem] text-[1.05rem] font-semibold leading-tight">{label}</span>
-      <span className={`mt-2 block text-[0.95rem] leading-snug ${toneMap[tone].helper}`}>{helper}</span>
+      <span className="block min-h-[2.5rem] text-[1.05rem] font-semibold leading-tight">
+        {label}
+      </span>
+      <span className={`mt-2 block text-[0.95rem] leading-snug ${toneMap[tone].helper}`}>
+        {helper}
+      </span>
     </button>
   );
 }
@@ -668,12 +817,16 @@ function SummaryShortcutCard({
   onClick: () => void;
 }) {
   const toneMap = {
-    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700 dark:!border-emerald-500/40 dark:!bg-emerald-950/70 dark:!text-emerald-100",
-    indigo: "border-indigo-100 bg-indigo-50 text-indigo-700 dark:!border-indigo-500/40 dark:!bg-indigo-950/70 dark:!text-indigo-100",
-    amber: "border-amber-100 bg-amber-50 text-amber-700 dark:!border-amber-500/40 dark:!bg-amber-950/70 dark:!text-amber-100",
+    emerald:
+      "border-emerald-100 bg-emerald-50 text-emerald-700 dark:!border-emerald-500/40 dark:!bg-emerald-950/70 dark:!text-emerald-100",
+    indigo:
+      "border-indigo-100 bg-indigo-50 text-indigo-700 dark:!border-indigo-500/40 dark:!bg-indigo-950/70 dark:!text-indigo-100",
+    amber:
+      "border-amber-100 bg-amber-50 text-amber-700 dark:!border-amber-500/40 dark:!bg-amber-950/70 dark:!text-amber-100",
     blue: "border-sky-100 bg-sky-50 text-sky-700 dark:!border-sky-500/40 dark:!bg-sky-950/70 dark:!text-sky-100",
     rose: "border-rose-100 bg-rose-50 text-rose-700 dark:!border-rose-500/40 dark:!bg-rose-950/70 dark:!text-rose-100",
-    yellow: "border-yellow-100 bg-yellow-50 text-yellow-700 dark:!border-yellow-500/40 dark:!bg-yellow-950/70 dark:!text-yellow-100",
+    yellow:
+      "border-yellow-100 bg-yellow-50 text-yellow-700 dark:!border-yellow-500/40 dark:!bg-yellow-950/70 dark:!text-yellow-100",
     teal: "border-teal-100 bg-teal-50 text-teal-700 dark:!border-teal-500/40 dark:!bg-teal-950/70 dark:!text-teal-100",
     pink: "border-pink-100 bg-pink-50 text-pink-700 dark:!border-pink-500/40 dark:!bg-pink-950/70 dark:!text-pink-100",
   } as const;
@@ -687,15 +840,23 @@ function SummaryShortcutCard({
       <span className="flex items-start justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
           <Icon className="h-5 w-5 shrink-0 dark:text-current" />
-          <span className="break-words text-sm font-medium leading-tight dark:!text-current">{title}</span>
+          <span className="break-words text-sm font-medium leading-tight dark:!text-current">
+            {title}
+          </span>
         </span>
         {badge ? (
-          <span className="shrink-0 rounded-full bg-white/75 px-2 py-0.5 text-xs font-semibold text-stone-700 shadow-sm dark:bg-white/10 dark:text-stone-100">{badge}</span>
+          <span className="shrink-0 rounded-full bg-white/75 px-2 py-0.5 text-xs font-semibold text-stone-700 shadow-sm dark:bg-white/10 dark:text-stone-100">
+            {badge}
+          </span>
         ) : null}
       </span>
       <span>
-        <span className="line-clamp-2 block break-words text-xl font-semibold leading-tight text-stone-950 dark:text-white">{value}</span>
-        <span className="mt-2 line-clamp-2 block break-words text-xs leading-snug text-stone-600 dark:text-stone-300">{detail}</span>
+        <span className="line-clamp-2 block break-words text-xl font-semibold leading-tight text-stone-950 dark:text-white">
+          {value}
+        </span>
+        <span className="mt-2 line-clamp-2 block break-words text-xs leading-snug text-stone-600 dark:text-stone-300">
+          {detail}
+        </span>
       </span>
       <span className="mt-3 inline-flex items-center gap-2 text-sm font-medium dark:!text-current">
         Ver detalhes
@@ -735,7 +896,9 @@ function DetailPanel({
     <div className="space-y-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${toneMap[tone]}`}>
+          <span
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${toneMap[tone]}`}
+          >
             <Icon className="h-5 w-5" />
           </span>
           <h2 className="break-words text-lg font-semibold text-stone-950">{title}</h2>
@@ -816,7 +979,10 @@ function AddIncomeEntryModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-stone-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-stone-900/40 p-0 backdrop-blur-sm sm:items-center sm:p-4"
+      onClick={onClose}
+    >
       <form
         onSubmit={(event) => void handleSubmit(event)}
         className="max-h-[100dvh] w-full max-w-lg overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-h-[calc(100vh-2rem)] sm:rounded-3xl sm:p-6"
@@ -825,16 +991,25 @@ function AddIncomeEntryModal({
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold text-stone-900">Adicionar renda</h2>
-            <p className="mt-1 text-sm text-stone-500">Registre renda variável, extra, comissão, freela ou reembolso.</p>
+            <p className="mt-1 text-sm text-stone-500">
+              Registre renda variável, extra, comissão, freela ou reembolso.
+            </p>
           </div>
-          <button type="button" onClick={onClose} disabled={saving} className="text-stone-400 transition-colors hover:text-stone-600 disabled:opacity-50">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="text-stone-400 transition-colors hover:text-stone-600 disabled:opacity-50"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <div className="space-y-4">
           <div>
-            <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">Valor</label>
+            <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+              Valor
+            </label>
             <input
               type="text"
               inputMode="decimal"
@@ -845,7 +1020,9 @@ function AddIncomeEntryModal({
             />
           </div>
           <div>
-            <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">Descrição</label>
+            <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+              Descrição
+            </label>
             <input
               type="text"
               value={description}
@@ -856,7 +1033,9 @@ function AddIncomeEntryModal({
           </div>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">Tipo</label>
+              <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+                Tipo
+              </label>
               <select
                 value={sourceType}
                 onChange={(event) => setSourceType(event.target.value)}
@@ -871,7 +1050,9 @@ function AddIncomeEntryModal({
               </select>
             </div>
             <div>
-              <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">Data</label>
+              <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+                Data
+              </label>
               <input
                 type="date"
                 value={date}
@@ -881,7 +1062,9 @@ function AddIncomeEntryModal({
             </div>
           </div>
           <div>
-            <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">Quem recebeu</label>
+            <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+              Quem recebeu
+            </label>
             <select
               value={receivedBy}
               onChange={(event) => setReceivedBy(event.target.value)}
@@ -889,17 +1072,28 @@ function AddIncomeEntryModal({
             >
               {people.length === 0 && <option value="">Casa</option>}
               {people.map((name) => (
-                <option key={name} value={name}>{name}</option>
+                <option key={name} value={name}>
+                  {name}
+                </option>
               ))}
             </select>
           </div>
         </div>
 
         <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-          <button type="button" onClick={onClose} disabled={saving} className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50"
+          >
             Cancelar
           </button>
-          <button type="submit" disabled={saving} className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+          <button
+            type="submit"
+            disabled={saving}
+            className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+          >
             {saving ? "Salvando..." : "Adicionar renda"}
           </button>
         </div>
@@ -964,7 +1158,15 @@ function CloseMonthModal({
   };
 
   const nextMonthLabel = closedSnapshot
-    ? format(new Date(nextCycle({ month: closedSnapshot.month, year: closedSnapshot.year }).year, nextCycle({ month: closedSnapshot.month, year: closedSnapshot.year }).month - 1, 1), "MMMM 'de' yyyy", { locale: ptBR })
+    ? format(
+        new Date(
+          nextCycle({ month: closedSnapshot.month, year: closedSnapshot.year }).year,
+          nextCycle({ month: closedSnapshot.month, year: closedSnapshot.year }).month - 1,
+          1,
+        ),
+        "MMMM 'de' yyyy",
+        { locale: ptBR },
+      )
     : "";
 
   return (
@@ -974,15 +1176,26 @@ function CloseMonthModal({
         if (!isSaving) onClose();
       }}
     >
-      <div className="max-h-[100dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-h-[calc(100vh-2rem)] sm:rounded-3xl sm:p-6" onClick={(e) => e.stopPropagation()}>
+      <div
+        className="max-h-[100dvh] w-full max-w-2xl overflow-y-auto rounded-t-3xl bg-white p-5 shadow-xl sm:max-h-[calc(100vh-2rem)] sm:rounded-3xl sm:p-6"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-stone-900">{closedSnapshot ? `${monthLabel} fechado` : `Fechar ${monthLabel}`}</h2>
+            <h2 className="text-xl font-semibold text-stone-900">
+              {closedSnapshot ? `${monthLabel} fechado` : `Fechar ${monthLabel}`}
+            </h2>
             <p className="mt-1 text-xs text-stone-500">
-              {closedSnapshot ? "Histórico salvo. Agora você pode abrir o próximo mês." : "Confira o resumo antes de salvar o fechamento."}
+              {closedSnapshot
+                ? "Histórico salvo. Agora você pode abrir o próximo mês."
+                : "Confira o resumo antes de salvar o fechamento."}
             </p>
           </div>
-          <button disabled={isSaving} onClick={onClose} className="text-stone-400 transition-colors hover:text-stone-600 disabled:opacity-50">
+          <button
+            disabled={isSaving}
+            onClick={onClose}
+            className="text-stone-400 transition-colors hover:text-stone-600 disabled:opacity-50"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -993,10 +1206,18 @@ function CloseMonthModal({
               {monthLabel} foi fechado com snapshot. Os gastos continuam preservados no histórico.
             </div>
             <div className="mt-6 flex flex-col gap-3 sm:flex-row">
-              <button disabled={isSaving} onClick={onClose} className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50">
+              <button
+                disabled={isSaving}
+                onClick={onClose}
+                className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50"
+              >
                 Ver depois
               </button>
-              <button disabled={isSaving} onClick={handleOpenNextMonth} className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+              <button
+                disabled={isSaving}
+                onClick={handleOpenNextMonth}
+                className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+              >
                 {isSaving ? "Abrindo..." : `Abrir ${nextMonthLabel}`}
               </button>
             </div>
@@ -1013,19 +1234,31 @@ function CloseMonthModal({
             </div>
 
             <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <SummaryList title="Gastos por categoria" rows={categoryTotals.map(([name, amount]) => ({ name, amount }))} />
+              <SummaryList
+                title="Gastos por categoria"
+                rows={categoryTotals.map(([name, amount]) => ({ name, amount }))}
+              />
               <SummaryList title="Gastos por pessoa" rows={data.peopleTotals} />
             </div>
 
             <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
-              Ao confirmar, este mês será salvo no histórico. Você poderá reabrir o mês pelo histórico se tiver fechado sem querer.
+              Ao confirmar, este mês será salvo no histórico. Você poderá reabrir o mês pelo
+              histórico se tiver fechado sem querer.
             </div>
 
             <div className="mt-4 flex flex-col gap-3 sm:flex-row">
-              <button disabled={isSaving} onClick={onClose} className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50">
+              <button
+                disabled={isSaving}
+                onClick={onClose}
+                className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50"
+              >
                 Cancelar
               </button>
-              <button disabled={isSaving} onClick={handleConfirm} className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50">
+              <button
+                disabled={isSaving}
+                onClick={handleConfirm}
+                className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
+              >
                 {isSaving ? "Fechando..." : "Confirmar fechamento"}
               </button>
             </div>
@@ -1036,16 +1269,34 @@ function CloseMonthModal({
   );
 }
 
-function SummaryLine({ label, value, strong = false }: { label: string; value: number; strong?: boolean }) {
+function SummaryLine({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: number;
+  strong?: boolean;
+}) {
   return (
     <div className="rounded-xl border border-stone-100 bg-stone-50 p-3">
       <p className="text-xs text-stone-500">{label}</p>
-      <p className={`mt-1 break-words text-sm ${strong ? "font-semibold text-stone-950" : "font-medium text-stone-900"}`}>{formatBRL(value)}</p>
+      <p
+        className={`mt-1 break-words text-sm ${strong ? "font-semibold text-stone-950" : "font-medium text-stone-900"}`}
+      >
+        {formatBRL(value)}
+      </p>
     </div>
   );
 }
 
-function SummaryList({ title, rows }: { title: string; rows: Array<{ name: string; amount: number }> }) {
+function SummaryList({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<{ name: string; amount: number }>;
+}) {
   return (
     <div className="rounded-xl border border-stone-100 p-3">
       <p className="mb-2 text-xs font-medium uppercase tracking-wider text-stone-500">{title}</p>
@@ -1064,5 +1315,3 @@ function SummaryList({ title, rows }: { title: string; rows: Array<{ name: strin
     </div>
   );
 }
-
-

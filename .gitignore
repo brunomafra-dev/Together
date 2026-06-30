@@ -1,5 +1,11 @@
 dist/
 node_modules/
+coverage/
+.vite/
+.eslintcache
+.DS_Store
+Thumbs.db
+
 .env
 .env.local
 .env.development

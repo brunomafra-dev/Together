@@ -1,7 +1,14 @@
 ﻿import { useEffect, useRef, useState } from "react";
 import { Layout } from "./Layout";
 import { ExpandableSection } from "./ExpandableSection";
-import { Expense, FixedExpense, FixedExpenseMonthlyValueModel, useFinance, formatBRL, MonthlySnapshotModel } from "../context/FinanceContext";
+import {
+  Expense,
+  FixedExpense,
+  FixedExpenseMonthlyValueModel,
+  useFinance,
+  formatBRL,
+  MonthlySnapshotModel,
+} from "../context/FinanceContext";
 import { Camera, LogOut, Mail, Plus, Trash2, Save, X, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import { CategorySelect } from "./CategorySelect";
@@ -20,7 +27,11 @@ const csvCell = (value: string | number) => {
   return `"${text.replace(/"/g, '""')}"`;
 };
 
-const exportSnapshotExpensesCsv = (snapshot: MonthlySnapshotModel, monthLabel: string, expenses: Expense[]) => {
+const exportSnapshotExpensesCsv = (
+  snapshot: MonthlySnapshotModel,
+  monthLabel: string,
+  expenses: Expense[],
+) => {
   const monthKey = `${snapshot.year}-${String(snapshot.month).padStart(2, "0")}`;
   const rows = [
     ["data", "descrição", "categoria", "forma de pagamento", "quem pagou", "valor"],
@@ -68,13 +79,17 @@ export function Settings() {
     deleteMonthlySnapshot,
   } = useFinance();
 
-  const [monthlyIncome, setMonthlyIncome] = useState(settings.monthlyIncome ? settings.monthlyIncome.toString() : "");
+  const [monthlyIncome, setMonthlyIncome] = useState(
+    settings.monthlyIncome ? settings.monthlyIncome.toString() : "",
+  );
   const [partner1, setPartner1] = useState(settings.partnerNames[0]);
   const [partner2, setPartner2] = useState(settings.partnerNames[1]);
   const [showAddPaymentMethod, setShowAddPaymentMethod] = useState(false);
   const [showAddFixed, setShowAddFixed] = useState(false);
   const [editingFixedExpense, setEditingFixedExpense] = useState<FixedExpense | null>(null);
-  const [editingFixedMonthlyValue, setEditingFixedMonthlyValue] = useState<FixedExpense | null>(null);
+  const [editingFixedMonthlyValue, setEditingFixedMonthlyValue] = useState<FixedExpense | null>(
+    null,
+  );
   const [saved, setSaved] = useState(false);
   const [editingMethodId, setEditingMethodId] = useState<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = useState<MonthlySnapshotModel | null>(null);
@@ -90,19 +105,22 @@ export function Settings() {
   const plannedIncome = parseFloat(monthlyIncome) || 0;
   const fixedExpensesTotal = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const creditCardCount = paymentMethods.filter((method) => method.type === "credit_card").length;
-  const initials = [partner1, partner2]
-    .map((name) => name.trim()[0])
-    .filter(Boolean)
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "BL";
+  const initials =
+    [partner1, partner2]
+      .map((name) => name.trim()[0])
+      .filter(Boolean)
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "BL";
 
   useEffect(() => {
     const loadProfile = async () => {
       try {
         setProfile(await financeService.fetchCurrentProfile());
       } catch (error) {
-        setProfileError(error instanceof Error ? error.message : "Não foi possível carregar o perfil.");
+        setProfileError(
+          error instanceof Error ? error.message : "Não foi possível carregar o perfil.",
+        );
       }
     };
     void loadProfile();
@@ -122,7 +140,10 @@ export function Settings() {
   };
 
   const monthLabel = (snapshot: MonthlySnapshotModel) =>
-    new Date(snapshot.year, snapshot.month - 1, 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
+    new Date(snapshot.year, snapshot.month - 1, 1).toLocaleDateString("pt-BR", {
+      month: "long",
+      year: "numeric",
+    });
 
   const handleCloseMonth = async () => {
     if (!window.confirm("Fechar o mês atual? Um histórico imutável será criado.")) return;
@@ -161,9 +182,7 @@ export function Settings() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-stone-900">Perfil</h1>
-          <p className="text-sm text-stone-600 mt-1">
-            Perfil, renda, casal e contas fixas
-          </p>
+          <p className="text-sm text-stone-600 mt-1">Perfil, renda, casal e contas fixas</p>
         </div>
 
         <ExpandableSection title="Perfil" summary={accountEmail || "Conta conectada"} defaultOpen>
@@ -171,9 +190,15 @@ export function Settings() {
           <div className="flex items-center gap-4">
             <div className="relative h-20 w-20 shrink-0 overflow-visible rounded-2xl bg-emerald-500">
               {householdAvatarUrl ? (
-                <img src={householdAvatarUrl} alt={coupleName} className="h-full w-full rounded-2xl object-cover" />
+                <img
+                  src={householdAvatarUrl}
+                  alt={coupleName}
+                  className="h-full w-full rounded-2xl object-cover"
+                />
               ) : (
-                <div className="flex h-full w-full items-center justify-center rounded-2xl text-lg font-semibold text-white">{initials}</div>
+                <div className="flex h-full w-full items-center justify-center rounded-2xl text-lg font-semibold text-white">
+                  {initials}
+                </div>
               )}
               <button
                 type="button"
@@ -198,20 +223,31 @@ export function Settings() {
             </div>
           </div>
           <div className="mt-6">
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">E-mail da conta</label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+              E-mail da conta
+            </label>
             <div className="flex items-center gap-3 rounded-xl border border-stone-200 px-4 py-3 text-sm text-stone-900">
               <Mail className="h-4 w-4 text-stone-400" />
               <span className="break-words">{accountEmail}</span>
             </div>
           </div>
-          {profileError && <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">{profileError}</p>}
+          {profileError && (
+            <p className="mt-4 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {profileError}
+            </p>
+          )}
         </ExpandableSection>
 
-        <ExpandableSection title="Casal e rendimento" summary={`${coupleName} · renda ${formatBRL(plannedIncome)}`}>
+        <ExpandableSection
+          title="Casal e rendimento"
+          summary={`${coupleName} · renda ${formatBRL(plannedIncome)}`}
+        >
           <h2 className="font-medium text-stone-900 mb-4">Casal e rendimento</h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
-              <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Parceiro 1</label>
+              <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+                Parceiro 1
+              </label>
               <input
                 type="text"
                 value={partner1}
@@ -220,7 +256,9 @@ export function Settings() {
               />
             </div>
             <div>
-              <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Parceiro 2</label>
+              <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+                Parceiro 2
+              </label>
               <input
                 type="text"
                 value={partner2}
@@ -229,7 +267,9 @@ export function Settings() {
               />
             </div>
             <div className="sm:col-span-2">
-              <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Renda mensal planejada (R$)</label>
+              <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+                Renda mensal planejada (R$)
+              </label>
               <input
                 type="number"
                 step="0.01"
@@ -248,7 +288,10 @@ export function Settings() {
           </button>
         </ExpandableSection>
 
-        <ExpandableSection title="Formas de pagamento" summary={`${paymentMethods.length} formas · ${creditCardCount} cartões`}>
+        <ExpandableSection
+          title="Formas de pagamento"
+          summary={`${paymentMethods.length} formas · ${creditCardCount} cartões`}
+        >
           <h2 className="font-medium text-stone-900 mb-4">Formas de Pagamento</h2>
 
           <div className="space-y-4">
@@ -260,9 +303,14 @@ export function Settings() {
                     className="group flex flex-col gap-3 rounded-lg bg-stone-50 p-3 sm:flex-row sm:items-center sm:justify-between"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="break-words text-sm font-medium text-stone-900">{method.name}</p>
+                      <p className="break-words text-sm font-medium text-stone-900">
+                        {method.name}
+                      </p>
                       <p className="break-words text-xs text-stone-500">
-                        {PAYMENT_TYPE_LABELS[method.type]}{method.type === "credit_card" ? ` · Limite: ${method.limitAmount !== null ? formatBRL(method.limitAmount) : "sem limite definido"}` : ""}
+                        {PAYMENT_TYPE_LABELS[method.type]}
+                        {method.type === "credit_card"
+                          ? ` · Limite: ${method.limitAmount !== null ? formatBRL(method.limitAmount) : "sem limite definido"}`
+                          : ""}
                       </p>
                     </div>
                     <div className="flex gap-2 self-end sm:self-auto">
@@ -301,11 +349,13 @@ export function Settings() {
                 Adicionar cartão
               </button>
             </div>
-
           </div>
         </ExpandableSection>
 
-        <ExpandableSection title="Contas fixas" summary={`${fixedExpenses.length} contas · ${formatBRL(fixedExpensesTotal)}/mês`}>
+        <ExpandableSection
+          title="Contas fixas"
+          summary={`${fixedExpenses.length} contas · ${formatBRL(fixedExpensesTotal)}/mês`}
+        >
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="font-medium text-stone-900">Contas Fixas</h2>
             <button
@@ -329,50 +379,6 @@ export function Settings() {
                 onDelete={deleteFixedExpense}
               />
             ))}
-            {false && fixedExpenses.map((expense) => (
-              <div
-                key={expense.id}
-                className="group flex flex-col gap-2 border-b border-stone-100 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="break-words text-sm font-medium text-stone-900">
-                    {expense.name}
-                  </p>
-                  <p className="text-xs text-stone-500">
-                    {expense.category} · vence dia {expense.dueDate}
-                  </p>
-                </div>
-                <div className="flex items-center justify-between gap-3 sm:justify-end">
-                  <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${
-                    expense.amountType === "variable"
-                      ? "bg-amber-50 text-amber-700"
-                      : "bg-emerald-50 text-emerald-700"
-                  }`}>
-                    {expense.amountType === "variable" ? "Variável" : "Fixa"}
-                  </span>
-                  <p className="break-words text-sm font-medium text-stone-900">
-                    {formatBRL(expense.amount)}
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setEditingFixedExpense(expense)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700 hover:shadow-[0_0_18px_rgba(16,185,129,0.16)] sm:opacity-0 sm:group-hover:opacity-100"
-                    aria-label="Editar conta fixa"
-                  >
-                    <Edit2 className="w-4 h-4" />
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => deleteFixedExpense(expense.id)}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600 hover:shadow-[0_0_18px_rgba(244,63,94,0.16)] sm:opacity-0 sm:group-hover:opacity-100"
-                    aria-label="Excluir conta fixa"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-
             {fixedExpenses.length === 0 && (
               <p className="text-center py-8 text-stone-400 text-sm">
                 Nenhuma conta fixa cadastrada.
@@ -381,11 +387,16 @@ export function Settings() {
           </div>
         </ExpandableSection>
 
-        <ExpandableSection title="Histórico financeiro" summary={`${monthlySnapshots.length} fechamentos`}>
+        <ExpandableSection
+          title="Histórico financeiro"
+          summary={`${monthlySnapshots.length} fechamentos`}
+        >
           <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="min-w-0">
               <h2 className="font-medium text-stone-900">Histórico Financeiro</h2>
-              <p className="text-sm text-stone-500">Feche meses para criar relatórios que não mudam depois.</p>
+              <p className="text-sm text-stone-500">
+                Feche meses para criar relatórios que não mudam depois.
+              </p>
             </div>
             <button
               type="button"
@@ -398,7 +409,9 @@ export function Settings() {
           </div>
 
           {monthlySnapshots.length === 0 ? (
-            <p className="text-center py-8 text-stone-400 text-sm">Nenhum histórico mensal ainda.</p>
+            <p className="text-center py-8 text-stone-400 text-sm">
+              Nenhum histórico mensal ainda.
+            </p>
           ) : (
             <div className="space-y-2">
               {monthlySnapshots.map((snapshot) => (
@@ -410,10 +423,17 @@ export function Settings() {
                 >
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
-                      <p className="break-words text-sm font-medium capitalize text-stone-900">{monthLabel(snapshot)}</p>
-                      <p className="break-words text-xs text-stone-500">Gastos {formatBRL(snapshot.totalExpenses)} · Sobra {formatBRL(snapshot.remainingBalance)}</p>
+                      <p className="break-words text-sm font-medium capitalize text-stone-900">
+                        {monthLabel(snapshot)}
+                      </p>
+                      <p className="break-words text-xs text-stone-500">
+                        Gastos {formatBRL(snapshot.totalExpenses)} · Sobra{" "}
+                        {formatBRL(snapshot.remainingBalance)}
+                      </p>
                     </div>
-                    <span className="text-xs text-stone-500 sm:text-right">{snapshot.financialHealth.availablePercent}% livre</span>
+                    <span className="text-xs text-stone-500 sm:text-right">
+                      {snapshot.financialHealth.availablePercent}% livre
+                    </span>
                   </div>
                 </button>
               ))}
@@ -453,9 +473,7 @@ export function Settings() {
           editingId={editingMethodId}
         />
       )}
-      {showAddFixed && (
-        <AddFixedExpenseModal onClose={() => setShowAddFixed(false)} />
-      )}
+      {showAddFixed && <AddFixedExpenseModal onClose={() => setShowAddFixed(false)} />}
       {editingFixedExpense && (
         <AddFixedExpenseModal
           fixedExpense={editingFixedExpense}
@@ -494,12 +512,18 @@ export function Settings() {
           monthLabel={monthLabel(selectedSnapshot)}
           onClose={() => setSelectedSnapshot(null)}
           onDelete={async () => {
-            if (!window.confirm("Excluir este histórico? Os dados atuais não serão alterados.")) return;
+            if (!window.confirm("Excluir este histórico? Os dados atuais não serão alterados."))
+              return;
             await deleteMonthlySnapshot(selectedSnapshot.id);
             setSelectedSnapshot(null);
           }}
           onReopen={async () => {
-            if (!window.confirm(`Reabrir ${monthLabel(selectedSnapshot)}? Esse mês voltará a ser o mês aberto e os gastos variáveis poderão ser editados novamente.`)) return;
+            if (
+              !window.confirm(
+                `Reabrir ${monthLabel(selectedSnapshot)}? Esse mês voltará a ser o mês aberto e os gastos variáveis poderão ser editados novamente.`,
+              )
+            )
+              return;
             await reopenMonth(selectedSnapshot);
             setSelectedSnapshot(null);
           }}
@@ -534,7 +558,7 @@ function FixedExpenseRow({
   const displayedAmount =
     monthlyValue?.status === "confirmed" && monthlyValue.actualAmount !== null
       ? monthlyValue.actualAmount
-      : monthlyValue?.estimatedAmount ?? expense.amount;
+      : (monthlyValue?.estimatedAmount ?? expense.amount);
 
   return (
     <div className="group flex flex-col gap-2 border-b border-stone-100 py-3 last:border-0 sm:flex-row sm:items-center sm:justify-between">
@@ -544,9 +568,8 @@ function FixedExpenseRow({
           {expense.category} - vence dia {expense.dueDate}
           {expense.amountType === "variable" && (
             <span>
-              {" "}-
               {" "}
-              {monthlyValue?.status === "confirmed" ? "valor real informado" : "estimado"}
+              - {monthlyValue?.status === "confirmed" ? "valor real informado" : "estimado"}
             </span>
           )}
         </p>
@@ -561,7 +584,9 @@ function FixedExpenseRow({
         >
           {expense.amountType === "variable" ? "Variável" : "Fixa"}
         </span>
-        <p className="break-words text-sm font-medium text-stone-900">{formatBRL(displayedAmount)}</p>
+        <p className="break-words text-sm font-medium text-stone-900">
+          {formatBRL(displayedAmount)}
+        </p>
         {expense.amountType === "variable" && (
           <button
             type="button"
@@ -646,14 +671,20 @@ function FixedExpenseMonthlyValueModal({
               {fixedExpense.name} - {monthLabel}
             </p>
           </div>
-          <button type="button" disabled={saving} onClick={onClose} className="text-stone-400 hover:text-stone-700 disabled:opacity-50">
+          <button
+            type="button"
+            disabled={saving}
+            onClick={onClose}
+            className="text-stone-400 hover:text-stone-700 disabled:opacity-50"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">
-            Estimado: {formatBRL(fixedExpense.amount)}. Ao salvar, o dashboard e o fechamento deste mês passam a usar o valor real.
+            Estimado: {formatBRL(fixedExpense.amount)}. Ao salvar, o dashboard e o fechamento deste
+            mês passam a usar o valor real.
           </div>
           <div>
             <label className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
@@ -701,15 +732,9 @@ interface AddPaymentMethodModalProps {
   editingId?: string | null;
 }
 
-function AddPaymentMethodModal({
-  onClose,
-  editingId,
-}: AddPaymentMethodModalProps) {
-  const { addPaymentMethod, updatePaymentMethod, paymentMethods } =
-    useFinance();
-  const editingMethod = editingId
-    ? paymentMethods.find((m) => m.id === editingId)
-    : null;
+function AddPaymentMethodModal({ onClose, editingId }: AddPaymentMethodModalProps) {
+  const { addPaymentMethod, updatePaymentMethod, paymentMethods } = useFinance();
+  const editingMethod = editingId ? paymentMethods.find((m) => m.id === editingId) : null;
   const [name, setName] = useState(editingMethod?.name || "");
   const [limitAmount, setLimitAmount] = useState(
     editingMethod?.limitAmount !== null && editingMethod?.limitAmount !== undefined
@@ -717,7 +742,9 @@ function AddPaymentMethodModal({
       : "",
   );
   const [methodType, setMethodType] = useState(editingMethod?.type ?? "credit_card");
-  const [closingDay, setClosingDay] = useState(editingMethod?.closingDay ? String(editingMethod.closingDay) : "");
+  const [closingDay, setClosingDay] = useState(
+    editingMethod?.closingDay ? String(editingMethod.closingDay) : "",
+  );
   const [dueDay, setDueDay] = useState(editingMethod?.dueDay ? String(editingMethod.dueDay) : "");
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -726,9 +753,22 @@ function AddPaymentMethodModal({
     if (!trimmed) return;
 
     if (editingId && editingMethod) {
-      await updatePaymentMethod(editingId, trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined, methodType, closingDay ? Number(closingDay) : null, dueDay ? Number(dueDay) : null);
+      await updatePaymentMethod(
+        editingId,
+        trimmed,
+        limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined,
+        methodType,
+        closingDay ? Number(closingDay) : null,
+        dueDay ? Number(dueDay) : null,
+      );
     } else {
-      await addPaymentMethod(trimmed, limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined, methodType, closingDay ? Number(closingDay) : null, dueDay ? Number(dueDay) : null);
+      await addPaymentMethod(
+        trimmed,
+        limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined,
+        methodType,
+        closingDay ? Number(closingDay) : null,
+        dueDay ? Number(dueDay) : null,
+      );
     }
     onClose();
   };
@@ -841,7 +881,7 @@ function AddPaymentMethodModal({
 function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalProps) {
   const { addFixedExpense, updateFixedExpense, categories } = useFinance();
   const selectedCategoryId = fixedExpense
-    ? categories.find((category) => category.name === fixedExpense.category)?.id ?? ""
+    ? (categories.find((category) => category.name === fixedExpense.category)?.id ?? "")
     : "";
   const [name, setName] = useState(fixedExpense?.name ?? "");
   const [amount, setAmount] = useState(
@@ -1024,14 +1064,23 @@ function FinancialHistoryModal({
   onReopen: () => Promise<void>;
   expenses: Expense[];
 }) {
-
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center" onClick={onClose}>
-      <div className="bg-white rounded-3xl max-w-3xl w-full max-h-[calc(100vh-2rem)] overflow-hidden shadow-xl" onClick={(e) => e.stopPropagation()}>
+    <div
+      className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
+      onClick={onClose}
+    >
+      <div
+        className="bg-white rounded-3xl max-w-3xl w-full max-h-[calc(100vh-2rem)] overflow-hidden shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-stone-100 bg-white px-5 py-4 sm:px-6">
           <div className="min-w-0">
-            <h2 className="break-words text-xl font-semibold capitalize text-stone-950">{monthLabel}</h2>
-            <p className="text-xs text-stone-500">Histórico fechado em {new Date(snapshot.closedAt).toLocaleDateString("pt-BR")}</p>
+            <h2 className="break-words text-xl font-semibold capitalize text-stone-950">
+              {monthLabel}
+            </h2>
+            <p className="text-xs text-stone-500">
+              Histórico fechado em {new Date(snapshot.closedAt).toLocaleDateString("pt-BR")}
+            </p>
           </div>
           <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700">
             <X className="h-5 w-5" />
@@ -1047,28 +1096,68 @@ function FinancialHistoryModal({
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2">
-            <HistoryList title="Categorias" rows={snapshot.categoryTotals.map((item) => ({ label: item.name, value: formatBRL(item.amount) }))} />
-            <HistoryList title="Cartões" rows={snapshot.cardTotals.map((item) => ({ label: item.name, value: `${formatBRL(item.amount)}${item.availableLimit !== null ? ` · livre ${formatBRL(item.availableLimit)}` : ""}` }))} />
-            <HistoryList title="Metas" rows={snapshot.goalProgress.map((item) => ({ label: item.title, value: `${formatBRL(item.currentAmount)} / ${formatBRL(item.targetAmount)} · ${item.percent}%` }))} />
+            <HistoryList
+              title="Categorias"
+              rows={snapshot.categoryTotals.map((item) => ({
+                label: item.name,
+                value: formatBRL(item.amount),
+              }))}
+            />
+            <HistoryList
+              title="Cartões"
+              rows={snapshot.cardTotals.map((item) => ({
+                label: item.name,
+                value: `${formatBRL(item.amount)}${item.availableLimit !== null ? ` · livre ${formatBRL(item.availableLimit)}` : ""}`,
+              }))}
+            />
+            <HistoryList
+              title="Metas"
+              rows={snapshot.goalProgress.map((item) => ({
+                label: item.title,
+                value: `${formatBRL(item.currentAmount)} / ${formatBRL(item.targetAmount)} · ${item.percent}%`,
+              }))}
+            />
             <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
               <h3 className="text-sm font-medium text-stone-900">Indicadores</h3>
-              <p className="mt-3 text-sm text-stone-600">Gasto total: {snapshot.financialHealth.totalSpentPercent}% da renda.</p>
-              <p className="mt-1 text-sm text-stone-600">Parcelas: {formatBRL(snapshot.installmentExpensesTotal)}</p>
-              <p className="mt-1 text-sm text-stone-600">Fixas: {formatBRL(snapshot.fixedExpensesTotal)}</p>
+              <p className="mt-3 text-sm text-stone-600">
+                Gasto total: {snapshot.financialHealth.totalSpentPercent}% da renda.
+              </p>
+              <p className="mt-1 text-sm text-stone-600">
+                Parcelas: {formatBRL(snapshot.installmentExpensesTotal)}
+              </p>
+              <p className="mt-1 text-sm text-stone-600">
+                Fixas: {formatBRL(snapshot.fixedExpensesTotal)}
+              </p>
             </div>
           </div>
 
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button type="button" onClick={() => void onDelete()} className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700">
+            <button
+              type="button"
+              onClick={() => void onDelete()}
+              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700"
+            >
               Excluir histórico
             </button>
-            <button type="button" onClick={() => void onReopen()} className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800">
+            <button
+              type="button"
+              onClick={() => void onReopen()}
+              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800"
+            >
               Reabrir mês
             </button>
-            <button type="button" onClick={() => exportSnapshotExpensesCsv(snapshot, monthLabel, expenses)} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">
+            <button
+              type="button"
+              onClick={() => exportSnapshotExpensesCsv(snapshot, monthLabel, expenses)}
+              className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700"
+            >
               Exportar CSV
             </button>
-            <button type="button" onClick={onClose} className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700">
+            <button
+              type="button"
+              onClick={onClose}
+              className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700"
+            >
               Fechar
             </button>
           </div>
@@ -1087,7 +1176,13 @@ function SummaryTile({ label, value }: { label: string; value: string }) {
   );
 }
 
-function HistoryList({ title, rows }: { title: string; rows: Array<{ label: string; value: string }> }) {
+function HistoryList({
+  title,
+  rows,
+}: {
+  title: string;
+  rows: Array<{ label: string; value: string }>;
+}) {
   return (
     <div className="rounded-2xl border border-stone-200 bg-white p-4">
       <h3 className="text-sm font-medium text-stone-900">{title}</h3>
@@ -1096,9 +1191,14 @@ function HistoryList({ title, rows }: { title: string; rows: Array<{ label: stri
       ) : (
         <div className="mt-3 space-y-2">
           {rows.map((row) => (
-            <div key={`${row.label}-${row.value}`} className="flex flex-col gap-1 border-b border-stone-100 py-2 last:border-0 sm:flex-row sm:items-start sm:justify-between">
+            <div
+              key={`${row.label}-${row.value}`}
+              className="flex flex-col gap-1 border-b border-stone-100 py-2 last:border-0 sm:flex-row sm:items-start sm:justify-between"
+            >
               <span className="break-words text-sm text-stone-700">{row.label}</span>
-              <span className="break-words text-sm font-medium text-stone-950 sm:text-right">{row.value}</span>
+              <span className="break-words text-sm font-medium text-stone-950 sm:text-right">
+                {row.value}
+              </span>
             </div>
           ))}
         </div>

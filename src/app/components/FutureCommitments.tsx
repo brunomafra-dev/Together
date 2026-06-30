@@ -7,9 +7,22 @@ import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
 
 export function FutureCommitments() {
-  const { fixedExpenses, financialCommitments: commitments, expenses, settings, activeCycle, categories, paymentMethods } = useFinance();
+  const {
+    fixedExpenses,
+    financialCommitments: commitments,
+    expenses,
+    settings,
+    activeCycle,
+    categories,
+    paymentMethods,
+  } = useFinance();
   const subscriptionCategoryIds = useMemo(
-    () => new Set(categories.filter((category) => category.name.trim().toLowerCase() === "assinaturas").map((category) => category.id)),
+    () =>
+      new Set(
+        categories
+          .filter((category) => category.name.trim().toLowerCase() === "assinaturas")
+          .map((category) => category.id),
+      ),
     [categories],
   );
 
@@ -18,10 +31,16 @@ export function FutureCommitments() {
     [expenses, subscriptionCategoryIds],
   );
   const activeRecurringPurchases = useMemo(
-    () => expenses.filter((expense) => expense.recurringMonthly && !subscriptionCategoryIds.has(expense.category)),
+    () =>
+      expenses.filter(
+        (expense) => expense.recurringMonthly && !subscriptionCategoryIds.has(expense.category),
+      ),
     [expenses, subscriptionCategoryIds],
   );
-  const subscriptionTotal = useMemo(() => activeSubscriptions.reduce((sum, expense) => sum + expense.amount, 0), [activeSubscriptions]);
+  const subscriptionTotal = useMemo(
+    () => activeSubscriptions.reduce((sum, expense) => sum + expense.amount, 0),
+    [activeSubscriptions],
+  );
   const recurringPurchaseTotal = useMemo(
     () => activeRecurringPurchases.reduce((sum, expense) => sum + expense.amount, 0),
     [activeRecurringPurchases],
@@ -43,7 +62,11 @@ export function FutureCommitments() {
       const monthDate = addMonths(baseMonth, i);
       const monthKey = monthDate.getFullYear() * 12 + monthDate.getMonth();
       const monthCommitments = commitments
-        .filter((commitment) => commitment.status !== "finished" && commitment.totalInstallments - commitment.currentInstallment >= i)
+        .filter(
+          (commitment) =>
+            commitment.status !== "finished" &&
+            commitment.totalInstallments - commitment.currentInstallment >= i,
+        )
         .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
       const monthFixed = fixedExpenses.reduce((s, e) => s + e.amount, 0);
       const monthSubscriptions = activeSubscriptions
@@ -73,7 +96,15 @@ export function FutureCommitments() {
       });
     }
     return months;
-  }, [activeCycle.month, activeCycle.year, activeRecurringPurchases, activeSubscriptions, commitments, fixedExpenses, settings.monthlyIncome]);
+  }, [
+    activeCycle.month,
+    activeCycle.year,
+    activeRecurringPurchases,
+    activeSubscriptions,
+    commitments,
+    fixedExpenses,
+    settings.monthlyIncome,
+  ]);
 
   const prevMonth = futureMonths[0]?.total || 0;
 
@@ -82,13 +113,16 @@ export function FutureCommitments() {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-semibold text-stone-900">Impacto futuro</h1>
-          <p className="text-sm text-stone-600 mt-1">O que já está comprometido nos próximos meses</p>
+          <p className="text-sm text-stone-600 mt-1">
+            O que já está comprometido nos próximos meses
+          </p>
         </div>
 
         <div className="bg-gradient-to-br from-emerald-50 to-teal-50 rounded-2xl p-6 border border-emerald-100">
           <p className="text-sm text-emerald-900 mb-1">Esse compromisso vai diminuir</p>
           <p className="text-stone-700 text-sm">
-            Conforme os compromissos terminam, vocês recuperam dinheiro livre todo mês. Acompanhe abaixo como cada mês vai ficar mais leve.
+            Conforme os compromissos terminam, vocês recuperam dinheiro livre todo mês. Acompanhe
+            abaixo como cada mês vai ficar mais leve.
           </p>
         </div>
 
@@ -111,7 +145,9 @@ export function FutureCommitments() {
                   <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-2">
                       <Calendar className="w-4 h-4 text-stone-500" />
-                      <h3 className="min-w-0 break-words font-medium capitalize text-stone-900">{month.label}</h3>
+                      <h3 className="min-w-0 break-words font-medium capitalize text-stone-900">
+                        {month.label}
+                      </h3>
                     </div>
                     {isRelief && (
                       <span className="text-xs px-2 py-1 bg-emerald-50 text-emerald-700 rounded-full flex items-center gap-1">
@@ -124,23 +160,33 @@ export function FutureCommitments() {
                   <div className="grid gap-3 sm:grid-cols-5">
                     <div className="bg-stone-50 rounded-xl p-3">
                       <p className="text-xs text-stone-500 mb-1">Contas fixas</p>
-                      <p className="break-words font-semibold text-stone-900">{formatBRL(month.fixed)}</p>
+                      <p className="break-words font-semibold text-stone-900">
+                        {formatBRL(month.fixed)}
+                      </p>
                     </div>
                     <div className="bg-indigo-50 rounded-xl p-3">
                       <p className="text-xs text-indigo-700 mb-1">Compromissos</p>
-                      <p className="break-words font-semibold text-indigo-900">{formatBRL(month.commitments)}</p>
+                      <p className="break-words font-semibold text-indigo-900">
+                        {formatBRL(month.commitments)}
+                      </p>
                     </div>
                     <div className="bg-amber-50 rounded-xl p-3">
                       <p className="text-xs text-amber-700 mb-1">Assinaturas</p>
-                      <p className="break-words font-semibold text-amber-900">{formatBRL(month.subscriptions)}</p>
+                      <p className="break-words font-semibold text-amber-900">
+                        {formatBRL(month.subscriptions)}
+                      </p>
                     </div>
                     <div className="bg-cyan-50 rounded-xl p-3">
                       <p className="text-xs text-cyan-700 mb-1">Recorrências</p>
-                      <p className="break-words font-semibold text-cyan-900">{formatBRL(month.recurringPurchases)}</p>
+                      <p className="break-words font-semibold text-cyan-900">
+                        {formatBRL(month.recurringPurchases)}
+                      </p>
                     </div>
                     <div className="bg-emerald-50 rounded-xl p-3">
                       <p className="text-xs text-emerald-700 mb-1">Sobra estimada</p>
-                      <p className="break-words font-semibold text-emerald-900">{formatBRL(month.free)}</p>
+                      <p className="break-words font-semibold text-emerald-900">
+                        {formatBRL(month.free)}
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -159,14 +205,19 @@ export function FutureCommitments() {
           </div>
           <div className="space-y-2">
             {fixedExpenses.map((expense) => (
-              <div key={expense.id} className="flex flex-col gap-2 border-b border-stone-100 py-2.5 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+              <div
+                key={expense.id}
+                className="flex flex-col gap-2 border-b border-stone-100 py-2.5 last:border-0 sm:flex-row sm:items-center sm:justify-between"
+              >
                 <div className="min-w-0">
                   <p className="break-words text-sm font-medium text-stone-900">{expense.name}</p>
                   <p className="text-xs text-stone-500">
                     {expense.category} · vence dia {expense.dueDate}
                   </p>
                 </div>
-                <p className="break-words text-sm font-medium text-stone-900 sm:text-right">{formatBRL(expense.amount)}</p>
+                <p className="break-words text-sm font-medium text-stone-900 sm:text-right">
+                  {formatBRL(expense.amount)}
+                </p>
               </div>
             ))}
           </div>
@@ -186,13 +237,17 @@ export function FutureCommitments() {
             <div className="rounded-xl bg-emerald-50 p-4">
               <p className="text-xs text-emerald-700">Fixas reais</p>
               <p className="mt-1 font-semibold text-emerald-900">
-                {formatBRL(fixedRecurringExpenses.reduce((sum, expense) => sum + expense.amount, 0))}
+                {formatBRL(
+                  fixedRecurringExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+                )}
               </p>
             </div>
             <div className="rounded-xl bg-amber-50 p-4">
               <p className="text-xs text-amber-700">Variaveis estimadas</p>
               <p className="mt-1 font-semibold text-amber-900">
-                {formatBRL(variableRecurringExpenses.reduce((sum, expense) => sum + expense.amount, 0))}
+                {formatBRL(
+                  variableRecurringExpenses.reduce((sum, expense) => sum + expense.amount, 0),
+                )}
               </p>
             </div>
           </div>
@@ -208,7 +263,9 @@ export function FutureCommitments() {
               <TrendingUp className="w-4 h-4 text-cyan-600" />
               <h3 className="font-medium text-stone-900">Compras recorrentes</h3>
             </div>
-            <p className="text-sm font-semibold text-stone-900">{formatBRL(recurringPurchaseTotal)}</p>
+            <p className="text-sm font-semibold text-stone-900">
+              {formatBRL(recurringPurchaseTotal)}
+            </p>
           </div>
           <div className="space-y-2">
             {activeRecurringPurchases.length === 0 ? (
@@ -217,20 +274,29 @@ export function FutureCommitments() {
               </p>
             ) : (
               activeRecurringPurchases.map((expense) => {
-                const categoryName = categories.find((category) => category.id === expense.category)?.name ?? "Sem categoria";
-                const paymentName = paymentMethods.find((method) => method.id === expense.card)?.name ?? "Sem forma";
+                const categoryName =
+                  categories.find((category) => category.id === expense.category)?.name ??
+                  "Sem categoria";
+                const paymentName =
+                  paymentMethods.find((method) => method.id === expense.card)?.name ?? "Sem forma";
 
                 return (
-                  <div key={expense.id} className="flex flex-col gap-2 border-b border-stone-100 py-2.5 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+                  <div
+                    key={expense.id}
+                    className="flex flex-col gap-2 border-b border-stone-100 py-2.5 last:border-0 sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <div className="min-w-0">
                       <p className="break-words text-sm font-medium text-stone-900">
                         {expense.description || categoryName}
                       </p>
                       <p className="text-xs text-stone-500">
-                        {categoryName} · {paymentName} · desde {format(new Date(`${expense.date}T00:00:00`), "MMM/yyyy", { locale: ptBR })}
+                        {categoryName} · {paymentName} · desde{" "}
+                        {format(new Date(`${expense.date}T00:00:00`), "MMM/yyyy", { locale: ptBR })}
                       </p>
                     </div>
-                    <p className="break-words text-sm font-medium text-stone-900 sm:text-right">{formatBRL(expense.amount)}</p>
+                    <p className="break-words text-sm font-medium text-stone-900 sm:text-right">
+                      {formatBRL(expense.amount)}
+                    </p>
                   </div>
                 );
               })
@@ -257,20 +323,29 @@ export function FutureCommitments() {
               </p>
             ) : (
               activeSubscriptions.map((expense) => {
-                const categoryName = categories.find((category) => category.id === expense.category)?.name ?? "Assinatura";
-                const paymentName = paymentMethods.find((method) => method.id === expense.card)?.name ?? "Sem forma";
+                const categoryName =
+                  categories.find((category) => category.id === expense.category)?.name ??
+                  "Assinatura";
+                const paymentName =
+                  paymentMethods.find((method) => method.id === expense.card)?.name ?? "Sem forma";
 
                 return (
-                  <div key={expense.id} className="flex flex-col gap-2 border-b border-stone-100 py-2.5 last:border-0 sm:flex-row sm:items-center sm:justify-between">
+                  <div
+                    key={expense.id}
+                    className="flex flex-col gap-2 border-b border-stone-100 py-2.5 last:border-0 sm:flex-row sm:items-center sm:justify-between"
+                  >
                     <div className="min-w-0">
                       <p className="break-words text-sm font-medium text-stone-900">
                         {expense.description || categoryName}
                       </p>
                       <p className="text-xs text-stone-500">
-                        {categoryName} · {paymentName} · desde {format(new Date(`${expense.date}T00:00:00`), "MMM/yyyy", { locale: ptBR })}
+                        {categoryName} · {paymentName} · desde{" "}
+                        {format(new Date(`${expense.date}T00:00:00`), "MMM/yyyy", { locale: ptBR })}
                       </p>
                     </div>
-                    <p className="break-words text-sm font-medium text-stone-900 sm:text-right">{formatBRL(expense.amount)}</p>
+                    <p className="break-words text-sm font-medium text-stone-900 sm:text-right">
+                      {formatBRL(expense.amount)}
+                    </p>
                   </div>
                 );
               })

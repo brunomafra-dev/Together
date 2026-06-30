@@ -19,7 +19,8 @@ function todayLocalDate() {
 }
 
 export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
-  const { addExpense, updateExpense, household, settings, categories, paymentMethods } = useFinance();
+  const { addExpense, updateExpense, household, settings, categories, paymentMethods } =
+    useFinance();
   const isEditing = Boolean(expense);
   const [amount, setAmount] = useState(expense ? String(expense.amount).replace(".", ",") : "");
   const [categoryId, setCategoryId] = useState(expense?.category ?? "");
@@ -50,7 +51,8 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
       .filter((member) => member.name);
   }, [household?.partnerIds, household?.partnerNames, settings.partnerNames]);
   const subscriptionCategoryId = useMemo(
-    () => categories.find((category) => category.name.trim().toLowerCase() === "assinaturas")?.id ?? "",
+    () =>
+      categories.find((category) => category.name.trim().toLowerCase() === "assinaturas")?.id ?? "",
     [categories],
   );
   const handleCategoryChange = (value: string) => {
@@ -60,10 +62,15 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
       setShowSubscriptionSuggestion(false);
     }
   };
-  const isSubscriptionCategory = Boolean(subscriptionCategoryId && categoryId === subscriptionCategoryId);
+  const isSubscriptionCategory = Boolean(
+    subscriptionCategoryId && categoryId === subscriptionCategoryId,
+  );
 
   useEffect(() => {
-    if ((!paidBy || !householdMembers.some((member) => member.value === paidBy)) && householdMembers[0]) {
+    if (
+      (!paidBy || !householdMembers.some((member) => member.value === paidBy)) &&
+      householdMembers[0]
+    ) {
       setPaidBy(householdMembers[0].value);
     }
     if (!methodId && paymentMethods.length > 0) {
@@ -122,19 +129,27 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
       >
         <div className="flex items-center justify-between mb-5">
           <div>
-            <h2 className="text-xl font-semibold text-stone-900">{isEditing ? "Editar gasto" : "Novo gasto"}</h2>
+            <h2 className="text-xl font-semibold text-stone-900">
+              {isEditing ? "Editar gasto" : "Novo gasto"}
+            </h2>
             <p className="text-xs text-stone-500 mt-0.5">
               {isEditing ? "Ajuste os dados do lançamento." : "Adicione rápido, ajustes depois."}
             </p>
           </div>
-          <button disabled={isSaving} onClick={handleClose} className="text-stone-400 hover:text-stone-600 disabled:opacity-50 transition-colors">
+          <button
+            disabled={isSaving}
+            onClick={handleClose}
+            className="text-stone-400 hover:text-stone-600 disabled:opacity-50 transition-colors"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Valor</label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+              Valor
+            </label>
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-stone-400">R$</span>
               <input
@@ -150,17 +165,31 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Categoria</label>
-            <CategorySelect value={categoryId} onChange={handleCategoryChange} placeholder="Selecione a categoria" />
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+              Categoria
+            </label>
+            <CategorySelect
+              value={categoryId}
+              onChange={handleCategoryChange}
+              placeholder="Selecione a categoria"
+            />
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Forma de pagamento</label>
-            <PaymentMethodSelect value={methodId} onChange={setMethodId} placeholder="Selecione a forma de pagamento" />
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+              Forma de pagamento
+            </label>
+            <PaymentMethodSelect
+              value={methodId}
+              onChange={setMethodId}
+              placeholder="Selecione a forma de pagamento"
+            />
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Quem pagou</label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+              Quem pagou
+            </label>
             <select
               value={paidBy}
               onChange={(e) => setPaidBy(e.target.value)}
@@ -176,7 +205,9 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Data da compra</label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+              Data da compra
+            </label>
             <input
               type="date"
               value={purchaseDate}
@@ -186,7 +217,9 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
           </div>
 
           <div>
-            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">Descrição (opcional)</label>
+            <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
+              Descrição (opcional)
+            </label>
             <input
               type="text"
               value={description}
@@ -203,13 +236,17 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
               onChange={(e) => {
                 const checked = e.target.checked;
                 setRecurringMonthly(checked);
-                setShowSubscriptionSuggestion(checked && Boolean(subscriptionCategoryId) && !isSubscriptionCategory);
+                setShowSubscriptionSuggestion(
+                  checked && Boolean(subscriptionCategoryId) && !isSubscriptionCategory,
+                );
               }}
               className="mt-1 h-4 w-4 rounded border-stone-300 text-emerald-600 focus:ring-emerald-500"
             />
             <span>
               <span className="block font-medium text-stone-900">Recorrente mensal</span>
-              <span className="text-xs text-stone-500">Marca para revisão mensal, sem lançar duplicado automaticamente.</span>
+              <span className="text-xs text-stone-500">
+                Marca para revisão mensal, sem lançar duplicado automaticamente.
+              </span>
             </span>
           </label>
 

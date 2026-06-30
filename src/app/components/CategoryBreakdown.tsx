@@ -18,10 +18,13 @@ const COLORS = [
 
 export function CategoryBreakdown({ expenses }: CategoryBreakdownProps) {
   const categoryData = useMemo(() => {
-    const totals = expenses.reduce((acc, e) => {
-      acc[e.category] = (acc[e.category] || 0) + e.amount;
-      return acc;
-    }, {} as Record<string, number>);
+    const totals = expenses.reduce(
+      (acc, e) => {
+        acc[e.category] = (acc[e.category] || 0) + e.amount;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
     return Object.entries(totals)
       .map(([name, value]) => ({ name, value }))
       .sort((a, b) => b.value - a.value);
@@ -32,14 +35,10 @@ export function CategoryBreakdown({ expenses }: CategoryBreakdownProps) {
   return (
     <div className="bg-white rounded-2xl p-6 border border-stone-200">
       <h2 className="font-medium text-stone-900 mb-1">Onde está indo</h2>
-      <p className="text-xs text-stone-500 mb-4">
-        Gastos variáveis por categoria
-      </p>
+      <p className="text-xs text-stone-500 mb-4">Gastos variáveis por categoria</p>
 
       {categoryData.length === 0 ? (
-        <div className="text-center py-12 text-stone-400 text-sm">
-          Nenhum gasto ainda esse mês.
-        </div>
+        <div className="text-center py-12 text-stone-400 text-sm">Nenhum gasto ainda esse mês.</div>
       ) : (
         <div className="space-y-3">
           {categoryData.map((item, index) => {
@@ -59,9 +58,7 @@ export function CategoryBreakdown({ expenses }: CategoryBreakdownProps) {
                     <span className="break-words font-medium text-stone-900">
                       {formatBRL(item.value)}
                     </span>
-                    <span className="text-xs text-stone-500 ml-2">
-                      {pct.toFixed(0)}%
-                    </span>
+                    <span className="text-xs text-stone-500 ml-2">{pct.toFixed(0)}%</span>
                   </div>
                 </div>
                 <div className="h-1.5 bg-stone-100 rounded-full overflow-hidden">

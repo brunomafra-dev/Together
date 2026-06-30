@@ -1,16 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { addMonths, format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import {
-  CalendarCheck,
-  Clock3,
-  Layers3,
-  Pencil,
-  Plus,
-  Trash2,
-  Wallet,
-  X,
-} from "lucide-react";
+import { CalendarCheck, Clock3, Layers3, Pencil, Plus, Trash2, Wallet, X } from "lucide-react";
+import { toast } from "sonner";
 import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
@@ -135,9 +127,7 @@ export function Installments() {
         name: method.name,
         totalLimit: method.limitAmount ?? 0,
         billExpenses: methodExpenses
-          .filter(
-            (expense) => dueKeyForPurchase(expense.date, method.closingDay) === nextBillKey,
-          )
+          .filter((expense) => dueKeyForPurchase(expense.date, method.closingDay) === nextBillKey)
           .reduce((sum, expense) => sum + expense.amount, 0),
         billInstallments: methodCommitments.reduce(
           (sum, commitment) => sum + currentCommitmentDue(commitment),
@@ -162,7 +152,10 @@ export function Installments() {
 
   const totalLimit = buckets.reduce((sum, bucket) => sum + bucket.totalLimit, 0);
   const expensesLimitUsed = buckets.reduce((sum, bucket) => sum + bucket.expenseLimitUsed, 0);
-  const installmentsLimitUsed = buckets.reduce((sum, bucket) => sum + bucket.commitmentLimitUsed, 0);
+  const installmentsLimitUsed = buckets.reduce(
+    (sum, bucket) => sum + bucket.commitmentLimitUsed,
+    0,
+  );
   const usedLimit = expensesLimitUsed + installmentsLimitUsed;
   const availableLimit = Math.max(totalLimit - usedLimit, 0);
   const currentBillTotal = buckets.reduce(
@@ -173,7 +166,9 @@ export function Installments() {
     (sum, commitment) => sum + currentCommitmentDue(commitment),
     0,
   );
-  const activeInstallments = commitments.filter((commitment) => commitment.status !== "finished").length;
+  const activeInstallments = commitments.filter(
+    (commitment) => commitment.status !== "finished",
+  ).length;
   const totalRemainingInstallments = commitments.reduce(
     (sum, commitment) => sum + remainingInstallments(commitment),
     0,
@@ -225,13 +220,21 @@ export function Installments() {
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <SummaryCard icon={Layers3} label="Parcelamentos ativos" value={String(activeInstallments)} />
+          <SummaryCard
+            icon={Layers3}
+            label="Parcelamentos ativos"
+            value={String(activeInstallments)}
+          />
           <SummaryCard
             icon={CalendarCheck}
             label="Parcelas restantes"
             value={String(totalRemainingInstallments)}
           />
-          <SummaryCard icon={Wallet} label={`Fatura ${nextBillLabel}`} value={formatBRL(currentBillTotal)} />
+          <SummaryCard
+            icon={Wallet}
+            label={`Fatura ${nextBillLabel}`}
+            value={formatBRL(currentBillTotal)}
+          />
           <SummaryCard icon={Clock3} label="Término estimado" value={estimatedEndDate} capitalize />
         </div>
 
@@ -419,7 +422,10 @@ function CardSummary({
       </div>
 
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-white">
-        <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${usagePercent}%` }} />
+        <div
+          className="h-full rounded-full bg-emerald-500 transition-all"
+          style={{ width: `${usagePercent}%` }}
+        />
       </div>
 
       <div className="mt-5">
@@ -474,14 +480,17 @@ function CommitmentRow({
     commitment.totalInstallments > 0
       ? Math.min((commitment.currentInstallment / commitment.totalInstallments) * 100, 100)
       : 0;
-  const categoryName = categories.find((category) => category.id === commitment.categoryId)?.name || "Sem categoria";
+  const categoryName =
+    categories.find((category) => category.id === commitment.categoryId)?.name || "Sem categoria";
 
   return (
     <div className="rounded-xl border border-stone-200 bg-white p-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">
-            <p className="break-words text-sm font-semibold text-stone-950">{commitment.itemName}</p>
+            <p className="break-words text-sm font-semibold text-stone-950">
+              {commitment.itemName}
+            </p>
             <span
               className={`inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium ${statusTone(
                 commitment.status,
@@ -495,7 +504,8 @@ function CommitmentRow({
             </span>
           </div>
           <p className="mt-1 text-xs text-stone-500">
-            {categoryName} - {commitment.currentInstallment} de {commitment.totalInstallments} pagas, {remaining} restantes
+            {categoryName} - {commitment.currentInstallment} de {commitment.totalInstallments}{" "}
+            pagas, {remaining} restantes
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -528,7 +538,10 @@ function CommitmentRow({
       </div>
 
       <div className="mt-3 h-2 overflow-hidden rounded-full bg-stone-100">
-        <div className="h-full rounded-full bg-emerald-500 transition-all" style={{ width: `${progress}%` }} />
+        <div
+          className="h-full rounded-full bg-emerald-500 transition-all"
+          style={{ width: `${progress}%` }}
+        />
       </div>
       {commitment.notes && <p className="mt-3 text-sm text-stone-600">{commitment.notes}</p>}
     </div>
@@ -545,9 +558,7 @@ function AddCommitmentModal({
   onClose: () => void;
 }) {
   const { household, addFinancialCommitment, updateFinancialCommitment } = useFinance();
-  const [paymentMethodId, setPaymentMethodId] = useState(
-    commitment?.paymentMethodId ?? "",
-  );
+  const [paymentMethodId, setPaymentMethodId] = useState(commitment?.paymentMethodId ?? "");
   const [itemName, setItemName] = useState(commitment?.itemName ?? "");
   const [categoryId, setCategoryId] = useState(commitment?.categoryId ?? "");
   const [installmentValue, setInstallmentValue] = useState(
@@ -610,7 +621,9 @@ function AddCommitmentModal({
         toast.success("Parcelamento salvo.");
       }
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o parcelamento.");
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível salvar o parcelamento.",
+      );
     } finally {
       setSaving(false);
     }
@@ -641,7 +654,10 @@ function AddCommitmentModal({
           </button>
         </div>
 
-        <form className="max-h-[calc(100vh-8rem)] overflow-y-auto px-6 py-5" onSubmit={handleSubmit}>
+        <form
+          className="max-h-[calc(100vh-8rem)] overflow-y-auto px-6 py-5"
+          onSubmit={handleSubmit}
+        >
           <div className="grid gap-4 md:grid-cols-2">
             <div className="md:col-span-2">
               <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">
@@ -657,7 +673,11 @@ function AddCommitmentModal({
               <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">
                 Categoria
               </label>
-              <CategorySelect value={categoryId} onChange={setCategoryId} placeholder="Selecione a categoria" />
+              <CategorySelect
+                value={categoryId}
+                onChange={setCategoryId}
+                placeholder="Selecione a categoria"
+              />
             </div>
             <div>
               <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">

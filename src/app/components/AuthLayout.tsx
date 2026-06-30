@@ -9,4 +9,3 @@ export function AuthLayout({ children }: { children: ReactNode }) {
     </main>
   );
 }
-

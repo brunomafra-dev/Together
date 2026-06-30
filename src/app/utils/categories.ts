@@ -9,10 +9,18 @@ export const normalizeCategoryName = (name: string) =>
 export const canonicalCategoryName = (name: string) => {
   const hasMojibakeMarker = name.includes(String.fromCharCode(0xc3)) || name.includes("\uFFFD");
   const normalized = normalizeCategoryName(name);
-  if (/alimenta/i.test(name) || name.includes("Alimenta?") || (name.includes("Alimenta") && hasMojibakeMarker)) {
+  if (
+    /alimenta/i.test(name) ||
+    name.includes("Alimenta?") ||
+    (name.includes("Alimenta") && hasMojibakeMarker)
+  ) {
     return "Alimentação";
   }
-  if (/sa[?\uFFFD]/i.test(name) || name.includes("Sa?") || (name.includes("Sa") && hasMojibakeMarker)) {
+  if (
+    /sa[?\uFFFD]/i.test(name) ||
+    name.includes("Sa?") ||
+    (name.includes("Sa") && hasMojibakeMarker)
+  ) {
     return "Saúde";
   }
   if (normalized.includes("aliment")) return "Alimentação";

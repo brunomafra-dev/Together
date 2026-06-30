@@ -45,7 +45,9 @@ export function RegisterPage() {
           <div className="px-6 pb-6 pt-9 sm:px-8">
             <form className="space-y-5 text-left" onSubmit={handleSubmit}>
               <div className="space-y-2">
-                <label className="text-[0.92rem] font-medium uppercase tracking-[0.16em] text-[#6b7280]">Nome</label>
+                <label className="text-[0.92rem] font-medium uppercase tracking-[0.16em] text-[#6b7280]">
+                  Nome
+                </label>
                 <div className="relative">
                   <User className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
                   <Input
@@ -60,7 +62,9 @@ export function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[0.92rem] font-medium uppercase tracking-[0.16em] text-[#6b7280]">E-mail</label>
+                <label className="text-[0.92rem] font-medium uppercase tracking-[0.16em] text-[#6b7280]">
+                  E-mail
+                </label>
                 <div className="relative">
                   <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
                   <Input
@@ -76,7 +80,9 @@ export function RegisterPage() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-[0.92rem] font-medium uppercase tracking-[0.16em] text-[#6b7280]">Senha</label>
+                <label className="text-[0.92rem] font-medium uppercase tracking-[0.16em] text-[#6b7280]">
+                  Senha
+                </label>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9ca3af]" />
                   <Input

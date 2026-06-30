@@ -11,15 +11,18 @@ export function Layout({ children }: LayoutProps) {
   const location = useLocation();
   const { household, settings } = useFinance();
   const isActive = (path: string) => location.pathname === path;
-  const [darkMode, setDarkMode] = useState(() => window.localStorage.getItem("together:theme") === "dark");
+  const [darkMode, setDarkMode] = useState(
+    () => window.localStorage.getItem("together:theme") === "dark",
+  );
   const partnerNames = (household?.partnerNames ?? settings.partnerNames).filter(Boolean);
   const coupleName = partnerNames.length > 0 ? partnerNames.join(" & ") : "";
-  const initials = partnerNames
-    .map((name) => name.trim()[0])
-    .filter(Boolean)
-    .join("")
-    .slice(0, 2)
-    .toUpperCase() || "T";
+  const initials =
+    partnerNames
+      .map((name) => name.trim()[0])
+      .filter(Boolean)
+      .join("")
+      .slice(0, 2)
+      .toUpperCase() || "T";
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", darkMode);
@@ -43,7 +46,9 @@ export function Layout({ children }: LayoutProps) {
               <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 shadow-sm lg:h-8 lg:w-8 lg:rounded-xl">
                 <Heart className="h-5 w-5 text-white lg:h-4 lg:w-4" fill="white" />
               </div>
-              <span className="hidden text-base font-semibold text-stone-900 dark:text-white min-[390px]:inline lg:text-sm">Together</span>
+              <span className="hidden text-base font-semibold text-stone-900 dark:text-white min-[390px]:inline lg:text-sm">
+                Together
+              </span>
             </Link>
 
             {coupleName ? (
@@ -54,7 +59,11 @@ export function Layout({ children }: LayoutProps) {
               >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700 dark:bg-emerald-900 dark:text-emerald-100 lg:h-8 lg:w-8">
                   {household?.avatarUrl ? (
-                    <img src={household.avatarUrl} alt={coupleName} className="h-full w-full object-cover" />
+                    <img
+                      src={household.avatarUrl}
+                      alt={coupleName}
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
                     initials
                   )}
@@ -110,7 +119,9 @@ export function Layout({ children }: LayoutProps) {
               }`}
             >
               <Icon className="h-5 w-5" />
-              <span className="max-w-full truncate">{label === "Impacto futuro" ? "Futuro" : label}</span>
+              <span className="max-w-full truncate">
+                {label === "Impacto futuro" ? "Futuro" : label}
+              </span>
             </Link>
           ))}
         </div>

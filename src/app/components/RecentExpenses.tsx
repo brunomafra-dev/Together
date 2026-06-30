@@ -24,7 +24,9 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [filters, setFilters] = useState({
-    month: defaultMonth ?? (expenses[0]?.date ? monthKey(expenses[0].date) : new Date().toISOString().slice(0, 7)),
+    month:
+      defaultMonth ??
+      (expenses[0]?.date ? monthKey(expenses[0].date) : new Date().toISOString().slice(0, 7)),
     paidBy: "all",
     category: "all",
     method: "all",
@@ -36,9 +38,15 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
     }
   }, [defaultMonth]);
 
-  const categoryNames = useMemo(() => new Map(categories.map((category) => [category.id, category.name])), [categories]);
+  const categoryNames = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name])),
+    [categories],
+  );
   const categoryOptions = useMemo(() => dedupeCategories(categories), [categories]);
-  const paymentMethodNames = useMemo(() => new Map(paymentMethods.map((method) => [method.id, method.name])), [paymentMethods]);
+  const paymentMethodNames = useMemo(
+    () => new Map(paymentMethods.map((method) => [method.id, method.name])),
+    [paymentMethods],
+  );
   const householdMembers = useMemo(() => {
     const names = [
       household?.partnerNames[0] || settings.partnerNames[0] || "",
@@ -50,7 +58,8 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
       .filter((member) => member.name);
   }, [household?.partnerIds, household?.partnerNames, settings.partnerNames]);
   const resolvePersonName = (paidBy: string) =>
-    householdMembers.find((member) => member.id === paidBy || member.value === paidBy)?.name || paidBy;
+    householdMembers.find((member) => member.id === paidBy || member.value === paidBy)?.name ||
+    paidBy;
 
   const sorted = useMemo(
     () => [...expenses].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()),
@@ -64,7 +73,9 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
         const matchesPaidBy =
           filters.paidBy === "all" ||
           expense.paidBy === filters.paidBy ||
-          householdMembers.some((member) => member.value === filters.paidBy && member.id === expense.paidBy);
+          householdMembers.some(
+            (member) => member.value === filters.paidBy && member.id === expense.paidBy,
+          );
         const matchesCategory = filters.category === "all" || expense.category === filters.category;
         const matchesMethod = filters.method === "all" || expense.card === filters.method;
         return matchesMonth && matchesPaidBy && matchesCategory && matchesMethod;
@@ -83,7 +94,10 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
       .sort((a, b) => b.amount - a.amount);
   }, [filtered, householdMembers]);
 
-  const difference = personTotals.length >= 2 ? Math.abs(personTotals[0].amount - personTotals[1].amount) : personTotals[0]?.amount ?? 0;
+  const difference =
+    personTotals.length >= 2
+      ? Math.abs(personTotals[0].amount - personTotals[1].amount)
+      : (personTotals[0]?.amount ?? 0);
 
   const handleDelete = async (expense: Expense) => {
     setDeletingId(expense.id);
@@ -152,7 +166,9 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
         >
           <option value="all">Todas as pessoas</option>
           {householdMembers.map((member) => (
-            <option key={member.id} value={member.value}>{member.name}</option>
+            <option key={member.id} value={member.value}>
+              {member.name}
+            </option>
           ))}
         </select>
         <select
@@ -162,7 +178,9 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
         >
           <option value="all">Todas as categorias</option>
           {categoryOptions.map((category) => (
-            <option key={category.id} value={category.id}>{category.name}</option>
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
           ))}
         </select>
         <select
@@ -172,13 +190,17 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
         >
           <option value="all">Todas as formas</option>
           {paymentMethods.map((method) => (
-            <option key={method.id} value={method.id}>{method.name}</option>
+            <option key={method.id} value={method.id}>
+              {method.name}
+            </option>
           ))}
         </select>
       </div>
 
       <div className="mb-4 rounded-xl border border-stone-100 bg-stone-50 p-3">
-        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-stone-500">Pago por pessoa</p>
+        <p className="mb-2 text-xs font-medium uppercase tracking-wider text-stone-500">
+          Pago por pessoa
+        </p>
         {personTotals.length === 0 ? (
           <p className="text-sm text-stone-500">Sem gastos para comparar neste filtro.</p>
         ) : (
@@ -198,9 +220,7 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
       </div>
 
       {filtered.length === 0 ? (
-        <div className="text-center py-12 text-stone-400 text-sm">
-          Nada por aqui neste filtro.
-        </div>
+        <div className="text-center py-12 text-stone-400 text-sm">Nada por aqui neste filtro.</div>
       ) : (
         <div className="space-y-1">
           {filtered.map((expense) => (
@@ -223,8 +243,8 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
                   )}
                 </div>
                 <p className="text-xs text-stone-500 mt-0.5">
-                  {format(parseISO(expense.date), "d 'de' MMM", { locale: ptBR })}{" "}
-                  - {resolvePersonName(expense.paidBy)}
+                  {format(parseISO(expense.date), "d 'de' MMM", { locale: ptBR })} -{" "}
+                  {resolvePersonName(expense.paidBy)}
                   {expense.card ? ` - ${paymentMethodNames.get(expense.card) || expense.card}` : ""}
                 </p>
               </div>
@@ -255,7 +275,9 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
         </div>
       )}
 
-      {editingExpense && <AddExpenseModal expense={editingExpense} onClose={() => setEditingExpense(null)} />}
+      {editingExpense && (
+        <AddExpenseModal expense={editingExpense} onClose={() => setEditingExpense(null)} />
+      )}
     </div>
   );
 }
