@@ -10,6 +10,7 @@ import { dedupeCategories } from "../utils/categories";
 interface RecentExpensesProps {
   expenses: Expense[];
   defaultMonth?: string;
+  cycleRangeLabel?: string;
 }
 
 const monthKey = (date: string) => date.slice(0, 7);
@@ -19,7 +20,7 @@ const csvCell = (value: string | number) => {
   return `"${text.replace(/"/g, '""')}"`;
 };
 
-export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) {
+export function RecentExpenses({ expenses, defaultMonth, cycleRangeLabel }: RecentExpensesProps) {
   const { deleteExpense, household, settings, categories, paymentMethods } = useFinance();
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
@@ -69,7 +70,9 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
   const filtered = useMemo(
     () =>
       sorted.filter((expense) => {
-        const matchesMonth = !filters.month || monthKey(expense.date) === filters.month;
+        const matchesMonth = cycleRangeLabel
+          ? true
+          : !filters.month || monthKey(expense.date) === filters.month;
         const matchesPaidBy =
           filters.paidBy === "all" ||
           expense.paidBy === filters.paidBy ||
@@ -80,7 +83,7 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
         const matchesMethod = filters.method === "all" || expense.card === filters.method;
         return matchesMonth && matchesPaidBy && matchesCategory && matchesMethod;
       }),
-    [filters, householdMembers, sorted],
+    [cycleRangeLabel, filters, householdMembers, sorted],
   );
 
   const personTotals = useMemo(() => {
@@ -113,9 +116,20 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
 
   const exportCsv = () => {
     const rows = [
-      ["data", "descrição", "categoria", "forma de pagamento", "quem pagou", "valor"],
+      [
+        "data da compra",
+        "fechamento da fatura",
+        "vencimento da fatura",
+        "descrição",
+        "categoria",
+        "forma de pagamento",
+        "quem pagou",
+        "valor",
+      ],
       ...filtered.map((expense) => [
         expense.date,
+        expense.invoiceClosingDate || "",
+        expense.invoiceDueDate || "",
         expense.description || "",
         categoryNames.get(expense.category) || expense.category || "Sem categoria",
         expense.card ? paymentMethodNames.get(expense.card) || expense.card : "",
@@ -128,7 +142,7 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `gastos-${filters.month || "filtrados"}.csv`;
+    link.download = `gastos-${cycleRangeLabel ? "ciclo-financeiro" : filters.month || "filtrados"}.csv`;
     link.click();
     URL.revokeObjectURL(url);
     toast.success("CSV exportado.");
@@ -152,13 +166,21 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
         </button>
       </div>
 
+      {cycleRangeLabel ? (
+        <div className="mb-4 rounded-xl border border-emerald-100 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          Ciclo financeiro: {cycleRangeLabel}
+        </div>
+      ) : null}
+
       <div className="mb-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <input
-          type="month"
-          value={filters.month}
-          onChange={(e) => setFilters((current) => ({ ...current, month: e.target.value }))}
-          className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-        />
+        {!cycleRangeLabel ? (
+          <input
+            type="month"
+            value={filters.month}
+            onChange={(e) => setFilters((current) => ({ ...current, month: e.target.value }))}
+            className="rounded-xl border border-stone-200 bg-white px-3 py-2 text-sm text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        ) : null}
         <select
           value={filters.paidBy}
           onChange={(e) => setFilters((current) => ({ ...current, paidBy: e.target.value }))}
@@ -239,6 +261,12 @@ export function RecentExpenses({ expenses, defaultMonth }: RecentExpensesProps) 
                   {expense.recurringMonthly && (
                     <span className="text-xs px-2 py-0.5 bg-emerald-50 text-emerald-700 rounded shrink-0">
                       recorrente
+                    </span>
+                  )}
+                  {expense.invoiceDueDate && (
+                    <span className="shrink-0 rounded bg-indigo-50 px-2 py-0.5 text-xs text-indigo-700">
+                      fatura vence{" "}
+                      {format(parseISO(expense.invoiceDueDate), "dd/MM", { locale: ptBR })}
                     </span>
                   )}
                 </div>

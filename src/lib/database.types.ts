@@ -40,6 +40,9 @@ export interface MonthlySnapshot extends TimestampedRow {
   household_id: string | null;
   month: number | null;
   year: number | null;
+  cycle_start_date: string | null;
+  cycle_end_date: string | null;
+  expense_rows: Json | null;
   monthly_income: number | null;
   total_expenses: number | null;
   fixed_expenses_total: number | null;
@@ -56,6 +59,7 @@ export interface HouseholdFinanceState extends TimestampedRow {
   household_id: string;
   active_month: number;
   active_year: number;
+  active_cycle_start_date: string | null;
   updated_at: string | null;
 }
 
@@ -73,6 +77,8 @@ export interface Expense extends TimestampedRow {
   description: string | null;
   amount: number | null;
   purchase_date: string | null;
+  invoice_closing_date: string | null;
+  invoice_due_date: string | null;
   created_by: string | null;
   paid_by: string | null;
   notes: string | null;
@@ -229,9 +235,46 @@ export interface Database {
         Args: Record<string, never>;
         Returns: string;
       };
+      close_financial_cycle: {
+        Args: {
+          p_household_id: string;
+          p_month: number;
+          p_year: number;
+          p_cycle_start_date: string;
+          p_cycle_end_date: string;
+          p_next_month: number;
+          p_next_year: number;
+          p_next_cycle_start_date: string;
+          p_monthly_income: number;
+          p_total_expenses: number;
+          p_fixed_expenses_total: number;
+          p_installment_expenses_total: number;
+          p_remaining_balance: number;
+          p_category_totals: Json;
+          p_card_totals: Json;
+          p_goal_progress: Json;
+          p_financial_health: Json;
+          p_expense_rows: Json;
+          p_closed_at: string;
+        };
+        Returns: MonthlySnapshot[];
+      };
+      initialize_financial_cycle_state: {
+        Args: {
+          p_household_id: string;
+          p_active_month: number;
+          p_active_year: number;
+          p_active_cycle_start_date: string;
+        };
+        Returns: HouseholdFinanceState[];
+      };
       delete_current_user: {
         Args: Record<string, never>;
         Returns: void;
+      };
+      reopen_financial_cycle: {
+        Args: { p_snapshot_id: string };
+        Returns: MonthlySnapshot[];
       };
     };
     Enums: Record<string, never>;

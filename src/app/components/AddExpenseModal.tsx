@@ -4,6 +4,7 @@ import { Expense, useFinance } from "../context/FinanceContext";
 import { X } from "lucide-react";
 import { CategorySelect } from "./CategorySelect";
 import { PaymentMethodSelect } from "./PaymentMethodSelect";
+import { getCreditCardBillingDates } from "../utils/financialCycles";
 
 interface AddExpenseModalProps {
   onClose: () => void;
@@ -65,6 +66,30 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
   const isSubscriptionCategory = Boolean(
     subscriptionCategoryId && categoryId === subscriptionCategoryId,
   );
+  const selectedPaymentMethod = paymentMethods.find((method) => method.id === methodId);
+  const creditCardNeedsBillingDates = Boolean(
+    selectedPaymentMethod?.type === "credit_card" &&
+    (selectedPaymentMethod.closingDay === null || selectedPaymentMethod.dueDay === null),
+  );
+  const billingPreview = useMemo(() => {
+    if (
+      selectedPaymentMethod?.type !== "credit_card" ||
+      selectedPaymentMethod.closingDay === null ||
+      selectedPaymentMethod.dueDay === null ||
+      !purchaseDate
+    ) {
+      return null;
+    }
+    return getCreditCardBillingDates(
+      purchaseDate,
+      selectedPaymentMethod.closingDay,
+      selectedPaymentMethod.dueDay,
+    );
+  }, [purchaseDate, selectedPaymentMethod]);
+  const formatDate = (date: string) => {
+    const [year, month, day] = date.split("-");
+    return `${day}/${month}/${year}`;
+  };
 
   useEffect(() => {
     if (
@@ -85,6 +110,10 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
     e.preventDefault();
     const value = parseFloat(amount.replace(",", "."));
     if (!value || value <= 0 || isSaving) return;
+    if (creditCardNeedsBillingDates) {
+      toast.error("Configure o fechamento e o vencimento deste cartão antes de lançar a compra.");
+      return;
+    }
 
     setIsSaving(true);
     try {
@@ -216,6 +245,21 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
             />
           </div>
 
+          {billingPreview ? (
+            <div className="rounded-xl border border-indigo-100 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+              <p className="font-medium">Esta compra já tem uma fatura definida</p>
+              <p className="mt-1 text-xs text-indigo-700">
+                Fecha em {formatDate(billingPreview.closingDate)} e vence em{" "}
+                {formatDate(billingPreview.dueDate)}. Compras após o fechamento passam para a fatura
+                seguinte.
+              </p>
+            </div>
+          ) : creditCardNeedsBillingDates ? (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
+              Configure os dias de fechamento e vencimento desse cartão em Perfil antes de salvar.
+            </div>
+          ) : null}
+
           <div>
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
               Descrição (opcional)
@@ -289,7 +333,13 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
             </button>
             <button
               type="submit"
-              disabled={isSaving || !amount || parseFloat(amount.replace(",", ".")) <= 0 || !paidBy}
+              disabled={
+                isSaving ||
+                !amount ||
+                parseFloat(amount.replace(",", ".")) <= 0 ||
+                !paidBy ||
+                creditCardNeedsBillingDates
+              }
               className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-medium"
             >
               {isSaving ? "Salvando..." : isEditing ? "Salvar edição" : "Salvar"}

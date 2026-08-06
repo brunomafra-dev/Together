@@ -1,5 +1,5 @@
 import { supabase } from "../lib/supabase";
-import type { TableInsert, TableRow } from "../lib/database.types";
+import type { Json, TableInsert, TableRow } from "../lib/database.types";
 
 type ExpenseRow = TableRow<"expenses">;
 type InstallmentRow = TableRow<"installments">;
@@ -24,6 +24,8 @@ export interface ExpenseModel {
   date: string;
   createdBy: string;
   cardId?: string | null;
+  invoiceClosingDate?: string | null;
+  invoiceDueDate?: string | null;
   notes?: string;
   recurringMonthly?: boolean;
 }
@@ -140,6 +142,23 @@ export interface MonthlySnapshotModel {
   householdId: string;
   month: number;
   year: number;
+  cycleStartDate: string;
+  cycleEndDate: string;
+  expenseRows: Array<{
+    id: string;
+    purchaseDate: string;
+    effectiveDate: string;
+    invoiceClosingDate: string | null;
+    invoiceDueDate: string | null;
+    description: string;
+    categoryId: string;
+    category: string;
+    paymentMethodId: string | null;
+    paymentMethod: string;
+    paidById: string;
+    paidBy: string;
+    amount: number;
+  }>;
   monthlyIncome: number;
   totalExpenses: number;
   fixedExpensesTotal: number;
@@ -147,12 +166,14 @@ export interface MonthlySnapshotModel {
   remainingBalance: number;
   categoryTotals: Array<{ name: string; amount: number }>;
   cardTotals: Array<{
+    id: string;
     name: string;
     amount: number;
     limitAmount: number | null;
     availableLimit: number | null;
   }>;
   goalProgress: Array<{
+    id: string;
     title: string;
     currentAmount: number;
     targetAmount: number;
@@ -171,6 +192,7 @@ export interface HouseholdFinanceStateModel {
   householdId: string;
   activeMonth: number;
   activeYear: number;
+  activeCycleStartDate: string;
   updatedAt: string;
 }
 
@@ -185,10 +207,37 @@ export interface ProfileModel {
 
 const toNumber = (value: unknown) => (typeof value === "number" ? value : Number(value ?? 0) || 0);
 const toString = (value: unknown) => (typeof value === "string" ? value : "");
+const toLocalDateString = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
 const throwIfError = (error: unknown) => {
   if (error && typeof error === "object" && "message" in error) {
     throw new Error(String((error as { message?: string }).message || "Supabase error"));
   }
+};
+
+const financialCycleMigrationError = () =>
+  new Error(
+    "Atualize o Supabase com supabase_manual_financial_cycles_and_invoices.sql antes de usar ciclos e faturas.",
+  );
+
+const isFinancialCycleSchemaError = (error: unknown) => {
+  const message =
+    error && typeof error === "object" && "message" in error
+      ? String((error as { message?: string }).message || "")
+      : "";
+  return [
+    "invoice_closing_date",
+    "invoice_due_date",
+    "recurring_monthly",
+    "close_financial_cycle",
+    "reopen_financial_cycle",
+    "initialize_financial_cycle_state",
+    "household_finance_state",
+    "active_cycle_start_date",
+    "PGRST202",
+  ].some((part) => message.includes(part));
 };
 
 // Obter household_id do usuário atual
@@ -250,6 +299,8 @@ const mapExpenseRow = (row: any): ExpenseModel => ({
   date: toString(row.purchase_date),
   createdBy: toString(row.paid_by) || toString(row.created_by),
   cardId: row.card_id,
+  invoiceClosingDate: row.invoice_closing_date ? toString(row.invoice_closing_date) : null,
+  invoiceDueDate: row.invoice_due_date ? toString(row.invoice_due_date) : null,
   notes: toString(row.notes),
   recurringMonthly: Boolean(row.recurring_monthly),
 });
@@ -454,6 +505,15 @@ const mapMonthlySnapshotRow = (row: MonthlySnapshotRow): MonthlySnapshotModel =>
   householdId: toString(row.household_id),
   month: toNumber(row.month),
   year: toNumber(row.year),
+  cycleStartDate:
+    toString(row.cycle_start_date) ||
+    `${toNumber(row.year)}-${String(toNumber(row.month)).padStart(2, "0")}-01`,
+  cycleEndDate:
+    toString(row.cycle_end_date) ||
+    toLocalDateString(new Date(toNumber(row.year), toNumber(row.month), 0)),
+  expenseRows: Array.isArray(row.expense_rows)
+    ? (row.expense_rows as MonthlySnapshotModel["expenseRows"])
+    : [],
   monthlyIncome: toNumber(row.monthly_income),
   totalExpenses: toNumber(row.total_expenses),
   fixedExpensesTotal: toNumber(row.fixed_expenses_total),
@@ -481,6 +541,7 @@ const mapHouseholdFinanceStateRow = (
   householdId: toString(row.household_id),
   activeMonth: toNumber(row.active_month),
   activeYear: toNumber(row.active_year),
+  activeCycleStartDate: toString(row.active_cycle_start_date),
   updatedAt: toString(row.updated_at || row.created_at),
 });
 
@@ -784,17 +845,13 @@ export async function addExpense(
     purchase_date: expense.date,
     created_by: user?.id || null,
     paid_by: expense.createdBy || null,
+    invoice_closing_date: expense.invoiceClosingDate || null,
+    invoice_due_date: expense.invoiceDueDate || null,
     notes: (expense as any).notes,
     recurring_monthly: (expense as any).recurringMonthly ?? false,
   };
-  let { data, error } = await supabase.from("expenses").insert(payload).select("*").single();
-  if (error && String(error.message || "").includes("recurring_monthly")) {
-    const fallbackPayload = { ...payload } as any;
-    delete fallbackPayload.recurring_monthly;
-    const fallback = await supabase.from("expenses").insert(fallbackPayload).select("*").single();
-    data = fallback.data;
-    error = fallback.error;
-  }
+  const { data, error } = await supabase.from("expenses").insert(payload).select("*").single();
+  if (error && isFinancialCycleSchemaError(error)) throw financialCycleMigrationError();
   throwIfError(error);
   return mapExpenseRow(data as ExpenseRow);
 }
@@ -810,26 +867,19 @@ export async function updateExpense(
   if (changes.date !== undefined) payload.purchase_date = changes.date;
   if (changes.createdBy !== undefined) payload.paid_by = changes.createdBy || null;
   if (changes.cardId !== undefined) payload.card_id = changes.cardId || null;
+  if (changes.invoiceClosingDate !== undefined)
+    payload.invoice_closing_date = changes.invoiceClosingDate || null;
+  if (changes.invoiceDueDate !== undefined)
+    payload.invoice_due_date = changes.invoiceDueDate || null;
   if (changes.recurringMonthly !== undefined)
     (payload as any).recurring_monthly = changes.recurringMonthly;
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from("expenses")
     .update(payload)
     .eq("id", id)
     .select("*")
     .single();
-  if (error && String(error.message || "").includes("recurring_monthly")) {
-    const fallbackPayload = { ...payload } as any;
-    delete fallbackPayload.recurring_monthly;
-    const fallback = await supabase
-      .from("expenses")
-      .update(fallbackPayload)
-      .eq("id", id)
-      .select("*")
-      .single();
-    data = fallback.data;
-    error = fallback.error;
-  }
+  if (error && isFinancialCycleSchemaError(error)) throw financialCycleMigrationError();
   throwIfError(error);
   return mapExpenseRow(data as ExpenseRow);
 }
@@ -1258,76 +1308,78 @@ export async function fetchHouseholdFinanceState(
 ): Promise<HouseholdFinanceStateModel | null> {
   const { data, error } = await supabase
     .from("household_finance_state")
-    .select("*")
+    .select(
+      "household_id, active_month, active_year, active_cycle_start_date, updated_at, created_at",
+    )
     .eq("household_id", householdId)
     .maybeSingle();
-  if (error) {
-    if (
-      String(error.message || "").includes("schema cache") ||
-      String(error.message || "").includes("household_finance_state")
-    )
-      return null;
-    throwIfError(error);
-  }
+  if (error && isFinancialCycleSchemaError(error)) throw financialCycleMigrationError();
+  throwIfError(error);
   return data ? mapHouseholdFinanceStateRow(data as HouseholdFinanceStateRow) : null;
 }
 
-export async function upsertHouseholdFinanceState(
+export async function initializeHouseholdFinanceState(
   householdId: string,
   activeMonth: number,
   activeYear: number,
-): Promise<HouseholdFinanceStateModel | null> {
+  activeCycleStartDate: string,
+): Promise<HouseholdFinanceStateModel> {
   const { data, error } = await supabase
-    .from("household_finance_state")
-    .upsert({
-      household_id: householdId,
-      active_month: activeMonth,
-      active_year: activeYear,
-      updated_at: new Date().toISOString(),
-    } as any)
-    .select("*")
+    .rpc("initialize_financial_cycle_state", {
+      p_household_id: householdId,
+      p_active_month: activeMonth,
+      p_active_year: activeYear,
+      p_active_cycle_start_date: activeCycleStartDate,
+    })
     .single();
-  if (error) {
-    if (
-      String(error.message || "").includes("schema cache") ||
-      String(error.message || "").includes("household_finance_state")
-    )
-      return null;
-    throwIfError(error);
-  }
-  return data ? mapHouseholdFinanceStateRow(data as HouseholdFinanceStateRow) : null;
-}
-
-export async function addMonthlySnapshot(
-  snapshot: MonthlySnapshotInput,
-): Promise<MonthlySnapshotModel> {
-  const { data, error } = await supabase
-    .from("monthly_snapshots")
-    .upsert(
-      {
-        household_id: snapshot.householdId,
-        month: snapshot.month,
-        year: snapshot.year,
-        monthly_income: snapshot.monthlyIncome,
-        total_expenses: snapshot.totalExpenses,
-        fixed_expenses_total: snapshot.fixedExpensesTotal,
-        installment_expenses_total: snapshot.installmentExpensesTotal,
-        remaining_balance: snapshot.remainingBalance,
-        category_totals: snapshot.categoryTotals,
-        card_totals: snapshot.cardTotals,
-        goal_progress: snapshot.goalProgress,
-        financial_health: snapshot.financialHealth,
-        closed_at: snapshot.closedAt ?? new Date().toISOString(),
-      },
-      { onConflict: "household_id,month,year" },
-    )
-    .select("*")
-    .single();
+  if (error && isFinancialCycleSchemaError(error)) throw financialCycleMigrationError();
   throwIfError(error);
-  return mapMonthlySnapshotRow(data as MonthlySnapshotRow);
+  if (!data) throw new Error("O Supabase não retornou o ciclo financeiro inicial.");
+  return mapHouseholdFinanceStateRow(data as HouseholdFinanceStateRow);
 }
 
-export async function deleteMonthlySnapshot(id: string): Promise<void> {
-  const { error } = await supabase.from("monthly_snapshots").delete().eq("id", id);
+export async function closeFinancialCycle(
+  snapshot: MonthlySnapshotInput,
+  nextCycle: { month: number; year: number; startDate: string },
+): Promise<MonthlySnapshotModel> {
+  const closedAt = snapshot.closedAt ?? new Date().toISOString();
+  const { data, error } = await supabase
+    .rpc("close_financial_cycle", {
+      p_household_id: snapshot.householdId,
+      p_month: snapshot.month,
+      p_year: snapshot.year,
+      p_cycle_start_date: snapshot.cycleStartDate,
+      p_cycle_end_date: snapshot.cycleEndDate,
+      p_next_month: nextCycle.month,
+      p_next_year: nextCycle.year,
+      p_next_cycle_start_date: nextCycle.startDate,
+      p_monthly_income: snapshot.monthlyIncome,
+      p_total_expenses: snapshot.totalExpenses,
+      p_fixed_expenses_total: snapshot.fixedExpensesTotal,
+      p_installment_expenses_total: snapshot.installmentExpensesTotal,
+      p_remaining_balance: snapshot.remainingBalance,
+      p_category_totals: snapshot.categoryTotals as unknown as Json,
+      p_card_totals: snapshot.cardTotals as unknown as Json,
+      p_goal_progress: snapshot.goalProgress as unknown as Json,
+      p_financial_health: snapshot.financialHealth as unknown as Json,
+      p_expense_rows: snapshot.expenseRows as unknown as Json,
+      p_closed_at: closedAt,
+    })
+    .single();
+
+  if (!error && data) return mapMonthlySnapshotRow(data as MonthlySnapshotRow);
+
+  if (error && isFinancialCycleSchemaError(error)) throw financialCycleMigrationError();
+  throwIfError(error);
+  throw new Error("O Supabase não retornou o fechamento criado.");
+}
+
+export async function reopenFinancialCycle(snapshot: MonthlySnapshotModel): Promise<void> {
+  const { error } = await supabase.rpc("reopen_financial_cycle", {
+    p_snapshot_id: snapshot.id,
+  });
+  if (!error) return;
+
+  if (isFinancialCycleSchemaError(error)) throw financialCycleMigrationError();
   throwIfError(error);
 }

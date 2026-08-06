@@ -1,10 +1,17 @@
 ﻿import { useMemo } from "react";
-import { addMonths, format } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Calendar, TrendingDown, TrendingUp } from "lucide-react";
 import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
+import {
+  addLocalMonths,
+  defaultCycleEnd,
+  isDateWithinCycle,
+  isLocalDateString,
+  parseLocalDate,
+} from "../utils/financialCycles";
 
 export function FutureCommitments() {
   const {
@@ -56,10 +63,12 @@ export function FutureCommitments() {
 
   const futureMonths = useMemo(() => {
     const months = [];
-    const baseMonth = new Date(activeCycle.year, activeCycle.month - 1, 1);
+    const paymentMethodsById = new Map(paymentMethods.map((method) => [method.id, method]));
 
     for (let i = 1; i <= 6; i++) {
-      const monthDate = addMonths(baseMonth, i);
+      const cycleStartDate = addLocalMonths(activeCycle.startDate, i);
+      const cycleEndDate = defaultCycleEnd(cycleStartDate);
+      const monthDate = parseLocalDate(cycleStartDate);
       const monthKey = monthDate.getFullYear() * 12 + monthDate.getMonth();
       const monthCommitments = commitments
         .filter(
@@ -83,30 +92,52 @@ export function FutureCommitments() {
           return startKey <= monthKey;
         })
         .reduce((sum, expense) => sum + expense.amount, 0);
-      const total = monthCommitments + monthFixed + monthSubscriptions + monthRecurringPurchases;
+      const monthCardPurchases = expenses
+        .filter((expense) => {
+          if (expense.recurringMonthly || subscriptionCategoryIds.has(expense.category)) {
+            return false;
+          }
+          const method = expense.card ? paymentMethodsById.get(expense.card) : null;
+          if (method?.type !== "credit_card") return false;
+          const effectiveDate = isLocalDateString(expense.invoiceDueDate)
+            ? expense.invoiceDueDate
+            : expense.date;
+          return isDateWithinCycle(effectiveDate, cycleStartDate, cycleEndDate);
+        })
+        .reduce((sum, expense) => sum + expense.amount, 0);
+      const total =
+        monthCommitments +
+        monthFixed +
+        monthSubscriptions +
+        monthRecurringPurchases +
+        monthCardPurchases;
       months.push({
         date: monthDate,
-        label: format(monthDate, "MMMM 'de' yyyy", { locale: ptBR }),
+        label: `${format(monthDate, "MMMM 'de' yyyy", { locale: ptBR })} · ${format(
+          monthDate,
+          "dd/MM",
+        )} a ${format(parseLocalDate(cycleEndDate), "dd/MM")}`,
         commitments: monthCommitments,
         fixed: monthFixed,
         subscriptions: monthSubscriptions,
         recurringPurchases: monthRecurringPurchases,
+        cardPurchases: monthCardPurchases,
         total,
         free: settings.monthlyIncome - total,
       });
     }
     return months;
   }, [
-    activeCycle.month,
-    activeCycle.year,
+    activeCycle.startDate,
     activeRecurringPurchases,
     activeSubscriptions,
     commitments,
     fixedExpenses,
+    expenses,
+    paymentMethods,
     settings.monthlyIncome,
+    subscriptionCategoryIds,
   ]);
-
-  const prevMonth = futureMonths[0]?.total || 0;
 
   return (
     <Layout>
@@ -137,7 +168,6 @@ export function FutureCommitments() {
         >
           <div className="grid gap-3">
             {futureMonths.map((month, index) => {
-              const change = index === 0 ? 0 : month.total - prevMonth;
               const isRelief = index > 0 && month.total < futureMonths[index - 1].total;
 
               return (
@@ -157,7 +187,7 @@ export function FutureCommitments() {
                     )}
                   </div>
 
-                  <div className="grid gap-3 sm:grid-cols-5">
+                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
                     <div className="bg-stone-50 rounded-xl p-3">
                       <p className="text-xs text-stone-500 mb-1">Contas fixas</p>
                       <p className="break-words font-semibold text-stone-900">
@@ -180,6 +210,12 @@ export function FutureCommitments() {
                       <p className="text-xs text-cyan-700 mb-1">Recorrências</p>
                       <p className="break-words font-semibold text-cyan-900">
                         {formatBRL(month.recurringPurchases)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-violet-50 p-3">
+                      <p className="mb-1 text-xs text-violet-700">Faturas futuras</p>
+                      <p className="break-words font-semibold text-violet-900">
+                        {formatBRL(month.cardPurchases)}
                       </p>
                     </div>
                     <div className="bg-emerald-50 rounded-xl p-3">

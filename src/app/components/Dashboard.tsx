@@ -1,15 +1,7 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
 import { useRef } from "react";
-import {
-  endOfMonth,
-  format,
-  getDate,
-  getDaysInMonth,
-  isWithinInterval,
-  parseISO,
-  startOfMonth,
-} from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import {
   ArrowRight,
@@ -30,16 +22,21 @@ import { Link, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { AddExpenseModal } from "./AddExpenseModal";
 import { CategoryBreakdown } from "./CategoryBreakdown";
-import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { RecentExpenses } from "./RecentExpenses";
 import { formatBRL, MonthlySnapshotModel, useFinance } from "../context/FinanceContext";
 import * as financeService from "../../services/financeService";
-
-const nextCycle = (cycle: { month: number; year: number }) =>
-  cycle.month === 12
-    ? { month: 1, year: cycle.year + 1 }
-    : { month: cycle.month + 1, year: cycle.year };
+import {
+  addLocalMonths,
+  daysBetweenLocalDates,
+  defaultCycleEnd,
+  formatLocalDate,
+  isDateWithinCycle,
+  isLocalDateString,
+  nextLocalDate,
+  parseLocalDate,
+  previousLocalDate,
+} from "../utils/financialCycles";
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -58,7 +55,6 @@ export function Dashboard() {
     closeMonth,
     addIncomeEntry,
     deleteIncomeEntry,
-    openNextMonth,
     activeCycle,
   } = useFinance();
   const [showAddExpense, setShowAddExpense] = useState(false);
@@ -104,16 +100,9 @@ export function Dashboard() {
   }, [household?.id]);
 
   const cycleMonthDate = new Date(activeCycle.year, activeCycle.month - 1, 1);
-  const today = new Date();
-  const isActiveCycleCurrentMonth =
-    today.getFullYear() === activeCycle.year && today.getMonth() + 1 === activeCycle.month;
-  const paceReferenceDate = isActiveCycleCurrentMonth
-    ? today
-    : new Date(activeCycle.year, activeCycle.month - 1, 1);
-  const currentMonth = useMemo(
-    () => ({ start: startOfMonth(cycleMonthDate), end: endOfMonth(cycleMonthDate) }),
-    [cycleMonthDate],
-  );
+  const cycleEndDate = defaultCycleEnd(activeCycle.startDate);
+  const todayDate = formatLocalDate(new Date());
+  const paceReferenceDate = todayDate < activeCycle.startDate ? activeCycle.startDate : todayDate;
 
   const data = useMemo(() => {
     const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
@@ -125,18 +114,21 @@ export function Dashboard() {
         .filter(([id]) => Boolean(id)),
     );
 
-    const resolvedExpenses = expenses.map((expense) => ({
+    const effectiveDate = (expense: (typeof expenses)[number]) =>
+      isLocalDateString(expense.invoiceDueDate) ? expense.invoiceDueDate : expense.date;
+    const cycleExpenses = expenses.filter((expense) =>
+      isDateWithinCycle(effectiveDate(expense), activeCycle.startDate, cycleEndDate),
+    );
+    const resolvedExpenses = cycleExpenses.map((expense) => ({
       ...expense,
       category: categoryNames.get(expense.category) || expense.category || "Sem categoria",
       card: expense.card ? paymentMethodNames.get(expense.card) || expense.card : null,
       paidBy: householdMembers.get(expense.paidBy) || expense.paidBy || "Sem responsável",
     }));
 
-    const monthExpenses = resolvedExpenses.filter((expense) =>
-      isWithinInterval(parseISO(expense.date), currentMonth),
-    );
+    const monthExpenses = resolvedExpenses;
     const monthIncomeEntries = incomeEntries.filter((entry) =>
-      isWithinInterval(parseISO(entry.date), currentMonth),
+      isDateWithinCycle(entry.date, activeCycle.startDate, cycleEndDate),
     );
     const fixedExpenseAmount = (expense: (typeof fixedExpenses)[number]) => {
       const monthlyValue = fixedExpenseMonthlyValues.find(
@@ -198,11 +190,15 @@ export function Dashboard() {
       .map(([name, amount]) => ({ name, amount }))
       .sort((left, right) => right.amount - left.amount);
 
-    const dayOfMonth = getDate(paceReferenceDate);
-    const daysInMonth = getDaysInMonth(cycleMonthDate);
-    const daysLeft = daysInMonth - dayOfMonth;
-    const dailyPace = dayOfMonth > 0 ? variableSpent / dayOfMonth : 0;
-    const projectedVariable = dailyPace * daysInMonth;
+    const elapsedDays = Math.max(
+      daysBetweenLocalDates(activeCycle.startDate, paceReferenceDate) + 1,
+      1,
+    );
+    const plannedCycleDays = daysBetweenLocalDates(activeCycle.startDate, cycleEndDate) + 1;
+    const totalCycleDays = Math.max(plannedCycleDays, elapsedDays);
+    const daysLeft = Math.max(totalCycleDays - elapsedDays, 0);
+    const dailyPace = variableSpent / elapsedDays;
+    const projectedVariable = dailyPace * totalCycleDays;
     const projectedLeftover = income - committed - projectedVariable;
 
     return {
@@ -217,6 +213,7 @@ export function Dashboard() {
       totalSpent,
       available,
       monthExpenses,
+      cycleExpenseIds: new Set(cycleExpenses.map((expense) => expense.id)),
       categoryExpenses,
       categoryTotals,
       categorySpent,
@@ -227,15 +224,16 @@ export function Dashboard() {
     };
   }, [
     activeCycle.month,
+    activeCycle.startDate,
     activeCycle.year,
     categories,
-    currentMonth,
-    cycleMonthDate,
+    cycleEndDate,
     expenses,
     fixedExpenseMonthlyValues,
     fixedExpenses,
     financialCommitments,
     household?.partnerNames,
+    household?.partnerIds,
     incomeEntries,
     paceReferenceDate,
     paymentMethods,
@@ -244,7 +242,10 @@ export function Dashboard() {
   ]);
 
   const monthLabel = format(cycleMonthDate, "MMMM 'de' yyyy", { locale: ptBR });
-  const activeMonthKey = `${activeCycle.year}-${String(activeCycle.month).padStart(2, "0")}`;
+  const cycleRangeLabel = `aberto desde ${format(
+    parseLocalDate(activeCycle.startDate),
+    "dd/MM/yyyy",
+  )} · referência até ${format(parseLocalDate(cycleEndDate), "dd/MM/yyyy")}`;
   const availableColor =
     data.available > 1000
       ? "text-emerald-700"
@@ -309,6 +310,7 @@ export function Dashboard() {
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wider text-stone-500">{monthLabel}</p>
+            <p className="mt-1 text-xs text-stone-500">Ciclo financeiro: {cycleRangeLabel}</p>
             <h1 className="mt-1 break-words text-2xl font-semibold text-stone-900">
               Hoje no Together
             </h1>
@@ -665,7 +667,10 @@ export function Dashboard() {
 
             {openDetail === "expenses" ? (
               <DetailPanel title="Últimos gastos" icon={Clock3} tone="pink">
-                <RecentExpenses expenses={expenses} defaultMonth={activeMonthKey} />
+                <RecentExpenses
+                  expenses={expenses.filter((expense) => data.cycleExpenseIds.has(expense.id))}
+                  cycleRangeLabel={cycleRangeLabel}
+                />
               </DetailPanel>
             ) : null}
           </div>
@@ -686,21 +691,22 @@ export function Dashboard() {
       {showCloseMonth && (
         <CloseMonthModal
           monthLabel={monthLabel}
+          cycleStartDate={activeCycle.startDate}
+          suggestedNextCycleStartDate={
+            addLocalMonths(activeCycle.startDate, 1) <= todayDate
+              ? addLocalMonths(activeCycle.startDate, 1)
+              : todayDate
+          }
+          latestAllowedStartDate={todayDate}
           data={data}
           onClose={() => {
             setShowCloseMonth(false);
             setClosedSnapshot(null);
           }}
-          onConfirm={async () => {
-            const snapshot = await closeMonth();
+          onConfirm={async (nextCycleStartDate) => {
+            const snapshot = await closeMonth(nextCycleStartDate);
             setClosedSnapshot(snapshot);
             toast.success("Mês fechado com sucesso.");
-          }}
-          onOpenNextMonth={async () => {
-            await openNextMonth();
-            toast.success("Próximo mês aberto.");
-            setShowCloseMonth(false);
-            setClosedSnapshot(null);
           }}
           closedSnapshot={closedSnapshot}
         />
@@ -1104,13 +1110,18 @@ function AddIncomeEntryModal({
 
 function CloseMonthModal({
   monthLabel,
+  cycleStartDate,
+  suggestedNextCycleStartDate,
+  latestAllowedStartDate,
   data,
   onClose,
   onConfirm,
-  onOpenNextMonth,
   closedSnapshot,
 }: {
   monthLabel: string;
+  cycleStartDate: string;
+  suggestedNextCycleStartDate: string;
+  latestAllowedStartDate: string;
   data: {
     income: number;
     baseIncome: number;
@@ -1123,11 +1134,24 @@ function CloseMonthModal({
     peopleTotals: Array<{ name: string; amount: number }>;
   };
   onClose: () => void;
-  onConfirm: () => Promise<void>;
-  onOpenNextMonth: () => Promise<void>;
+  onConfirm: (nextCycleStartDate: string) => Promise<void>;
   closedSnapshot: MonthlySnapshotModel | null;
 }) {
   const [isSaving, setIsSaving] = useState(false);
+  const [nextCycleStartDate, setNextCycleStartDate] = useState(suggestedNextCycleStartDate);
+  const nextStartIsValid =
+    isLocalDateString(nextCycleStartDate) &&
+    nextCycleStartDate > cycleStartDate &&
+    nextCycleStartDate <= latestAllowedStartDate;
+  const cycleEndDate = nextStartIsValid ? previousLocalDate(nextCycleStartDate) : null;
+  const displayedMonthLabel = closedSnapshot
+    ? format(new Date(closedSnapshot.year, closedSnapshot.month - 1, 1), "MMMM 'de' yyyy", {
+        locale: ptBR,
+      })
+    : monthLabel;
+  const openedCycleStartDate = closedSnapshot
+    ? nextLocalDate(closedSnapshot.cycleEndDate)
+    : nextCycleStartDate;
   const categoryTotals = Array.from(
     data.categoryExpenses.reduce((acc, item) => {
       acc.set(item.category, (acc.get(item.category) || 0) + item.amount);
@@ -1136,38 +1160,21 @@ function CloseMonthModal({
   ).sort((a, b) => b[1] - a[1]);
 
   const handleConfirm = async () => {
+    if (!nextStartIsValid) {
+      toast.error(
+        "O próximo ciclo deve começar depois do início atual e não pode estar no futuro.",
+      );
+      return;
+    }
     setIsSaving(true);
     try {
-      await onConfirm();
+      await onConfirm(nextCycleStartDate);
     } catch (err) {
       toast.error((err as Error)?.message || "Não foi possível fechar o mês.");
     } finally {
       setIsSaving(false);
     }
   };
-
-  const handleOpenNextMonth = async () => {
-    setIsSaving(true);
-    try {
-      await onOpenNextMonth();
-    } catch (err) {
-      toast.error((err as Error)?.message || "Não foi possível abrir o próximo mês.");
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  const nextMonthLabel = closedSnapshot
-    ? format(
-        new Date(
-          nextCycle({ month: closedSnapshot.month, year: closedSnapshot.year }).year,
-          nextCycle({ month: closedSnapshot.month, year: closedSnapshot.year }).month - 1,
-          1,
-        ),
-        "MMMM 'de' yyyy",
-        { locale: ptBR },
-      )
-    : "";
 
   return (
     <div
@@ -1183,11 +1190,11 @@ function CloseMonthModal({
         <div className="mb-5 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-xl font-semibold text-stone-900">
-              {closedSnapshot ? `${monthLabel} fechado` : `Fechar ${monthLabel}`}
+              {closedSnapshot ? `${displayedMonthLabel} fechado` : `Fechar ${displayedMonthLabel}`}
             </h2>
             <p className="mt-1 text-xs text-stone-500">
               {closedSnapshot
-                ? "Histórico salvo. Agora você pode abrir o próximo mês."
+                ? "Histórico salvo e próximo ciclo iniciado."
                 : "Confira o resumo antes de salvar o fechamento."}
             </p>
           </div>
@@ -1203,22 +1210,16 @@ function CloseMonthModal({
         {closedSnapshot ? (
           <>
             <div className="rounded-2xl border border-emerald-100 bg-emerald-50 p-4 text-sm text-emerald-900">
-              {monthLabel} foi fechado com snapshot. Os gastos continuam preservados no histórico.
+              {displayedMonthLabel} foi fechado com snapshot, e o novo ciclo já está aberto a partir
+              de {format(parseLocalDate(openedCycleStartDate), "dd/MM/yyyy")}.
             </div>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row">
+            <div className="mt-6 flex justify-end">
               <button
                 disabled={isSaving}
                 onClick={onClose}
-                className="flex-1 rounded-xl border border-stone-200 px-4 py-3 text-stone-700 transition-colors hover:bg-stone-50 disabled:opacity-50"
+                className="rounded-xl bg-emerald-600 px-5 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
               >
-                Ver depois
-              </button>
-              <button
-                disabled={isSaving}
-                onClick={handleOpenNextMonth}
-                className="flex-1 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
-              >
-                {isSaving ? "Abrindo..." : `Abrir ${nextMonthLabel}`}
+                Continuar no novo ciclo
               </button>
             </div>
           </>
@@ -1239,6 +1240,28 @@ function CloseMonthModal({
                 rows={categoryTotals.map(([name, amount]) => ({ name, amount }))}
               />
               <SummaryList title="Gastos por pessoa" rows={data.peopleTotals} />
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-stone-200 bg-stone-50 p-4">
+              <label className="block text-xs font-medium uppercase tracking-wider text-stone-500">
+                Início do próximo ciclo
+              </label>
+              <input
+                type="date"
+                min={nextLocalDate(cycleStartDate)}
+                max={latestAllowedStartDate}
+                value={nextCycleStartDate}
+                onChange={(event) => setNextCycleStartDate(event.target.value)}
+                className="mt-2 w-full rounded-xl border border-stone-200 bg-white px-4 py-3 text-stone-900 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
+              <p className="mt-2 text-xs text-stone-500">
+                Ciclo atual: {format(parseLocalDate(cycleStartDate), "dd/MM/yyyy")} até{" "}
+                {cycleEndDate
+                  ? format(parseLocalDate(cycleEndDate), "dd/MM/yyyy")
+                  : "selecione uma data válida"}
+                . Se você alterar a data, o resumo final será recalculado ao confirmar. O fechamento
+                nunca acontece automaticamente.
+              </p>
             </div>
 
             <div className="mt-6 rounded-2xl border border-amber-100 bg-amber-50 p-4 text-sm text-amber-900">

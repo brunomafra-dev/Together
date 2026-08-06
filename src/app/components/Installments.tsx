@@ -7,6 +7,12 @@ import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
 import { CategorySelect } from "./CategorySelect";
+import {
+  defaultCycleEnd,
+  isDateWithinCycle,
+  isLocalDateString,
+  parseLocalDate,
+} from "../utils/financialCycles";
 
 type Commitment = {
   id: string;
@@ -30,6 +36,9 @@ type PaymentMethodBucket = {
   billInstallments: number;
   expenseLimitUsed: number;
   commitmentLimitUsed: number;
+  closingDay: number | null;
+  dueDay: number | null;
+  billDueDates: string[];
   commitments: Commitment[];
 };
 
@@ -49,25 +58,6 @@ function limitTone(available: number, totalLimit: number) {
   if (ratio <= 0.15) return "border-rose-100 bg-rose-50 text-rose-900";
   if (ratio <= 0.35) return "border-amber-100 bg-amber-50 text-amber-900";
   return "border-emerald-100 bg-emerald-50 text-emerald-900";
-}
-
-function billingKeyForPurchase(date: string, closingDay?: number | null) {
-  const purchaseDate = new Date(`${date}T00:00:00`);
-  const billDate =
-    purchaseDate.getDate() > (closingDay || 31) ? addMonths(purchaseDate, 1) : purchaseDate;
-
-  return `${billDate.getFullYear()}-${String(billDate.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function dueKeyForPurchase(date: string, closingDay?: number | null) {
-  const [year, month] = billingKeyForPurchase(date, closingDay).split("-").map(Number);
-  const dueDate = addMonths(new Date(year, month - 1, 1), 1);
-
-  return `${dueDate.getFullYear()}-${String(dueDate.getMonth() + 1).padStart(2, "0")}`;
-}
-
-function monthKey(date: Date) {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 }
 
 function remainingInstallments(commitment: Commitment) {
@@ -97,7 +87,6 @@ export function Installments() {
     paymentMethods,
     financialCommitments: commitments,
     expenses,
-    household,
     categories,
     activeCycle,
     deleteFinancialCommitment,
@@ -110,10 +99,16 @@ export function Installments() {
     () => paymentMethods.filter((method) => method.type === "credit_card"),
     [paymentMethods],
   );
-  const activeMonthDate = new Date(activeCycle.year, activeCycle.month - 1, 1);
-  const nextBillDate = addMonths(activeMonthDate, 1);
-  const nextBillKey = monthKey(nextBillDate);
-  const nextBillLabel = format(nextBillDate, "MMMM 'de' yyyy", { locale: ptBR });
+  const activeMonthDate = parseLocalDate(activeCycle.startDate);
+  const nextBillDate = activeMonthDate;
+  const cycleEndDate = useMemo(
+    () => defaultCycleEnd(activeCycle.startDate),
+    [activeCycle.startDate],
+  );
+  const cycleLabel = `${format(activeMonthDate, "dd/MM/yyyy")} a ${format(
+    parseLocalDate(cycleEndDate),
+    "dd/MM/yyyy",
+  )}`;
 
   const buckets = useMemo<PaymentMethodBucket[]>(() => {
     return creditCardMethods.map((method) => {
@@ -121,29 +116,35 @@ export function Installments() {
         (commitment) => commitment.paymentMethodId === method.id,
       );
       const methodExpenses = expenses.filter((expense) => expense.card === method.id);
+      const effectiveDate = (expense: (typeof expenses)[number]) =>
+        isLocalDateString(expense.invoiceDueDate) ? expense.invoiceDueDate : expense.date;
+      const cycleBillExpenses = methodExpenses.filter((expense) =>
+        isDateWithinCycle(effectiveDate(expense), activeCycle.startDate, cycleEndDate),
+      );
 
       return {
         id: method.id,
         name: method.name,
         totalLimit: method.limitAmount ?? 0,
-        billExpenses: methodExpenses
-          .filter((expense) => dueKeyForPurchase(expense.date, method.closingDay) === nextBillKey)
-          .reduce((sum, expense) => sum + expense.amount, 0),
+        billExpenses: cycleBillExpenses.reduce((sum, expense) => sum + expense.amount, 0),
         billInstallments: methodCommitments.reduce(
           (sum, commitment) => sum + currentCommitmentDue(commitment),
           0,
         ),
         expenseLimitUsed: methodExpenses
-          .filter((expense) => dueKeyForPurchase(expense.date, method.closingDay) >= nextBillKey)
+          .filter((expense) => effectiveDate(expense) >= activeCycle.startDate)
           .reduce((sum, expense) => sum + expense.amount, 0),
         commitmentLimitUsed: methodCommitments.reduce(
           (sum, commitment) => sum + remainingCommitmentAmount(commitment),
           0,
         ),
+        closingDay: method.closingDay,
+        dueDay: method.dueDay,
+        billDueDates: Array.from(new Set(cycleBillExpenses.map(effectiveDate))).sort(),
         commitments: methodCommitments,
       };
     });
-  }, [commitments, creditCardMethods, expenses, nextBillKey]);
+  }, [activeCycle.startDate, commitments, creditCardMethods, cycleEndDate, expenses]);
 
   const noCardCommitments = useMemo(
     () => commitments.filter((commitment) => !commitment.paymentMethodId),
@@ -179,7 +180,7 @@ export function Installments() {
   );
   const estimatedEndDate =
     maxRemainingInstallments > 0
-      ? format(addMonths(activeMonthDate, maxRemainingInstallments), "MMMM 'de' yyyy", {
+      ? format(addMonths(activeMonthDate, maxRemainingInstallments - 1), "MMMM 'de' yyyy", {
           locale: ptBR,
         })
       : "Sem parcelas abertas";
@@ -207,7 +208,7 @@ export function Installments() {
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-stone-900">Parcelas</h1>
             <p className="mt-1 text-sm text-stone-600">
-              Cartões, limite usado hoje e próxima fatura.
+              Cartões, limite usado e faturas atribuídas pelo fechamento de cada cartão.
             </p>
           </div>
           <button
@@ -230,17 +231,13 @@ export function Installments() {
             label="Parcelas restantes"
             value={String(totalRemainingInstallments)}
           />
-          <SummaryCard
-            icon={Wallet}
-            label={`Fatura ${nextBillLabel}`}
-            value={formatBRL(currentBillTotal)}
-          />
+          <SummaryCard icon={Wallet} label="Faturas do ciclo" value={formatBRL(currentBillTotal)} />
           <SummaryCard icon={Clock3} label="Término estimado" value={estimatedEndDate} capitalize />
         </div>
 
         <ExpandableSection
           title="Resumo geral"
-          summary={`${buckets.length} cartões · ${formatBRL(currentBillTotal)} próxima fatura · ${formatBRL(availableLimit)} livre`}
+          summary={`${buckets.length} cartões · ${formatBRL(currentBillTotal)} no ciclo · ${formatBRL(availableLimit)} livre`}
           defaultOpen
         >
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -269,7 +266,7 @@ export function Installments() {
                   onEdit={setEditingCommitment}
                   nextBillDate={nextBillDate}
                   categories={categories}
-                  nextBillLabel={nextBillLabel}
+                  cycleLabel={cycleLabel}
                 />
               ))
             )}
@@ -387,7 +384,7 @@ function CardSummary({
   onDelete,
   nextBillDate,
   categories,
-  nextBillLabel,
+  cycleLabel,
 }: {
   bucket: PaymentMethodBucket;
   deletingId: string | null;
@@ -395,7 +392,7 @@ function CardSummary({
   onDelete: (id: string) => Promise<void>;
   nextBillDate: Date;
   categories: ReturnType<typeof useFinance>["categories"];
-  nextBillLabel: string;
+  cycleLabel: string;
 }) {
   const used = bucket.expenseLimitUsed + bucket.commitmentLimitUsed;
   const available = Math.max(bucket.totalLimit - used, 0);
@@ -410,7 +407,15 @@ function CardSummary({
             <h3 className="break-words text-lg font-semibold text-stone-950">{bucket.name}</h3>
           </div>
           <p className="mt-1 text-xs text-stone-500">
-            Fatura {nextBillLabel}: {formatBRL(bucket.billExpenses + bucket.billInstallments)}
+            Ciclo {cycleLabel}: {formatBRL(bucket.billExpenses + bucket.billInstallments)}
+          </p>
+          <p className="mt-1 text-xs text-stone-500">
+            Fecha dia {bucket.closingDay ?? "—"} · vence dia {bucket.dueDay ?? "—"}
+            {bucket.billDueDates.length > 0
+              ? ` · vencimentos ${bucket.billDueDates
+                  .map((date) => format(parseLocalDate(date), "dd/MM"))
+                  .join(", ")}`
+              : ""}
           </p>
         </div>
         <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[520px] xl:grid-cols-4">
@@ -531,7 +536,7 @@ function CommitmentRow({
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MiniMetric label="Valor da parcela" value={formatBRL(commitment.installmentValue)} />
-        <MiniMetric label="Próxima fatura" value={formatBRL(currentCommitmentDue(commitment))} />
+        <MiniMetric label="Parcela do ciclo" value={formatBRL(currentCommitmentDue(commitment))} />
         <MiniMetric label="Saldo em aberto" value={formatBRL(remainingAmount)} />
         <MiniMetric label="Termina em" value={commitmentEndDate(commitment, nextBillDate)} />
         <MiniMetric label="Responsável" value={commitment.responsiblePerson || "Sem responsável"} />

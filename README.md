@@ -85,6 +85,8 @@ supabase_*_sql
 - Rendas planejadas e entradas extras.
 - Metas, submetas e adição de valores.
 - Fechamento mensal com histórico, reabertura e resumo.
+- Ciclo financeiro fechado somente por ação manual, com data real de início e fim.
+- Faturas calculadas pelo fechamento e vencimento configurados em cada cartão no Perfil.
 - Interface responsiva, mobile-first e com modo escuro.
 
 ## Roadmap
@@ -143,13 +145,27 @@ Scripts disponíveis:
 | `npm run format`       | Aplica Prettier.                           |
 | `npm run format:check` | Verifica formatação sem alterar arquivos.  |
 
-Para configurar um banco novo, rode primeiro:
+Em uma instância que já contenha as tabelas-base do projeto (`profiles`, `households`,
+`household_members`, `cards`, `categories` e `expenses`), aplique os SQLs nesta ordem (a migração
+de ciclos deve ser a última):
 
 ```text
 supabase_setup.sql
+supabase_fixed_expense_amount_type.sql
+supabase_fixed_expense_monthly_values.sql
+supabase_income_entries.sql
+supabase_goals_commitments.sql
+supabase_manual_financial_cycles_and_invoices.sql
 ```
 
-Depois aplique os SQLs complementares conforme necessário.
+Em um banco já existente, confirme que os três SQLs complementares de valores mensais, rendas e
+metas/compromissos já foram aplicados antes de executar a migração de ciclos.
+
+Essa migração preserva os meses antigos como ciclos de calendário, congela fechamento/vencimento
+nas compras de crédito e torna o fechamento/abertura do próximo ciclo uma operação transacional.
+O dia não é fixo no código: uma compra feita no dia de fechamento informado no cartão permanece na
+fatura atual; somente compras posteriores seguem para a próxima fatura. O app bloqueia o fechamento
+em data futura e exige essa migração para não salvar um histórico parcial.
 
 ## Engenharia e manutenção
 

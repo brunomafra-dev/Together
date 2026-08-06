@@ -2,6 +2,14 @@
 import { useAuth } from "./AuthContext";
 import * as financeService from "../../services/financeService";
 import { canonicalCategoryName, normalizeCategoryName } from "../utils/categories";
+import {
+  addLocalMonths,
+  formatLocalDate,
+  getCreditCardBillingDates,
+  isDateWithinCycle,
+  isLocalDateString,
+  previousLocalDate,
+} from "../utils/financialCycles";
 import type {
   CategoryModel,
   FinancialCommitmentModel,
@@ -27,6 +35,8 @@ export interface Expense {
   date: string;
   paidBy: string;
   card?: string | null;
+  invoiceClosingDate?: string | null;
+  invoiceDueDate?: string | null;
   installments?: number | null;
   notes?: string;
   recurringMonthly?: boolean;
@@ -56,6 +66,12 @@ export interface BudgetSettings {
   partnerNames: [string, string];
 }
 
+export interface FinancialCycle {
+  month: number;
+  year: number;
+  startDate: string;
+}
+
 interface FinanceContextType {
   household: HouseholdModel | null;
   expenses: Expense[];
@@ -67,7 +83,7 @@ interface FinanceContextType {
   categories: CategoryModel[];
   paymentMethods: PaymentMethodModel[];
   monthlySnapshots: MonthlySnapshotModel[];
-  activeCycle: { month: number; year: number };
+  activeCycle: FinancialCycle;
   settings: BudgetSettings;
   loading: boolean;
   error: string | null;
@@ -117,10 +133,8 @@ interface FinanceContextType {
     dueDay?: number | null,
   ) => Promise<void>;
   deletePaymentMethod: (id: string) => Promise<void>;
-  closeMonth: (date?: Date) => Promise<MonthlySnapshotModel>;
-  openNextMonth: () => Promise<void>;
+  closeMonth: (nextCycleStartDate?: string) => Promise<MonthlySnapshotModel>;
   reopenMonth: (snapshot: MonthlySnapshotModel) => Promise<void>;
-  deleteMonthlySnapshot: (id: string) => Promise<void>;
   addCategory: (name: string) => Promise<void>;
   updateCategory: (id: string, changes: Partial<Omit<CategoryModel, "id">>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
@@ -151,17 +165,21 @@ const DEFAULT_CATEGORY_NAMES = [
 
 const loadErrorMessage = "Não foi possível carregar os dados do Supabase.";
 
-const FINANCE_CACHE_VERSION = 1;
+const FINANCE_CACHE_VERSION = 2;
 
 const currentCycle = () => {
   const now = new Date();
-  return { month: now.getMonth() + 1, year: now.getFullYear() };
+  return {
+    month: now.getMonth() + 1,
+    year: now.getFullYear(),
+    startDate: formatLocalDate(new Date(now.getFullYear(), now.getMonth(), 1)),
+  };
 };
 
-const nextCycle = (cycle: { month: number; year: number }) =>
+const nextCycle = (cycle: FinancialCycle, startDate = addLocalMonths(cycle.startDate, 1)) =>
   cycle.month === 12
-    ? { month: 1, year: cycle.year + 1 }
-    : { month: cycle.month + 1, year: cycle.year };
+    ? { month: 1, year: cycle.year + 1, startDate }
+    : { month: cycle.month + 1, year: cycle.year, startDate };
 
 const fixedExpenseAmountForMonth = (
   expense: FixedExpense,
@@ -191,7 +209,7 @@ type FinanceCache = {
   categories: CategoryModel[];
   paymentMethods: PaymentMethodModel[];
   monthlySnapshots: MonthlySnapshotModel[];
-  activeCycle: { month: number; year: number };
+  activeCycle: FinancialCycle;
   settings: BudgetSettings;
 };
 
@@ -275,7 +293,10 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       setCategories(cache.categories ?? []);
       setPaymentMethods(cache.paymentMethods ?? []);
       setMonthlySnapshots(cache.monthlySnapshots ?? []);
-      setActiveCycle(cache.activeCycle ?? currentCycle());
+      const cachedCycle = cache.activeCycle;
+      setActiveCycle(
+        cachedCycle && isLocalDateString(cachedCycle.startDate) ? cachedCycle : currentCycle(),
+      );
       setSettings(cache.settings ?? EMPTY_SETTINGS);
       setLoading(false);
     } catch {
@@ -320,8 +341,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         financeService.fetchFixedExpenses(householdId),
         financeService.fetchFixedExpenseMonthlyValues(householdId),
         financeService.fetchHousehold(householdId),
-        financeService.fetchMonthlySnapshots(householdId).catch(() => []),
-        financeService.fetchHouseholdFinanceState(householdId).catch(() => null),
+        financeService.fetchMonthlySnapshots(householdId),
+        financeService.fetchHouseholdFinanceState(householdId),
       ]);
 
       setExpenses(
@@ -333,6 +354,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
           date: e.date,
           paidBy: e.createdBy,
           card: e.cardId,
+          invoiceClosingDate: e.invoiceClosingDate,
+          invoiceDueDate: e.invoiceDueDate,
           notes: e.notes,
           recurringMonthly: e.recurringMonthly,
         })),
@@ -388,11 +411,29 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       setIncomeEntries(incomeEntriesRes);
       setPaymentMethods(paymentMethodsRes);
       setMonthlySnapshots(monthlySnapshotsRes);
-      setActiveCycle(
-        financeStateRes
-          ? { month: financeStateRes.activeMonth, year: financeStateRes.activeYear }
-          : currentCycle(),
-      );
+      let resolvedCycle = financeStateRes
+        ? {
+            month: financeStateRes.activeMonth,
+            year: financeStateRes.activeYear,
+            startDate: isLocalDateString(financeStateRes.activeCycleStartDate)
+              ? financeStateRes.activeCycleStartDate
+              : `${financeStateRes.activeYear}-${String(financeStateRes.activeMonth).padStart(2, "0")}-01`,
+          }
+        : currentCycle();
+      if (!financeStateRes) {
+        const initializedState = await financeService.initializeHouseholdFinanceState(
+          householdId,
+          resolvedCycle.month,
+          resolvedCycle.year,
+          resolvedCycle.startDate,
+        );
+        resolvedCycle = {
+          month: initializedState.activeMonth,
+          year: initializedState.activeYear,
+          startDate: initializedState.activeCycleStartDate,
+        };
+      }
+      setActiveCycle(resolvedCycle);
       setFixedExpenses(
         fixedExpensesRes.map((expense: FixedExpenseModel) => ({
           id: expense.id,
@@ -515,12 +556,65 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     setHousehold(updated);
   };
 
+  const billingDatesForExpense = (date: string, paymentMethodId?: string | null) => {
+    const method = paymentMethods.find((item) => item.id === paymentMethodId);
+    if (method?.type !== "credit_card" || method.closingDay === null || method.dueDay === null) {
+      return { closingDate: null, dueDate: null };
+    }
+    return getCreditCardBillingDates(date, method.closingDay, method.dueDay);
+  };
+
+  const effectiveDateForExpense = (expense: Expense) => {
+    if (isLocalDateString(expense.invoiceDueDate)) return expense.invoiceDueDate;
+    // Invoice dates are assigned and persisted when a credit-card purchase is
+    // saved. Falling back to the purchase date keeps legacy rows stable instead
+    // of moving them when the card configuration is changed later.
+    return expense.date;
+  };
+
+  const closedSnapshotForExpense = (expense: Expense) => {
+    const effectiveDate = effectiveDateForExpense(expense);
+    return monthlySnapshots.find((snapshot) =>
+      isDateWithinCycle(effectiveDate, snapshot.cycleStartDate, snapshot.cycleEndDate),
+    );
+  };
+
+  const ensureExpenseCycleIsOpen = (expense: Expense) => {
+    const snapshot = closedSnapshotForExpense(expense);
+    if (snapshot) {
+      throw new Error(
+        "Esse gasto pertence a um ciclo fechado. Reabra o ciclo no histórico antes de alterá-lo.",
+      );
+    }
+  };
+
+  const ensureIncomeCycleIsOpen = (date: string) => {
+    const snapshot = monthlySnapshots.find((item) =>
+      isDateWithinCycle(date, item.cycleStartDate, item.cycleEndDate),
+    );
+    if (snapshot) {
+      throw new Error(
+        "Essa renda pertence a um ciclo fechado. Reabra o ciclo no histórico antes de alterá-la.",
+      );
+    }
+  };
+
   const addExpense = async (expense: Omit<Expense, "id">) => {
+    const billingDates = billingDatesForExpense(expense.date, expense.card);
+    const expenseWithBilling: Expense = {
+      ...expense,
+      id: "pending",
+      invoiceClosingDate: billingDates.closingDate,
+      invoiceDueDate: billingDates.dueDate,
+    };
+    ensureExpenseCycleIsOpen(expenseWithBilling);
     const data = await financeService.addExpense({
       ...expense,
       categoryId: expense.category,
       cardId: expense.card || null,
       createdBy: expense.paidBy,
+      invoiceClosingDate: billingDates.closingDate,
+      invoiceDueDate: billingDates.dueDate,
       householdId: household?.id || "",
     });
     const newExpense: Expense = {
@@ -531,6 +625,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       date: data.date,
       paidBy: data.createdBy,
       card: data.cardId,
+      invoiceClosingDate: data.invoiceClosingDate ?? billingDates.closingDate,
+      invoiceDueDate: data.invoiceDueDate ?? billingDates.dueDate,
       notes: data.notes,
       recurringMonthly: data.recurringMonthly,
     };
@@ -628,6 +724,25 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   };
 
   const updateExpense = async (id: string, changes: Partial<Omit<Expense, "id">>) => {
+    const currentExpense = expenses.find((expense) => expense.id === id);
+    if (!currentExpense) throw new Error("Gasto não encontrado");
+    ensureExpenseCycleIsOpen(currentExpense);
+
+    const mergedExpense = { ...currentExpense, ...changes };
+    const shouldRecalculateBilling = changes.date !== undefined || changes.card !== undefined;
+    const billingDates = shouldRecalculateBilling
+      ? billingDatesForExpense(mergedExpense.date, mergedExpense.card)
+      : {
+          closingDate: currentExpense.invoiceClosingDate ?? null,
+          dueDate: currentExpense.invoiceDueDate ?? null,
+        };
+    const expenseAfterUpdate: Expense = {
+      ...mergedExpense,
+      invoiceClosingDate: billingDates.closingDate,
+      invoiceDueDate: billingDates.dueDate,
+    };
+    ensureExpenseCycleIsOpen(expenseAfterUpdate);
+
     const updated = await financeService.updateExpense(id, {
       amount: changes.amount,
       description: changes.description,
@@ -635,6 +750,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       categoryId: changes.category,
       createdBy: changes.paidBy,
       cardId: changes.card,
+      invoiceClosingDate: billingDates.closingDate,
+      invoiceDueDate: billingDates.dueDate,
       recurringMonthly: changes.recurringMonthly,
     });
 
@@ -649,6 +766,8 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
               date: updated.date,
               paidBy: updated.createdBy,
               card: updated.cardId,
+              invoiceClosingDate: updated.invoiceClosingDate ?? billingDates.closingDate,
+              invoiceDueDate: updated.invoiceDueDate ?? billingDates.dueDate,
               notes: updated.notes,
               recurringMonthly: updated.recurringMonthly,
             }
@@ -658,6 +777,9 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
   };
 
   const deleteExpense = async (id: string) => {
+    const expense = expenses.find((item) => item.id === id);
+    if (!expense) throw new Error("Gasto não encontrado");
+    ensureExpenseCycleIsOpen(expense);
     await financeService.deleteExpense(id);
     setExpenses((prev) => prev.filter((e) => e.id !== id));
   };
@@ -716,6 +838,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
 
   const addIncomeEntryCtx = async (entry: Omit<IncomeEntryModel, "id" | "householdId">) => {
     if (!household?.id) throw new Error("Casa não encontrada");
+    ensureIncomeCycleIsOpen(entry.date);
     const data = await financeService.addIncomeEntry({
       ...entry,
       householdId: household.id,
@@ -728,12 +851,19 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     id: string,
     changes: Partial<Omit<IncomeEntryModel, "id" | "householdId">>,
   ) => {
+    const currentEntry = incomeEntries.find((entry) => entry.id === id);
+    if (!currentEntry) throw new Error("Renda não encontrada");
+    ensureIncomeCycleIsOpen(currentEntry.date);
+    ensureIncomeCycleIsOpen(changes.date ?? currentEntry.date);
     const data = await financeService.updateIncomeEntry(id, changes);
     setIncomeEntries((prev) => prev.map((entry) => (entry.id === id ? data : entry)));
     return data;
   };
 
   const deleteIncomeEntryCtx = async (id: string) => {
+    const entry = incomeEntries.find((item) => item.id === id);
+    if (!entry) throw new Error("Renda não encontrada");
+    ensureIncomeCycleIsOpen(entry.date);
     await financeService.deleteIncomeEntry(id);
     setIncomeEntries((prev) => prev.filter((entry) => entry.id !== id));
   };
@@ -803,35 +933,31 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
     await refreshData();
   };
 
-  const closeMonthCtx = async () => {
+  const closeMonthCtx = async (nextCycleStartDate = formatLocalDate(new Date())) => {
     if (!household?.id) throw new Error("Casa não encontrada");
+    if (!isLocalDateString(nextCycleStartDate)) {
+      throw new Error("Informe uma data válida para o início do próximo ciclo.");
+    }
+    if (nextCycleStartDate <= activeCycle.startDate) {
+      throw new Error("O próximo ciclo precisa começar depois do ciclo atual.");
+    }
+    if (nextCycleStartDate > formatLocalDate(new Date())) {
+      throw new Error("Não é possível fechar o ciclo usando uma data futura.");
+    }
     const month = activeCycle.month;
     const year = activeCycle.year;
-    const start = new Date(year, month - 1, 1);
-    const end = new Date(year, month, 0, 23, 59, 59, 999);
-    const monthExpenses = expenses.filter((expense) => {
-      const expenseDate = new Date(`${expense.date}T00:00:00`);
-      return expenseDate >= start && expenseDate <= end;
-    });
-    const monthIncomeEntries = incomeEntries.filter((entry) => {
-      const entryDate = new Date(`${entry.date}T00:00:00`);
-      return entryDate >= start && entryDate <= end;
-    });
-    const billingKey = `${year}-${String(month).padStart(2, "0")}`;
-    const billingKeyForPurchase = (date: string, closingDay?: number | null) => {
-      const purchaseDate = new Date(`${date}T00:00:00`);
-      const billDate =
-        purchaseDate.getDate() > (closingDay || 31)
-          ? new Date(
-              purchaseDate.getFullYear(),
-              purchaseDate.getMonth() + 1,
-              purchaseDate.getDate(),
-            )
-          : purchaseDate;
-      return `${billDate.getFullYear()}-${String(billDate.getMonth() + 1).padStart(2, "0")}`;
-    };
+    if (monthlySnapshots.some((snapshot) => snapshot.month === month && snapshot.year === year)) {
+      throw new Error("Este ciclo já está fechado. Reabra-o pelo histórico para fazer alterações.");
+    }
+    const cycleStartDate = activeCycle.startDate;
+    const cycleEndDate = previousLocalDate(nextCycleStartDate);
+    const monthExpenses = expenses.filter((expense) =>
+      isDateWithinCycle(effectiveDateForExpense(expense), cycleStartDate, cycleEndDate),
+    );
+    const monthIncomeEntries = incomeEntries.filter((entry) =>
+      isDateWithinCycle(entry.date, cycleStartDate, cycleEndDate),
+    );
     const categoryTotals = new Map<string, number>();
-    const cardTotals = new Map<string, number>();
     const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
     const cardNames = new Map(paymentMethods.map((method) => [method.id, method.name]));
 
@@ -847,15 +973,6 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
         categoryName,
         (categoryTotals.get(categoryName) || 0) +
           fixedExpenseAmountForMonth(expense, fixedExpenseMonthlyValues, month, year),
-      );
-    }
-
-    for (const installment of installments) {
-      const categoryName =
-        categoryNames.get(installment.category) || installment.category || "Parcelas";
-      categoryTotals.set(
-        categoryName,
-        (categoryTotals.get(categoryName) || 0) + installment.monthlyAmount,
       );
     }
 
@@ -880,77 +997,131 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       .filter((commitment) => commitment.status !== "finished")
       .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
     const totalExpenses = variableTotal + fixedTotal + installmentTotal;
-    const goalRows = await financeService.fetchGoals(household.id).catch(() => []);
+    const goalRows = await financeService.fetchGoals(household.id);
 
-    const snapshot = await financeService.addMonthlySnapshot({
-      householdId: household.id,
-      month,
-      year,
-      monthlyIncome: realIncome,
-      totalExpenses,
-      fixedExpensesTotal: fixedTotal,
-      installmentExpensesTotal: installmentTotal,
-      remainingBalance: realIncome - totalExpenses,
-      categoryTotals: Array.from(categoryTotals.entries()).map(([name, amount]) => ({
-        name,
-        amount,
-      })),
-      cardTotals: paymentMethods
-        .filter((method) => method.type === "credit_card")
-        .map((method) => {
-          const amount = expenses
-            .filter(
-              (expense) =>
-                expense.card === method.id &&
-                billingKeyForPurchase(expense.date, method.closingDay) === billingKey,
-            )
-            .reduce((sum, expense) => sum + expense.amount, 0);
-          return {
-            name: cardNames.get(method.id) || method.name,
+    const nextActiveCycle = nextCycle(activeCycle, nextCycleStartDate);
+    let snapshot: MonthlySnapshotModel;
+    try {
+      snapshot = await financeService.closeFinancialCycle(
+        {
+          householdId: household.id,
+          month,
+          year,
+          cycleStartDate,
+          cycleEndDate,
+          expenseRows: monthExpenses.map((expense) => ({
+            id: expense.id,
+            purchaseDate: expense.date,
+            effectiveDate: effectiveDateForExpense(expense),
+            invoiceClosingDate: expense.invoiceClosingDate ?? null,
+            invoiceDueDate: expense.invoiceDueDate ?? null,
+            description: expense.description,
+            categoryId: expense.category,
+            category: categoryNames.get(expense.category) || expense.category || "Sem categoria",
+            paymentMethodId: expense.card ?? null,
+            paymentMethod: expense.card
+              ? cardNames.get(expense.card) || expense.card
+              : "Sem forma de pagamento",
+            paidById: expense.paidBy,
+            paidBy:
+              household.partnerIds.reduce<Record<string, string>>((acc, id, index) => {
+                if (id) acc[id] = household.partnerNames[index] || id;
+                return acc;
+              }, {})[expense.paidBy] || expense.paidBy,
+            amount: expense.amount,
+          })),
+          monthlyIncome: realIncome,
+          totalExpenses,
+          fixedExpensesTotal: fixedTotal,
+          installmentExpensesTotal: installmentTotal,
+          remainingBalance: realIncome - totalExpenses,
+          categoryTotals: Array.from(categoryTotals.entries()).map(([name, amount]) => ({
+            name,
             amount,
-            limitAmount: method.limitAmount,
-            availableLimit: method.limitAmount === null ? null : method.limitAmount - amount,
-          };
-        }),
-      goalProgress: goalRows.map((goal) => ({
-        title: goal.title,
-        currentAmount: goal.currentAmount,
-        targetAmount: goal.targetAmount,
-        percent:
-          goal.targetAmount > 0 ? Math.round((goal.currentAmount / goal.targetAmount) * 100) : 0,
-      })),
-      financialHealth: {
-        availablePercent:
-          realIncome > 0 ? Math.round(((realIncome - totalExpenses) / realIncome) * 100) : 0,
-        totalSpentPercent: realIncome > 0 ? Math.round((totalExpenses / realIncome) * 100) : 0,
-        baseIncome: settings.monthlyIncome,
-        extraIncome: extraIncomeTotal,
-      },
-      closedAt: new Date().toISOString(),
-    });
+          })),
+          cardTotals: paymentMethods
+            .filter((method) => method.type === "credit_card")
+            .map((method) => {
+              const amount = expenses
+                .filter(
+                  (expense) =>
+                    expense.card === method.id &&
+                    isDateWithinCycle(
+                      effectiveDateForExpense(expense),
+                      cycleStartDate,
+                      cycleEndDate,
+                    ),
+                )
+                .reduce((sum, expense) => sum + expense.amount, 0);
+              return {
+                id: method.id,
+                name: cardNames.get(method.id) || method.name,
+                amount,
+                limitAmount: method.limitAmount,
+                availableLimit: method.limitAmount === null ? null : method.limitAmount - amount,
+              };
+            }),
+          goalProgress: goalRows.map((goal) => ({
+            id: goal.id,
+            title: goal.title,
+            currentAmount: goal.currentAmount,
+            targetAmount: goal.targetAmount,
+            percent:
+              goal.targetAmount > 0
+                ? Math.round((goal.currentAmount / goal.targetAmount) * 100)
+                : 0,
+          })),
+          financialHealth: {
+            availablePercent:
+              realIncome > 0 ? Math.round(((realIncome - totalExpenses) / realIncome) * 100) : 0,
+            totalSpentPercent: realIncome > 0 ? Math.round((totalExpenses / realIncome) * 100) : 0,
+            baseIncome: settings.monthlyIncome,
+            extraIncome: extraIncomeTotal,
+          },
+          closedAt: new Date().toISOString(),
+        },
+        nextActiveCycle,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "";
+      if (
+        message.includes("Expenses changed") ||
+        message.includes("changed while the cycle") ||
+        message.includes("Reload before closing") ||
+        message.includes("financial cycle changed") ||
+        message.includes("duplicate key") ||
+        message.includes("deadlock detected")
+      ) {
+        await refreshData();
+        throw Object.assign(
+          new Error(
+            "Os dados da casa mudaram em outro dispositivo. Atualizamos os valores; confira e feche novamente.",
+          ),
+          { cause: error },
+        );
+      }
+      throw error;
+    }
     setMonthlySnapshots((prev) => [snapshot, ...prev]);
+    setActiveCycle(nextActiveCycle);
     return snapshot;
   };
 
-  const setActiveCycleCtx = async (cycle: { month: number; year: number }) => {
-    if (!household?.id) throw new Error("Casa não encontrada");
-    await financeService.upsertHouseholdFinanceState(household.id, cycle.month, cycle.year);
-    setActiveCycle(cycle);
-  };
-
-  const openNextMonthCtx = async () => {
-    await setActiveCycleCtx(nextCycle(activeCycle));
-  };
-
   const reopenMonthCtx = async (snapshot: MonthlySnapshotModel) => {
-    await financeService.deleteMonthlySnapshot(snapshot.id);
+    const latestSnapshot = [...monthlySnapshots].sort((left, right) =>
+      right.cycleEndDate.localeCompare(left.cycleEndDate),
+    )[0];
+    if (latestSnapshot?.id !== snapshot.id) {
+      throw new Error("Reabra primeiro o ciclo fechado mais recente.");
+    }
+    const reopenedCycle = {
+      month: snapshot.month,
+      year: snapshot.year,
+      startDate: snapshot.cycleStartDate,
+    };
+    await financeService.reopenFinancialCycle(snapshot);
+    setActiveCycle(reopenedCycle);
     setMonthlySnapshots((prev) => prev.filter((item) => item.id !== snapshot.id));
-    await setActiveCycleCtx({ month: snapshot.month, year: snapshot.year });
-  };
-
-  const deleteMonthlySnapshotCtx = async (id: string) => {
-    await financeService.deleteMonthlySnapshot(id);
-    setMonthlySnapshots((prev) => prev.filter((snapshot) => snapshot.id !== id));
   };
 
   const value = useMemo(
@@ -991,9 +1162,7 @@ export function FinanceProvider({ children }: { children: ReactNode }) {
       updatePaymentMethod: updatePaymentMethodCtx,
       deletePaymentMethod: deletePaymentMethodCtx,
       closeMonth: closeMonthCtx,
-      openNextMonth: openNextMonthCtx,
       reopenMonth: reopenMonthCtx,
-      deleteMonthlySnapshot: deleteMonthlySnapshotCtx,
       addCategory: addCategoryCtx,
       updateCategory: updateCategoryCtx,
       deleteCategory: deleteCategoryCtx,

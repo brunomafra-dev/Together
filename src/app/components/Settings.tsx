@@ -2,18 +2,19 @@
 import { Layout } from "./Layout";
 import { ExpandableSection } from "./ExpandableSection";
 import {
-  Expense,
   FixedExpense,
   FixedExpenseMonthlyValueModel,
   useFinance,
   formatBRL,
   MonthlySnapshotModel,
+  FinancialCycle,
 } from "../context/FinanceContext";
 import { Camera, LogOut, Mail, Plus, Trash2, Save, X, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import { CategorySelect } from "./CategorySelect";
 import { useAuth } from "../context/AuthContext";
 import * as financeService from "../../services/financeService";
+import { formatLocalDate, parseLocalDate } from "../utils/financialCycles";
 
 const PAYMENT_TYPE_LABELS = {
   credit_card: "Cartão de crédito",
@@ -27,24 +28,30 @@ const csvCell = (value: string | number) => {
   return `"${text.replace(/"/g, '""')}"`;
 };
 
-const exportSnapshotExpensesCsv = (
-  snapshot: MonthlySnapshotModel,
-  monthLabel: string,
-  expenses: Expense[],
-) => {
-  const monthKey = `${snapshot.year}-${String(snapshot.month).padStart(2, "0")}`;
+const exportSnapshotExpensesCsv = (snapshot: MonthlySnapshotModel, monthLabel: string) => {
   const rows = [
-    ["data", "descrição", "categoria", "forma de pagamento", "quem pagou", "valor"],
-    ...expenses
-      .filter((expense) => expense.date.slice(0, 7) === monthKey)
-      .map((expense) => [
-        expense.date,
-        expense.description || "",
-        expense.category || "Sem categoria",
-        expense.card || "",
-        expense.paidBy || "",
-        expense.amount.toFixed(2).replace(".", ","),
-      ]),
+    [
+      "data da compra",
+      "data de impacto",
+      "fechamento da fatura",
+      "vencimento da fatura",
+      "descrição",
+      "categoria",
+      "forma de pagamento",
+      "quem pagou",
+      "valor",
+    ],
+    ...snapshot.expenseRows.map((expense) => [
+      expense.purchaseDate,
+      expense.effectiveDate,
+      expense.invoiceClosingDate || "",
+      expense.invoiceDueDate || "",
+      expense.description || "",
+      expense.category || "Sem categoria",
+      expense.paymentMethod || "",
+      expense.paidBy || "",
+      expense.amount.toFixed(2).replace(".", ","),
+    ]),
   ];
   const csv = `\uFEFF${rows.map((row) => row.map(csvCell).join(";")).join("\n")}`;
   const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -60,7 +67,6 @@ export function Settings() {
   const { user, signOut } = useAuth();
   const {
     household,
-    expenses,
     fixedExpenses,
     fixedExpenseMonthlyValues,
     settings,
@@ -71,12 +77,9 @@ export function Settings() {
     upsertFixedExpenseMonthlyValue,
     updateSettings,
     updateHouseholdAvatar,
-    addPaymentMethod,
-    updatePaymentMethod,
     deletePaymentMethod,
     closeMonth,
     reopenMonth,
-    deleteMonthlySnapshot,
   } = useFinance();
 
   const [monthlyIncome, setMonthlyIncome] = useState(
@@ -139,18 +142,36 @@ export function Settings() {
     setTimeout(() => setSaved(false), 2000);
   };
 
-  const monthLabel = (snapshot: MonthlySnapshotModel) =>
-    new Date(snapshot.year, snapshot.month - 1, 1).toLocaleDateString("pt-BR", {
+  const monthLabel = (snapshot: MonthlySnapshotModel) => {
+    const reference = new Date(snapshot.year, snapshot.month - 1, 1).toLocaleDateString("pt-BR", {
       month: "long",
       year: "numeric",
     });
+    const range = `${parseLocalDate(snapshot.cycleStartDate).toLocaleDateString("pt-BR")} a ${parseLocalDate(
+      snapshot.cycleEndDate,
+    ).toLocaleDateString("pt-BR")}`;
+    return `${reference} · ${range}`;
+  };
 
   const handleCloseMonth = async () => {
-    if (!window.confirm("Fechar o mês atual? Um histórico imutável será criado.")) return;
+    const nextCycleStartDate = formatLocalDate(new Date());
+    if (nextCycleStartDate <= activeCycle.startDate) {
+      toast.error("O ciclo precisa permanecer aberto por pelo menos um dia.");
+      return;
+    }
+    const cycleEndDate = parseLocalDate(nextCycleStartDate);
+    cycleEndDate.setDate(cycleEndDate.getDate() - 1);
+    const confirmed = window.confirm(
+      `Fechar o ciclo de ${parseLocalDate(activeCycle.startDate).toLocaleDateString("pt-BR")} até ${cycleEndDate.toLocaleDateString("pt-BR")}? Hoje será o início do próximo ciclo e um histórico imutável será criado.`,
+    );
+    if (!confirmed) return;
     setClosingMonth(true);
     try {
-      const snapshot = await closeMonth();
+      const snapshot = await closeMonth(nextCycleStartDate);
       setSelectedSnapshot(snapshot);
+      toast.success("Mês fechado e próximo ciclo aberto.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível fechar o mês.");
     } finally {
       setClosingMonth(false);
     }
@@ -309,7 +330,7 @@ export function Settings() {
                       <p className="break-words text-xs text-stone-500">
                         {PAYMENT_TYPE_LABELS[method.type]}
                         {method.type === "credit_card"
-                          ? ` · Limite: ${method.limitAmount !== null ? formatBRL(method.limitAmount) : "sem limite definido"}`
+                          ? ` · Limite: ${method.limitAmount !== null ? formatBRL(method.limitAmount) : "sem limite definido"} · Fecha dia ${method.closingDay ?? "—"} · Vence dia ${method.dueDay ?? "—"}`
                           : ""}
                       </p>
                     </div>
@@ -511,12 +532,11 @@ export function Settings() {
           snapshot={selectedSnapshot}
           monthLabel={monthLabel(selectedSnapshot)}
           onClose={() => setSelectedSnapshot(null)}
-          onDelete={async () => {
-            if (!window.confirm("Excluir este histórico? Os dados atuais não serão alterados."))
-              return;
-            await deleteMonthlySnapshot(selectedSnapshot.id);
-            setSelectedSnapshot(null);
-          }}
+          canReopen={
+            [...monthlySnapshots].sort((left, right) =>
+              right.cycleEndDate.localeCompare(left.cycleEndDate),
+            )[0]?.id === selectedSnapshot.id
+          }
           onReopen={async () => {
             if (
               !window.confirm(
@@ -524,10 +544,16 @@ export function Settings() {
               )
             )
               return;
-            await reopenMonth(selectedSnapshot);
-            setSelectedSnapshot(null);
+            try {
+              await reopenMonth(selectedSnapshot);
+              setSelectedSnapshot(null);
+              toast.success("Mês reaberto.");
+            } catch (error) {
+              toast.error(
+                error instanceof Error ? error.message : "Não foi possível reabrir o mês.",
+              );
+            }
           }}
-          expenses={expenses}
         />
       )}
     </Layout>
@@ -544,7 +570,7 @@ function FixedExpenseRow({
 }: {
   expense: FixedExpense;
   monthlyValues: FixedExpenseMonthlyValueModel[];
-  activeCycle: { month: number; year: number };
+  activeCycle: FinancialCycle;
   onEdit: (expense: FixedExpense) => void;
   onEditMonthlyValue: (expense: FixedExpense) => void;
   onDelete: (id: string) => Promise<void>;
@@ -751,6 +777,20 @@ function AddPaymentMethodModal({ onClose, editingId }: AddPaymentMethodModalProp
     e.preventDefault();
     const trimmed = name.trim();
     if (!trimmed) return;
+    const parsedClosingDay = Number(closingDay);
+    const parsedDueDay = Number(dueDay);
+    if (
+      methodType === "credit_card" &&
+      (!Number.isInteger(parsedClosingDay) ||
+        parsedClosingDay < 1 ||
+        parsedClosingDay > 31 ||
+        !Number.isInteger(parsedDueDay) ||
+        parsedDueDay < 1 ||
+        parsedDueDay > 31)
+    ) {
+      toast.error("Informe dias válidos de fechamento e vencimento para o cartão.");
+      return;
+    }
 
     if (editingId && editingMethod) {
       await updatePaymentMethod(
@@ -758,16 +798,16 @@ function AddPaymentMethodModal({ onClose, editingId }: AddPaymentMethodModalProp
         trimmed,
         limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined,
         methodType,
-        closingDay ? Number(closingDay) : null,
-        dueDay ? Number(dueDay) : null,
+        methodType === "credit_card" ? parsedClosingDay : null,
+        methodType === "credit_card" ? parsedDueDay : null,
       );
     } else {
       await addPaymentMethod(
         trimmed,
         limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined,
         methodType,
-        closingDay ? Number(closingDay) : null,
-        dueDay ? Number(dueDay) : null,
+        methodType === "credit_card" ? parsedClosingDay : null,
+        methodType === "credit_card" ? parsedDueDay : null,
       );
     }
     onClose();
@@ -833,6 +873,7 @@ function AddPaymentMethodModal({ onClose, editingId }: AddPaymentMethodModalProp
                     type="number"
                     min="1"
                     max="31"
+                    required
                     value={closingDay}
                     onChange={(e) => setClosingDay(e.target.value)}
                     className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -847,6 +888,7 @@ function AddPaymentMethodModal({ onClose, editingId }: AddPaymentMethodModalProp
                     type="number"
                     min="1"
                     max="31"
+                    required
                     value={dueDay}
                     onChange={(e) => setDueDay(e.target.value)}
                     className="w-full px-4 py-2 border border-stone-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
@@ -1053,16 +1095,14 @@ function FinancialHistoryModal({
   snapshot,
   monthLabel,
   onClose,
-  onDelete,
+  canReopen,
   onReopen,
-  expenses,
 }: {
   snapshot: MonthlySnapshotModel;
   monthLabel: string;
   onClose: () => void;
-  onDelete: () => Promise<void>;
+  canReopen: boolean;
   onReopen: () => Promise<void>;
-  expenses: Expense[];
 }) {
   return (
     <div
@@ -1117,6 +1157,15 @@ function FinancialHistoryModal({
                 value: `${formatBRL(item.currentAmount)} / ${formatBRL(item.targetAmount)} · ${item.percent}%`,
               }))}
             />
+            <div className="md:col-span-2">
+              <HistoryList
+                title="Lançamentos congelados"
+                rows={snapshot.expenseRows.map((item) => ({
+                  label: `${parseLocalDate(item.purchaseDate).toLocaleDateString("pt-BR")} · ${item.description || item.category}`,
+                  value: `${formatBRL(item.amount)}${item.invoiceDueDate ? ` · fatura ${parseLocalDate(item.invoiceDueDate).toLocaleDateString("pt-BR")}` : ""}`,
+                }))}
+              />
+            </div>
             <div className="rounded-2xl border border-stone-200 bg-stone-50 p-4">
               <h3 className="text-sm font-medium text-stone-900">Indicadores</h3>
               <p className="mt-3 text-sm text-stone-600">
@@ -1134,22 +1183,18 @@ function FinancialHistoryModal({
           <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <button
               type="button"
-              onClick={() => void onDelete()}
-              className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-2.5 text-sm font-medium text-rose-700"
-            >
-              Excluir histórico
-            </button>
-            <button
-              type="button"
               onClick={() => void onReopen()}
-              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800"
+              disabled={!canReopen}
+              title={canReopen ? undefined : "Reabra primeiro o ciclo fechado mais recente."}
+              className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-2.5 text-sm font-medium text-amber-800 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Reabrir mês
+              {canReopen ? "Reabrir mês" : "Histórico permanente"}
             </button>
             <button
               type="button"
-              onClick={() => exportSnapshotExpensesCsv(snapshot, monthLabel, expenses)}
-              className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700"
+              onClick={() => exportSnapshotExpensesCsv(snapshot, monthLabel)}
+              disabled={snapshot.expenseRows.length === 0}
+              className="rounded-xl border border-stone-200 px-4 py-2.5 text-sm text-stone-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               Exportar CSV
             </button>

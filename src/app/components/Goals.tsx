@@ -1,18 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import {
-  endOfMonth,
-  getDate,
-  getDaysInMonth,
-  isWithinInterval,
-  parseISO,
-  startOfMonth,
-} from "date-fns";
-import { Edit3, Plus, Sparkles, Target, TrendingDown, Wallet, X, Save, Trash2 } from "lucide-react";
+import { Edit3, Plus, Sparkles, Target, X, Save, Trash2 } from "lucide-react";
 import { useLocation, useNavigate } from "react-router";
 import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
 import * as financeService from "../../services/financeService";
+import {
+  daysBetweenLocalDates,
+  defaultCycleEnd,
+  formatLocalDate,
+  isDateWithinCycle,
+  isLocalDateString,
+} from "../utils/financialCycles";
 
 type GoalTone = "stone" | "emerald" | "cyan" | "amber" | "indigo";
 
@@ -224,19 +223,18 @@ export function Goals() {
   const mainGoalRemaining = Math.max(snapshot.total - snapshot.current, 0);
   const planCards = snapshot.planCards;
   const financialData = useMemo(() => {
-    const cycleDate = new Date(activeCycle.year, activeCycle.month - 1, 1);
-    const today = new Date();
-    const referenceDate =
-      today.getFullYear() === activeCycle.year && today.getMonth() + 1 === activeCycle.month
-        ? today
-        : cycleDate;
-    const currentMonth = { start: startOfMonth(cycleDate), end: endOfMonth(cycleDate) };
+    const cycleEndDate = defaultCycleEnd(activeCycle.startDate);
+    const today = formatLocalDate(new Date());
+    const referenceDate = today < activeCycle.startDate ? activeCycle.startDate : today;
     const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
-    const monthExpenses = expenses.filter((expense) =>
-      isWithinInterval(parseISO(expense.date), currentMonth),
-    );
+    const monthExpenses = expenses.filter((expense) => {
+      const effectiveDate = isLocalDateString(expense.invoiceDueDate)
+        ? expense.invoiceDueDate
+        : expense.date;
+      return isDateWithinCycle(effectiveDate, activeCycle.startDate, cycleEndDate);
+    });
     const monthIncomeEntries = incomeEntries.filter((entry) =>
-      isWithinInterval(parseISO(entry.date), currentMonth),
+      isDateWithinCycle(entry.date, activeCycle.startDate, cycleEndDate),
     );
     const fixedExpenseAmount = (expense: (typeof fixedExpenses)[number]) => {
       const monthlyValue = fixedExpenseMonthlyValues.find(
@@ -258,9 +256,15 @@ export function Goals() {
     const extraIncome = monthIncomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
     const realIncome = income + extraIncome;
     const remainingBalance = realIncome - totalSpent;
-    const dayOfMonth = Math.max(getDate(referenceDate), 1);
-    const daysInMonth = getDaysInMonth(cycleDate);
-    const projectedVariable = (variableSpent / dayOfMonth) * daysInMonth;
+    const elapsedDays = Math.max(
+      daysBetweenLocalDates(activeCycle.startDate, referenceDate) + 1,
+      1,
+    );
+    const cycleDays = Math.max(
+      daysBetweenLocalDates(activeCycle.startDate, cycleEndDate) + 1,
+      elapsedDays,
+    );
+    const projectedVariable = (variableSpent / elapsedDays) * cycleDays;
     const projectedEndBalance = realIncome - fixedSpent - installmentSpent - projectedVariable;
     const categoryTotals = new Map<string, number>();
 
@@ -313,6 +317,7 @@ export function Goals() {
     };
   }, [
     activeCycle.month,
+    activeCycle.startDate,
     activeCycle.year,
     categories,
     expenses,
