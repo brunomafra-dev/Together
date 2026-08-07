@@ -1,20 +1,50 @@
+import { lazy, Suspense, type ReactNode } from "react";
 import { createBrowserRouter } from "react-router";
 import { LoginPage } from "./components/LoginPage";
 import { RegisterPage } from "./components/RegisterPage";
 import { ProtectedRoute } from "./components/ProtectedRoute";
-import { Dashboard } from "./components/Dashboard";
-import { Goals } from "./components/Goals";
-import { Installments } from "./components/Installments";
-import { FutureCommitments } from "./components/FutureCommitments";
-import { Settings } from "./components/Settings";
+
+const Dashboard = lazy(() =>
+  import("./components/Dashboard").then((module) => ({ default: module.Dashboard })),
+);
+const Goals = lazy(() =>
+  import("./components/Goals").then((module) => ({ default: module.Goals })),
+);
+const Installments = lazy(() =>
+  import("./components/Installments").then((module) => ({ default: module.Installments })),
+);
+const FutureCommitments = lazy(() =>
+  import("./components/FutureCommitments").then((module) => ({
+    default: module.FutureCommitments,
+  })),
+);
+const Settings = lazy(() =>
+  import("./components/Settings").then((module) => ({ default: module.Settings })),
+);
+
+function RouteLoadingFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-stone-50 text-stone-500">
+      Carregando...
+    </div>
+  );
+}
+
+function ProtectedPage({ children }: { children: ReactNode }) {
+  return (
+    <ProtectedRoute>
+      <Suspense fallback={<RouteLoadingFallback />}>{children}</Suspense>
+    </ProtectedRoute>
+  );
+}
 
 export const router = createBrowserRouter([
   {
     path: "/",
     element: (
-      <ProtectedRoute>
+      <ProtectedPage>
         <Dashboard />
-      </ProtectedRoute>
+      </ProtectedPage>
     ),
   },
   {
@@ -28,33 +58,33 @@ export const router = createBrowserRouter([
   {
     path: "/goals",
     element: (
-      <ProtectedRoute>
+      <ProtectedPage>
         <Goals />
-      </ProtectedRoute>
+      </ProtectedPage>
     ),
   },
   {
     path: "/installments",
     element: (
-      <ProtectedRoute>
+      <ProtectedPage>
         <Installments />
-      </ProtectedRoute>
+      </ProtectedPage>
     ),
   },
   {
     path: "/future",
     element: (
-      <ProtectedRoute>
+      <ProtectedPage>
         <FutureCommitments />
-      </ProtectedRoute>
+      </ProtectedPage>
     ),
   },
   {
     path: "/settings",
     element: (
-      <ProtectedRoute>
+      <ProtectedPage>
         <Settings />
-      </ProtectedRoute>
+      </ProtectedPage>
     ),
   },
 ]);

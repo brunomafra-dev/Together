@@ -14,7 +14,8 @@ import { toast } from "sonner";
 import { CategorySelect } from "./CategorySelect";
 import { useAuth } from "../context/AuthContext";
 import * as financeService from "../../services/financeService";
-import { formatLocalDate, parseLocalDate } from "../utils/financialCycles";
+import { parseLocalDate } from "../utils/financialCycles";
+import { useNavigate } from "react-router";
 
 const PAYMENT_TYPE_LABELS = {
   credit_card: "Cartão de crédito",
@@ -64,6 +65,7 @@ const exportSnapshotExpensesCsv = (snapshot: MonthlySnapshotModel, monthLabel: s
 };
 
 export function Settings() {
+  const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const {
     household,
@@ -78,7 +80,6 @@ export function Settings() {
     updateSettings,
     updateHouseholdAvatar,
     deletePaymentMethod,
-    closeMonth,
     reopenMonth,
   } = useFinance();
 
@@ -94,9 +95,10 @@ export function Settings() {
     null,
   );
   const [saved, setSaved] = useState(false);
+  const [settingsSaving, setSettingsSaving] = useState(false);
+  const [settingsError, setSettingsError] = useState<string | null>(null);
   const [editingMethodId, setEditingMethodId] = useState<string | null>(null);
   const [selectedSnapshot, setSelectedSnapshot] = useState<MonthlySnapshotModel | null>(null);
-  const [closingMonth, setClosingMonth] = useState(false);
   const [profile, setProfile] = useState<financeService.ProfileModel | null>(null);
   const [householdAvatarUrl, setHouseholdAvatarUrl] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
@@ -133,13 +135,27 @@ export function Settings() {
     setHouseholdAvatarUrl(household?.avatarUrl || "");
   }, [household?.avatarUrl]);
 
-  const handleSaveSettings = () => {
-    updateSettings({
-      monthlyIncome: parseFloat(monthlyIncome) || 0,
-      partnerNames: [partner1, partner2],
-    });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+  const handleSaveSettings = async () => {
+    if (settingsSaving) return;
+
+    setSettingsSaving(true);
+    setSettingsError(null);
+    setSaved(false);
+
+    try {
+      await updateSettings({
+        monthlyIncome: parseFloat(monthlyIncome) || 0,
+        partnerNames: [partner1, partner2],
+      });
+      setSaved(true);
+      window.setTimeout(() => setSaved(false), 2000);
+    } catch (error) {
+      setSettingsError(
+        error instanceof Error ? error.message : "Não foi possível salvar o perfil.",
+      );
+    } finally {
+      setSettingsSaving(false);
+    }
   };
 
   const monthLabel = (snapshot: MonthlySnapshotModel) => {
@@ -151,30 +167,6 @@ export function Settings() {
       snapshot.cycleEndDate,
     ).toLocaleDateString("pt-BR")}`;
     return `${reference} · ${range}`;
-  };
-
-  const handleCloseMonth = async () => {
-    const nextCycleStartDate = formatLocalDate(new Date());
-    if (nextCycleStartDate <= activeCycle.startDate) {
-      toast.error("O ciclo precisa permanecer aberto por pelo menos um dia.");
-      return;
-    }
-    const cycleEndDate = parseLocalDate(nextCycleStartDate);
-    cycleEndDate.setDate(cycleEndDate.getDate() - 1);
-    const confirmed = window.confirm(
-      `Fechar o ciclo de ${parseLocalDate(activeCycle.startDate).toLocaleDateString("pt-BR")} até ${cycleEndDate.toLocaleDateString("pt-BR")}? Hoje será o início do próximo ciclo e um histórico imutável será criado.`,
-    );
-    if (!confirmed) return;
-    setClosingMonth(true);
-    try {
-      const snapshot = await closeMonth(nextCycleStartDate);
-      setSelectedSnapshot(snapshot);
-      toast.success("Mês fechado e próximo ciclo aberto.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Não foi possível fechar o mês.");
-    } finally {
-      setClosingMonth(false);
-    }
   };
 
   const handleAvatarChange = async (file?: File | null) => {
@@ -233,7 +225,7 @@ export function Settings() {
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="image/*"
+                accept="image/jpeg,image/png,image/webp"
                 className="hidden"
                 onChange={(event) => void handleAvatarChange(event.target.files?.[0])}
               />
@@ -301,12 +293,20 @@ export function Settings() {
             </div>
           </div>
           <button
-            onClick={handleSaveSettings}
-            className="mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-3 rounded-xl flex items-center justify-center gap-2 transition-colors font-medium"
+            type="button"
+            onClick={() => void handleSaveSettings()}
+            disabled={settingsSaving}
+            aria-busy={settingsSaving}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
             <Save className="w-4 h-4" />
-            {saved ? "Salvo!" : "Salvar perfil"}
+            {settingsSaving ? "Salvando..." : saved ? "Salvo!" : "Salvar perfil"}
           </button>
+          {settingsError && (
+            <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+              {settingsError}
+            </p>
+          )}
         </ExpandableSection>
 
         <ExpandableSection
@@ -421,11 +421,10 @@ export function Settings() {
             </div>
             <button
               type="button"
-              onClick={() => void handleCloseMonth()}
-              disabled={closingMonth}
-              className="w-full rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors hover:bg-stone-800 disabled:opacity-60 sm:w-auto"
+              onClick={() => navigate("/", { state: { openCloseMonth: true } })}
+              className="w-full rounded-lg bg-stone-900 px-3 py-2 text-sm text-white transition-colors hover:bg-stone-800 sm:w-auto"
             >
-              {closingMonth ? "Fechando..." : "Fechar mês"}
+              Revisar e fechar mês
             </button>
           </div>
 
@@ -674,6 +673,8 @@ function FixedExpenseMonthlyValueModal({
     setSaving(true);
     try {
       await onSave(value);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar o valor.");
     } finally {
       setSaving(false);
     }
@@ -772,13 +773,19 @@ function AddPaymentMethodModal({ onClose, editingId }: AddPaymentMethodModalProp
     editingMethod?.closingDay ? String(editingMethod.closingDay) : "",
   );
   const [dueDay, setDueDay] = useState(editingMethod?.dueDay ? String(editingMethod.dueDay) : "");
+  const [saving, setSaving] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmed = name.trim();
-    if (!trimmed) return;
+    if (!trimmed || saving) return;
     const parsedClosingDay = Number(closingDay);
     const parsedDueDay = Number(dueDay);
+    const parsedLimit = limitAmount ? Number(limitAmount.replace(",", ".")) : undefined;
+    if (parsedLimit !== undefined && (!Number.isFinite(parsedLimit) || parsedLimit < 0)) {
+      toast.error("Informe um limite válido.");
+      return;
+    }
     if (
       methodType === "credit_card" &&
       (!Number.isInteger(parsedClosingDay) ||
@@ -792,25 +799,34 @@ function AddPaymentMethodModal({ onClose, editingId }: AddPaymentMethodModalProp
       return;
     }
 
-    if (editingId && editingMethod) {
-      await updatePaymentMethod(
-        editingId,
-        trimmed,
-        limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined,
-        methodType,
-        methodType === "credit_card" ? parsedClosingDay : null,
-        methodType === "credit_card" ? parsedDueDay : null,
+    setSaving(true);
+    try {
+      if (editingId && editingMethod) {
+        await updatePaymentMethod(
+          editingId,
+          trimmed,
+          parsedLimit,
+          methodType,
+          methodType === "credit_card" ? parsedClosingDay : null,
+          methodType === "credit_card" ? parsedDueDay : null,
+        );
+      } else {
+        await addPaymentMethod(
+          trimmed,
+          parsedLimit,
+          methodType,
+          methodType === "credit_card" ? parsedClosingDay : null,
+          methodType === "credit_card" ? parsedDueDay : null,
+        );
+      }
+      onClose();
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Não foi possível salvar a forma de pagamento.",
       );
-    } else {
-      await addPaymentMethod(
-        trimmed,
-        limitAmount ? parseFloat(limitAmount.replace(",", ".")) : undefined,
-        methodType,
-        methodType === "credit_card" ? parsedClosingDay : null,
-        methodType === "credit_card" ? parsedDueDay : null,
-      );
+    } finally {
+      setSaving(false);
     }
-    onClose();
   };
 
   return (
@@ -903,15 +919,17 @@ function AddPaymentMethodModal({ onClose, editingId }: AddPaymentMethodModalProp
             <button
               type="button"
               onClick={onClose}
+              disabled={saving}
               className="rounded-lg px-4 py-2 text-stone-600 transition-colors hover:bg-stone-100"
             >
               Cancelar
             </button>
             <button
               type="submit"
+              disabled={saving}
               className="rounded-lg bg-emerald-600 px-4 py-2 text-white transition-colors hover:bg-emerald-700"
             >
-              {editingId ? "Salvar" : "Adicionar"}
+              {saving ? "Salvando..." : editingId ? "Salvar" : "Adicionar"}
             </button>
           </div>
         </form>
@@ -961,6 +979,8 @@ function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalPro
         await addFixedExpense(payload);
       }
       onClose();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível salvar a conta.");
     } finally {
       setSaving(false);
     }

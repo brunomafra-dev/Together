@@ -18,6 +18,7 @@ type HouseholdFinanceStateRow = TableRow<"household_finance_state">;
 
 export interface ExpenseModel {
   id: string;
+  createdAt?: string;
   amount: number;
   categoryId: string;
   description: string;
@@ -207,6 +208,7 @@ export interface ProfileModel {
 
 const toNumber = (value: unknown) => (typeof value === "number" ? value : Number(value ?? 0) || 0);
 const toString = (value: unknown) => (typeof value === "string" ? value : "");
+const FETCH_PAGE_SIZE = 500;
 const toLocalDateString = (date: Date) =>
   `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
     date.getDate(),
@@ -254,38 +256,15 @@ export async function getUserHouseholdId(): Promise<string | null> {
     .maybeSingle();
 
   throwIfError(error);
-  console.log("[financeService] household lookup result", {
-    householdId: members?.household_id ?? null,
-    userId: user.id,
-  });
   if (members?.household_id) return members.household_id;
-
-  const fallbackHouseholdName =
-    toString(user.user_metadata?.name) ||
-    toString(user.user_metadata?.full_name) ||
-    toString(user.email) ||
-    "Household";
-
-  console.log("[financeService] Calling bootstrap_current_user_household RPC", {
-    householdName: fallbackHouseholdName,
-    userId: user.id,
-  });
 
   const { data: rpcHouseholdId, error: rpcError } = await supabase.rpc(
     "bootstrap_current_user_household",
   );
 
-  console.log("[financeService] bootstrap_current_user_household RPC response", {
-    data: rpcHouseholdId,
-    error: rpcError,
-  });
-
   throwIfError(rpcError);
 
   const householdId = toString(rpcHouseholdId);
-  console.log("[financeService] bootstrap_current_user_household returned household_id", {
-    householdId,
-  });
   if (!householdId) return null;
 
   return householdId;
@@ -293,6 +272,7 @@ export async function getUserHouseholdId(): Promise<string | null> {
 
 const mapExpenseRow = (row: any): ExpenseModel => ({
   id: row.id,
+  createdAt: toString(row.created_at),
   amount: toNumber(row.amount),
   categoryId: toString(row.category_id),
   description: toString(row.description),
@@ -394,15 +374,23 @@ export async function updateHouseholdAvatar(
 }
 
 export async function uploadHouseholdAvatar(householdId: string, file: File): Promise<string> {
-  const extension = file.name.split(".").pop()?.toLowerCase() || "jpg";
-  const path = `${householdId}/avatar-${Date.now()}.${extension}`;
+  const allowedMimeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+  const maxAvatarSize = 5 * 1024 * 1024;
+  if (!allowedMimeTypes.has(file.type)) {
+    throw new Error("Use uma imagem JPG, PNG ou WebP.");
+  }
+  if (file.size > maxAvatarSize) {
+    throw new Error("A foto deve ter no máximo 5 MB.");
+  }
+
+  const path = `${householdId}/avatar`;
   const { error } = await supabase.storage
     .from("profile-photos")
-    .upload(path, file, { cacheControl: "3600", upsert: true });
+    .upload(path, file, { cacheControl: "3600", contentType: file.type, upsert: true });
   throwIfError(error);
 
   const { data } = supabase.storage.from("profile-photos").getPublicUrl(path);
-  return data.publicUrl;
+  return `${data.publicUrl}?v=${Date.now()}`;
 }
 export async function deleteCurrentAccount(): Promise<void> {
   const { error } = await supabase.rpc("delete_current_user");
@@ -546,13 +534,25 @@ const mapHouseholdFinanceStateRow = (
 });
 
 export async function fetchExpenses(householdId: string): Promise<ExpenseModel[]> {
-  const { data, error } = await supabase
-    .from("expenses")
-    .select("*")
-    .eq("household_id", householdId)
-    .order("purchase_date", { ascending: false });
-  throwIfError(error);
-  return (data ?? []).map(mapExpenseRow);
+  const rows: ExpenseRow[] = [];
+
+  for (let from = 0; ; from += FETCH_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("expenses")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("purchase_date", { ascending: false })
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + FETCH_PAGE_SIZE - 1);
+    throwIfError(error);
+
+    const page = (data ?? []) as ExpenseRow[];
+    rows.push(...page);
+    if (page.length < FETCH_PAGE_SIZE) break;
+  }
+
+  return rows.map(mapExpenseRow);
 }
 
 export async function fetchInstallments(householdId: string): Promise<InstallmentModel[]> {
@@ -717,20 +717,31 @@ export async function upsertFixedExpenseMonthlyValue(
 }
 
 export async function fetchIncomeEntries(householdId: string): Promise<IncomeEntryModel[]> {
-  const { data, error } = await supabase
-    .from("income_entries")
-    .select("*")
-    .eq("household_id", householdId)
-    .order("entry_date", { ascending: false });
-  if (error) {
-    if (
-      String(error.message || "").includes("schema cache") ||
-      String(error.message || "").includes("income_entries")
-    )
-      return [];
-    throwIfError(error);
+  const rows: IncomeEntryRow[] = [];
+
+  for (let from = 0; ; from += FETCH_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("income_entries")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("entry_date", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + FETCH_PAGE_SIZE - 1);
+    if (error) {
+      if (
+        String(error.message || "").includes("schema cache") ||
+        String(error.message || "").includes("income_entries")
+      )
+        return [];
+      throwIfError(error);
+    }
+
+    const page = (data ?? []) as IncomeEntryRow[];
+    rows.push(...page);
+    if (page.length < FETCH_PAGE_SIZE) break;
   }
-  return (data ?? []).map(mapIncomeEntryRow);
+
+  return rows.map(mapIncomeEntryRow);
 }
 
 export async function addIncomeEntry(
@@ -1209,13 +1220,24 @@ export async function deleteGoalProgressRow(id: string): Promise<void> {
 export async function fetchFinancialCommitments(
   householdId: string,
 ): Promise<FinancialCommitmentModel[]> {
-  const { data, error } = await supabase
-    .from("financial_commitments")
-    .select("*")
-    .eq("household_id", householdId)
-    .order("created_at", { ascending: false });
-  throwIfError(error);
-  return (data ?? []).map(mapFinancialCommitmentRow);
+  const rows: FinancialCommitmentRow[] = [];
+
+  for (let from = 0; ; from += FETCH_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("financial_commitments")
+      .select("*")
+      .eq("household_id", householdId)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: false })
+      .range(from, from + FETCH_PAGE_SIZE - 1);
+    throwIfError(error);
+
+    const page = (data ?? []) as FinancialCommitmentRow[];
+    rows.push(...page);
+    if (page.length < FETCH_PAGE_SIZE) break;
+  }
+
+  return rows.map(mapFinancialCommitmentRow);
 }
 
 export async function addFinancialCommitment(

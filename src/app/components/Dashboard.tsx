@@ -18,7 +18,7 @@ import {
   X,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
-import { Link, useNavigate } from "react-router";
+import { Link, useLocation, useNavigate } from "react-router";
 import { toast } from "sonner";
 import { AddExpenseModal } from "./AddExpenseModal";
 import { CategoryBreakdown } from "./CategoryBreakdown";
@@ -29,17 +29,23 @@ import * as financeService from "../../services/financeService";
 import {
   addLocalMonths,
   daysBetweenLocalDates,
-  defaultCycleEnd,
   formatLocalDate,
   isDateWithinCycle,
   isLocalDateString,
   nextLocalDate,
+  openCycleReferenceEnd,
   parseLocalDate,
   previousLocalDate,
 } from "../utils/financialCycles";
+import { isOutstandingCommitment } from "../utils/financialCommitments";
+import { buildCycleClosingSummary } from "../utils/cycleClosingSummary";
 
 export function Dashboard() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const closeMonthRequested = Boolean(
+    (location.state as { openCloseMonth?: boolean } | null)?.openCloseMonth,
+  );
   const {
     household,
     expenses,
@@ -59,7 +65,7 @@ export function Dashboard() {
   } = useFinance();
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showAddIncome, setShowAddIncome] = useState(false);
-  const [showCloseMonth, setShowCloseMonth] = useState(false);
+  const [showCloseMonth, setShowCloseMonth] = useState(closeMonthRequested);
   const [closedSnapshot, setClosedSnapshot] = useState<MonthlySnapshotModel | null>(null);
   const [openDetail, setOpenDetail] = useState<
     "income" | "commitments" | "expenses" | "goal" | "people" | "categories" | null
@@ -74,11 +80,17 @@ export function Dashboard() {
   } | null>(null);
 
   useEffect(() => {
+    if (!closeMonthRequested) return;
+
+    void navigate(location.pathname, { replace: true, state: null });
+  }, [closeMonthRequested, location.pathname, navigate]);
+
+  useEffect(() => {
     const load = async () => {
       const householdId = household?.id;
       if (!householdId) return;
 
-      const goals = await financeService.fetchGoals(householdId).catch(() => []);
+      const goals = await financeService.fetchGoals(householdId);
 
       const currentGoal = goals[0];
       if (!currentGoal) {
@@ -86,7 +98,7 @@ export function Dashboard() {
         return;
       }
 
-      const subGoals = await financeService.fetchGoalProgressRows(currentGoal.id).catch(() => []);
+      const subGoals = await financeService.fetchGoalProgressRows(currentGoal.id);
       setGoalSummary({
         title: currentGoal.title,
         label: currentGoal.label,
@@ -96,12 +108,14 @@ export function Dashboard() {
       });
     };
 
-    void load();
+    void load().catch((error) => {
+      toast.error(error instanceof Error ? error.message : "Não foi possível carregar a meta.");
+    });
   }, [household?.id]);
 
   const cycleMonthDate = new Date(activeCycle.year, activeCycle.month - 1, 1);
-  const cycleEndDate = defaultCycleEnd(activeCycle.startDate);
   const todayDate = formatLocalDate(new Date());
+  const cycleEndDate = openCycleReferenceEnd(activeCycle.startDate, todayDate);
   const paceReferenceDate = todayDate < activeCycle.startDate ? activeCycle.startDate : todayDate;
 
   const data = useMemo(() => {
@@ -146,22 +160,23 @@ export function Dashboard() {
       category: expense.category || "Sem categoria",
       amount: fixedExpenseAmount(expense),
     }));
+    const commitmentCategoryExpenses = financialCommitments
+      .filter(isOutstandingCommitment)
+      .map((commitment) => ({
+        category: categoryNames.get(commitment.categoryId) || commitment.categoryId || "Parcelas",
+        amount: commitment.installmentValue,
+      }));
+    const nonVariableCategoryExpenses = [...fixedCategoryExpenses, ...commitmentCategoryExpenses];
     const categoryExpenses = [
       ...monthExpenses.map((expense) => ({ category: expense.category, amount: expense.amount })),
-      ...fixedCategoryExpenses,
-      ...financialCommitments
-        .filter((commitment) => commitment.status !== "finished")
-        .map((commitment) => ({
-          category: categoryNames.get(commitment.categoryId) || commitment.categoryId || "Parcelas",
-          amount: commitment.installmentValue,
-        })),
+      ...nonVariableCategoryExpenses,
     ];
 
     const variableSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const fixedTotal = fixedExpenses.reduce((sum, expense) => sum + fixedExpenseAmount(expense), 0);
     const categorySpent = categoryExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const commitmentsTotal = financialCommitments
-      .filter((commitment) => commitment.status !== "finished")
+      .filter(isOutstandingCommitment)
       .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
     const committed = fixedTotal + commitmentsTotal;
     const totalSpent = committed + variableSpent;
@@ -215,6 +230,7 @@ export function Dashboard() {
       monthExpenses,
       cycleExpenseIds: new Set(cycleExpenses.map((expense) => expense.id)),
       categoryExpenses,
+      nonVariableCategoryExpenses,
       categoryTotals,
       categorySpent,
       peopleTotals,
@@ -1132,6 +1148,15 @@ function CloseMonthModal({
     available: number;
     categoryExpenses: Array<{ category: string; amount: number }>;
     peopleTotals: Array<{ name: string; amount: number }>;
+    monthExpenses: Array<{
+      amount: number;
+      category: string;
+      paidBy: string;
+      date: string;
+      invoiceDueDate?: string | null;
+    }>;
+    monthIncomeEntries: Array<{ amount: number; date: string }>;
+    nonVariableCategoryExpenses: Array<{ category: string; amount: number }>;
   };
   onClose: () => void;
   onConfirm: (nextCycleStartDate: string) => Promise<void>;
@@ -1152,8 +1177,27 @@ function CloseMonthModal({
   const openedCycleStartDate = closedSnapshot
     ? nextLocalDate(closedSnapshot.cycleEndDate)
     : nextCycleStartDate;
+  const selectedSummary = useMemo(() => {
+    if (!cycleEndDate) return data;
+
+    const selected = buildCycleClosingSummary({
+      cycleStartDate,
+      cycleEndDate,
+      baseIncome: data.baseIncome,
+      fixedTotal: data.fixedTotal,
+      installmentsTotal: data.installmentsTotal,
+      expenses: data.monthExpenses,
+      incomeEntries: data.monthIncomeEntries,
+      nonVariableCategoryExpenses: data.nonVariableCategoryExpenses,
+    });
+
+    return {
+      ...data,
+      ...selected,
+    };
+  }, [cycleEndDate, cycleStartDate, data]);
   const categoryTotals = Array.from(
-    data.categoryExpenses.reduce((acc, item) => {
+    selectedSummary.categoryExpenses.reduce((acc, item) => {
       acc.set(item.category, (acc.get(item.category) || 0) + item.amount);
       return acc;
     }, new Map<string, number>()),
@@ -1226,12 +1270,15 @@ function CloseMonthModal({
         ) : (
           <>
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <SummaryLine label="Renda real" value={data.income} />
-              <SummaryLine label="Rendas extras" value={data.extraIncome} />
-              <SummaryLine label="Gastos variáveis" value={data.variableSpent} />
-              <SummaryLine label="Contas fixas" value={data.fixedTotal} />
-              <SummaryLine label="Parcelas/compromissos" value={data.installmentsTotal} />
-              <SummaryLine label="Saldo restante" value={data.available} strong />
+              <SummaryLine label="Renda real" value={selectedSummary.income} />
+              <SummaryLine label="Rendas extras" value={selectedSummary.extraIncome} />
+              <SummaryLine label="Gastos variáveis" value={selectedSummary.variableSpent} />
+              <SummaryLine label="Contas fixas" value={selectedSummary.fixedTotal} />
+              <SummaryLine
+                label="Parcelas/compromissos"
+                value={selectedSummary.installmentsTotal}
+              />
+              <SummaryLine label="Saldo restante" value={selectedSummary.available} strong />
             </div>
 
             <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -1239,7 +1286,7 @@ function CloseMonthModal({
                 title="Gastos por categoria"
                 rows={categoryTotals.map(([name, amount]) => ({ name, amount }))}
               />
-              <SummaryList title="Gastos por pessoa" rows={data.peopleTotals} />
+              <SummaryList title="Gastos por pessoa" rows={selectedSummary.peopleTotals} />
             </div>
 
             <div className="mt-5 rounded-2xl border border-stone-200 bg-stone-50 p-4">

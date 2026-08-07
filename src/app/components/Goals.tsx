@@ -7,11 +7,12 @@ import { formatBRL, useFinance } from "../context/FinanceContext";
 import * as financeService from "../../services/financeService";
 import {
   daysBetweenLocalDates,
-  defaultCycleEnd,
   formatLocalDate,
   isDateWithinCycle,
   isLocalDateString,
+  openCycleReferenceEnd,
 } from "../utils/financialCycles";
+import { isOutstandingCommitment } from "../utils/financialCommitments";
 
 type GoalTone = "stone" | "emerald" | "cyan" | "amber" | "indigo";
 
@@ -223,8 +224,8 @@ export function Goals() {
   const mainGoalRemaining = Math.max(snapshot.total - snapshot.current, 0);
   const planCards = snapshot.planCards;
   const financialData = useMemo(() => {
-    const cycleEndDate = defaultCycleEnd(activeCycle.startDate);
     const today = formatLocalDate(new Date());
+    const cycleEndDate = openCycleReferenceEnd(activeCycle.startDate, today);
     const referenceDate = today < activeCycle.startDate ? activeCycle.startDate : today;
     const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
     const monthExpenses = expenses.filter((expense) => {
@@ -250,7 +251,7 @@ export function Goals() {
     const variableSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const fixedSpent = fixedExpenses.reduce((sum, expense) => sum + fixedExpenseAmount(expense), 0);
     const installmentSpent = financialCommitments
-      .filter((commitment) => commitment.status !== "finished")
+      .filter(isOutstandingCommitment)
       .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
     const totalSpent = fixedSpent + variableSpent + installmentSpent;
     const extraIncome = monthIncomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
@@ -278,7 +279,7 @@ export function Goals() {
       categoryTotals.set(name, (categoryTotals.get(name) || 0) + fixedExpenseAmount(expense));
     }
 
-    for (const commitment of financialCommitments.filter((item) => item.status !== "finished")) {
+    for (const commitment of financialCommitments.filter(isOutstandingCommitment)) {
       const name = categoryNames.get(commitment.categoryId) || commitment.categoryId || "Parcelas";
       categoryTotals.set(name, (categoryTotals.get(name) || 0) + commitment.installmentValue);
     }
@@ -356,7 +357,7 @@ export function Goals() {
   useEffect(() => {
     const load = async () => {
       if (!household?.id) return;
-      const goals = await financeService.fetchGoals(household.id).catch(() => []);
+      const goals = await financeService.fetchGoals(household.id);
       const currentGoal = goals[0];
       if (!currentGoal) {
         const fallback = emptyGoal(income);
@@ -370,8 +371,8 @@ export function Goals() {
         return;
       }
 
-      const planItems = await financeService.fetchGoalPlanItems(currentGoal.id).catch(() => []);
-      const rows = await financeService.fetchGoalProgressRows(currentGoal.id).catch(() => []);
+      const planItems = await financeService.fetchGoalPlanItems(currentGoal.id);
+      const rows = await financeService.fetchGoalProgressRows(currentGoal.id);
       const resolvedPlanCards = planItems.length
         ? planItems.map((item) => ({
             id: item.id,
@@ -451,7 +452,9 @@ export function Goals() {
       setPlanningAllocations(resolvedPlanCards);
     };
 
-    void load();
+    void load().catch((error) => {
+      setFormError(error instanceof Error ? error.message : "Não foi possível carregar as metas.");
+    });
   }, [household?.id, income]);
 
   const openGoalEdit = () => setEditingGoal(true);
@@ -504,8 +507,8 @@ export function Goals() {
   const refreshGoalState = async (
     savedGoal: Awaited<ReturnType<typeof financeService.addGoal>>,
   ) => {
-    const planItems = await financeService.fetchGoalPlanItems(savedGoal.id).catch(() => []);
-    const rows = await financeService.fetchGoalProgressRows(savedGoal.id).catch(() => []);
+    const planItems = await financeService.fetchGoalPlanItems(savedGoal.id);
+    const rows = await financeService.fetchGoalProgressRows(savedGoal.id);
     const resolvedPlanCards = planItems.length
       ? planItems.map((item) => ({
           id: item.id,
@@ -766,7 +769,7 @@ export function Goals() {
         tone: item.tone || nextPlanTone(index),
       }));
 
-      const existingPlan = await financeService.fetchGoalPlanItems(savedGoal.id).catch(() => []);
+      const existingPlan = await financeService.fetchGoalPlanItems(savedGoal.id);
       for (const item of existingPlan) {
         await financeService.deleteGoalPlanItem(item.id);
       }
@@ -779,7 +782,7 @@ export function Goals() {
         });
       }
 
-      const planItems = await financeService.fetchGoalPlanItems(savedGoal.id).catch(() => []);
+      const planItems = await financeService.fetchGoalPlanItems(savedGoal.id);
       const resolvedPlanCards = planItems.length
         ? planItems.map((item) => ({
             id: item.id,

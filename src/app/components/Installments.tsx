@@ -8,11 +8,16 @@ import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
 import { CategorySelect } from "./CategorySelect";
 import {
-  defaultCycleEnd,
   isDateWithinCycle,
   isLocalDateString,
+  openCycleReferenceEnd,
   parseLocalDate,
 } from "../utils/financialCycles";
+import {
+  isOutstandingCommitment,
+  normalizedCommitmentStatus,
+  remainingInstallmentCount,
+} from "../utils/financialCommitments";
 
 type Commitment = {
   id: string;
@@ -61,8 +66,7 @@ function limitTone(available: number, totalLimit: number) {
 }
 
 function remainingInstallments(commitment: Commitment) {
-  if (commitment.status === "finished") return 0;
-  return Math.max(commitment.totalInstallments - commitment.currentInstallment, 0);
+  return remainingInstallmentCount(commitment);
 }
 
 function remainingCommitmentAmount(commitment: Commitment) {
@@ -102,7 +106,7 @@ export function Installments() {
   const activeMonthDate = parseLocalDate(activeCycle.startDate);
   const nextBillDate = activeMonthDate;
   const cycleEndDate = useMemo(
-    () => defaultCycleEnd(activeCycle.startDate),
+    () => openCycleReferenceEnd(activeCycle.startDate),
     [activeCycle.startDate],
   );
   const cycleLabel = `${format(activeMonthDate, "dd/MM/yyyy")} a ${format(
@@ -167,9 +171,7 @@ export function Installments() {
     (sum, commitment) => sum + currentCommitmentDue(commitment),
     0,
   );
-  const activeInstallments = commitments.filter(
-    (commitment) => commitment.status !== "finished",
-  ).length;
+  const activeInstallments = commitments.filter(isOutstandingCommitment).length;
   const totalRemainingInstallments = commitments.reduce(
     (sum, commitment) => sum + remainingInstallments(commitment),
     0,
@@ -580,7 +582,6 @@ function AddCommitmentModal({
   );
   const [notes, setNotes] = useState(commitment?.notes ?? "");
   const [saving, setSaving] = useState(false);
-  const [closedAfterSave, setClosedAfterSave] = useState(false);
 
   const partnerOptions = useMemo(
     () => (household?.partnerNames ?? []).filter((name) => name.trim().length > 0),
@@ -598,7 +599,7 @@ function AddCommitmentModal({
     const amount = parseFloat(installmentValue.replace(",", "."));
     const total = parseInt(totalInstallments, 10) || 1;
     const current = Math.min(Math.max(parseInt(currentInstallment, 10) || 0, 0), total);
-    if (!itemName.trim() || !amount) return;
+    if (!itemName.trim() || !Number.isFinite(amount) || amount <= 0 || saving) return;
 
     setSaving(true);
     try {
@@ -612,11 +613,12 @@ function AddCommitmentModal({
         responsiblePerson: responsiblePerson.trim() || "Sem responsável",
         notes: notes.trim(),
         startedAt: commitment?.startedAt ?? new Date().toISOString().split("T")[0],
-        status: commitment?.status ?? "active",
+        status: normalizedCommitmentStatus({
+          status: commitment?.status ?? "active",
+          currentInstallment: current,
+          totalInstallments: total,
+        }),
       };
-
-      setClosedAfterSave(true);
-      onClose();
 
       if (commitment) {
         await updateFinancialCommitment(commitment.id, payload);
@@ -625,6 +627,7 @@ function AddCommitmentModal({
         await addFinancialCommitment(payload);
         toast.success("Parcelamento salvo.");
       }
+      onClose();
     } catch (error) {
       toast.error(
         error instanceof Error ? error.message : "Não foi possível salvar o parcelamento.",
@@ -634,12 +637,12 @@ function AddCommitmentModal({
     }
   };
 
-  if (closedAfterSave) return null;
-
   return (
     <div
       className="fixed inset-0 z-50 flex items-end justify-center overflow-y-auto bg-black/50 p-4 sm:items-center"
-      onClick={onClose}
+      onClick={() => {
+        if (!saving) onClose();
+      }}
     >
       <div
         className="max-h-[calc(100vh-2rem)] w-full max-w-xl overflow-hidden rounded-3xl bg-white shadow-2xl"
@@ -654,7 +657,12 @@ function AddCommitmentModal({
               Ajuste parcelas, valor e forma de pagamento.
             </p>
           </div>
-          <button type="button" onClick={onClose} className="text-stone-400 hover:text-stone-700">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={saving}
+            className="text-stone-400 hover:text-stone-700 disabled:opacity-50"
+          >
             <X className="h-5 w-5" />
           </button>
         </div>

@@ -135,37 +135,59 @@ npm run format:check
 
 Scripts disponíveis:
 
-| Script                 | Descrição                                  |
-| ---------------------- | ------------------------------------------ |
-| `npm run dev`          | Inicia o ambiente local com Vite.          |
-| `npm run lint`         | Executa ESLint.                            |
-| `npm run typecheck`    | Executa TypeScript sem emitir arquivos.    |
-| `npm run build`        | Gera o build de produção.                  |
-| `npm run check`        | Roda lint, typecheck e build em sequência. |
-| `npm run format`       | Aplica Prettier.                           |
-| `npm run format:check` | Verifica formatação sem alterar arquivos.  |
+| Script                 | Descrição                                 |
+| ---------------------- | ----------------------------------------- |
+| `npm run dev`          | Inicia o ambiente local com Vite.         |
+| `npm run lint`         | Executa ESLint.                           |
+| `npm run typecheck`    | Executa TypeScript sem emitir arquivos.   |
+| `npm run test`         | Executa os testes unitários uma vez.      |
+| `npm run build`        | Gera o build de produção.                 |
+| `npm run check`        | Roda lint, typecheck, testes e build.     |
+| `npm run format`       | Aplica Prettier.                          |
+| `npm run format:check` | Verifica formatação sem alterar arquivos. |
 
 Em uma instância que já contenha as tabelas-base do projeto (`profiles`, `households`,
 `household_members`, `cards`, `categories` e `expenses`), aplique os SQLs nesta ordem (a migração
-de ciclos deve ser a última):
+de integridade deve ser a última):
 
 ```text
 supabase_setup.sql
+supabase_rls_foundation.sql
 supabase_fixed_expense_amount_type.sql
 supabase_fixed_expense_monthly_values.sql
 supabase_income_entries.sql
 supabase_goals_commitments.sql
 supabase_manual_financial_cycles_and_invoices.sql
+supabase_finance_integrity_v2.sql
 ```
 
-Em um banco já existente, confirme que os três SQLs complementares de valores mensais, rendas e
-metas/compromissos já foram aplicados antes de executar a migração de ciclos.
+`supabase_rls_foundation.sql` deve ser aplicado depois do setup e antes de metas/compromissos. Ele
+remove a policy recursiva de membros, cria `is_household_member` antes das policies que dependem
+dela e instala a RPC sem argumentos `bootstrap_current_user_household` usada pelo cliente atual.
+O cliente autenticado só pode ler membros; bootstrap é a única escrita disponível até que um fluxo
+de convites ganhe uma RPC validada. A mesma migração limita novos avatares a 5 MB, JPEG/PNG/WebP e
+ao objeto único `<household_id>/avatar`, mantendo a leitura pública e sem apagar arquivos legados.
+
+Em um banco já existente que já recebeu a migração de ciclos, aplique
+`supabase_rls_foundation.sql`, reaplique a versão atual de
+`supabase_manual_financial_cycles_and_invoices.sql` e finalize com
+`supabase_finance_integrity_v2.sql`. A reaplicação mantém a RPC original e instala nela o predicado
+defensivo; seus backfills ignoram ciclos fechados. As duas novas migrações são idempotentes e não
+exigem recriar os dados nem reaplicar os demais SQLs intermediários.
 
 Essa migração preserva os meses antigos como ciclos de calendário, congela fechamento/vencimento
 nas compras de crédito e torna o fechamento/abertura do próximo ciclo uma operação transacional.
 O dia não é fixo no código: uma compra feita no dia de fechamento informado no cartão permanece na
 fatura atual; somente compras posteriores seguem para a próxima fatura. O app bloqueia o fechamento
 em data futura e exige essa migração para não salvar um histórico parcial.
+
+`supabase_finance_integrity_v2.sql` torna as datas de fatura autoritativas no banco para novos
+lançamentos e alterações de cartão/data, sem recalcular datas históricas já persistidas. Ele também
+normaliza parcelamentos concluídos (por exemplo, `12/12`) como `finished`, mantém a assinatura
+pública e a implementação original da RPC de fechamento e exige que cartões, categorias e valores
+mensais pertençam ao mesmo domicílio de seus lançamentos. Também adiciona índices para esses
+caminhos. Se encontrar uma relação
+legada inválida, a migração para com a contagem por relação, sem corrigir ou apagar dados sozinha.
 
 ## Engenharia e manutenção
 

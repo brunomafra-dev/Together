@@ -8,10 +8,17 @@ import { formatBRL, useFinance } from "../context/FinanceContext";
 import {
   addLocalMonths,
   defaultCycleEnd,
+  formatLocalDate,
   isDateWithinCycle,
   isLocalDateString,
+  nextLocalDate,
+  openCycleReferenceEnd,
   parseLocalDate,
 } from "../utils/financialCycles";
+import {
+  recurringExpenseAppliesToCycle,
+  selectCurrentRecurringExpenses,
+} from "../utils/recurringExpenses";
 
 export function FutureCommitments() {
   const {
@@ -33,16 +40,14 @@ export function FutureCommitments() {
     [categories],
   );
 
+  const recurringTemplates = useMemo(() => selectCurrentRecurringExpenses(expenses), [expenses]);
   const activeSubscriptions = useMemo(
-    () => expenses.filter((expense) => subscriptionCategoryIds.has(expense.category)),
-    [expenses, subscriptionCategoryIds],
+    () => recurringTemplates.filter((expense) => subscriptionCategoryIds.has(expense.category)),
+    [recurringTemplates, subscriptionCategoryIds],
   );
   const activeRecurringPurchases = useMemo(
-    () =>
-      expenses.filter(
-        (expense) => expense.recurringMonthly && !subscriptionCategoryIds.has(expense.category),
-      ),
-    [expenses, subscriptionCategoryIds],
+    () => recurringTemplates.filter((expense) => !subscriptionCategoryIds.has(expense.category)),
+    [recurringTemplates, subscriptionCategoryIds],
   );
   const subscriptionTotal = useMemo(
     () => activeSubscriptions.reduce((sum, expense) => sum + expense.amount, 0),
@@ -60,43 +65,36 @@ export function FutureCommitments() {
     () => fixedExpenses.filter((expense) => expense.amountType === "variable"),
     [fixedExpenses],
   );
+  const firstFutureCycleStartDate = nextLocalDate(
+    openCycleReferenceEnd(activeCycle.startDate, formatLocalDate(new Date())),
+  );
 
   const futureMonths = useMemo(() => {
     const months = [];
     const paymentMethodsById = new Map(paymentMethods.map((method) => [method.id, method]));
 
-    for (let i = 1; i <= 6; i++) {
-      const cycleStartDate = addLocalMonths(activeCycle.startDate, i);
+    for (let index = 0; index < 6; index++) {
+      const futureCycleNumber = index + 1;
+      const cycleStartDate = addLocalMonths(firstFutureCycleStartDate, index);
       const cycleEndDate = defaultCycleEnd(cycleStartDate);
       const monthDate = parseLocalDate(cycleStartDate);
-      const monthKey = monthDate.getFullYear() * 12 + monthDate.getMonth();
       const monthCommitments = commitments
         .filter(
           (commitment) =>
             commitment.status !== "finished" &&
-            commitment.totalInstallments - commitment.currentInstallment >= i,
+            commitment.totalInstallments - commitment.currentInstallment >= futureCycleNumber,
         )
         .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
       const monthFixed = fixedExpenses.reduce((s, e) => s + e.amount, 0);
       const monthSubscriptions = activeSubscriptions
-        .filter((expense) => {
-          const startDate = new Date(`${expense.date}T00:00:00`);
-          const startKey = startDate.getFullYear() * 12 + startDate.getMonth();
-          return startKey <= monthKey;
-        })
+        .filter((expense) => recurringExpenseAppliesToCycle(expense, cycleEndDate))
         .reduce((sum, expense) => sum + expense.amount, 0);
       const monthRecurringPurchases = activeRecurringPurchases
-        .filter((expense) => {
-          const startDate = new Date(`${expense.date}T00:00:00`);
-          const startKey = startDate.getFullYear() * 12 + startDate.getMonth();
-          return startKey <= monthKey;
-        })
+        .filter((expense) => recurringExpenseAppliesToCycle(expense, cycleEndDate))
         .reduce((sum, expense) => sum + expense.amount, 0);
       const monthCardPurchases = expenses
         .filter((expense) => {
-          if (expense.recurringMonthly || subscriptionCategoryIds.has(expense.category)) {
-            return false;
-          }
+          if (expense.recurringMonthly) return false;
           const method = expense.card ? paymentMethodsById.get(expense.card) : null;
           if (method?.type !== "credit_card") return false;
           const effectiveDate = isLocalDateString(expense.invoiceDueDate)
@@ -128,15 +126,14 @@ export function FutureCommitments() {
     }
     return months;
   }, [
-    activeCycle.startDate,
     activeRecurringPurchases,
     activeSubscriptions,
     commitments,
     fixedExpenses,
     expenses,
+    firstFutureCycleStartDate,
     paymentMethods,
     settings.monthlyIncome,
-    subscriptionCategoryIds,
   ]);
 
   return (

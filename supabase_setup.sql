@@ -1,12 +1,51 @@
 -- Create extension for UUID generation
 create extension if not exists "pgcrypto";
 
+-- Keep the base setup safe to reapply after later migrations. This helper
+-- avoids recursive household_members policies and is replaced idempotently by
+-- supabase_rls_foundation.sql with the same contract.
+create or replace function public.is_household_member(target_household_id uuid)
+returns boolean
+language sql
+stable
+security definer
+set search_path = pg_catalog, public
+as $$
+  select auth.uid() is not null
+    and target_household_id is not null
+    and exists (
+      select 1
+      from public.household_members as member
+      where member.household_id = target_household_id
+        and member.profile_id = auth.uid()
+    );
+$$;
+
+revoke all on function public.is_household_member(uuid) from public;
+grant execute on function public.is_household_member(uuid) to authenticated;
+
 alter table if exists public.households
 add column if not exists avatar_url text;
 
-insert into storage.buckets (id, name, public)
-values ('profile-photos', 'profile-photos', true)
-on conflict (id) do update set public = true;
+insert into storage.buckets (
+  id,
+  name,
+  public,
+  file_size_limit,
+  allowed_mime_types
+)
+values (
+  'profile-photos',
+  'profile-photos',
+  true,
+  5242880,
+  array['image/jpeg', 'image/png', 'image/webp']::text[]
+)
+on conflict (id) do update
+set name = excluded.name,
+    public = excluded.public,
+    file_size_limit = excluded.file_size_limit,
+    allowed_mime_types = excluded.allowed_mime_types;
 
 drop policy if exists "profile_photos_select" on storage.objects;
 drop policy if exists "profile_photos_insert_own" on storage.objects;
@@ -21,10 +60,12 @@ create policy "profile_photos_insert_own"
 on storage.objects for insert to authenticated
 with check (
   bucket_id = 'profile-photos'
+  and storage.filename(name) = 'avatar'
   and exists (
-    select 1 from public.household_members hm
-    where hm.household_id = ((storage.foldername(name))[1])::uuid
-    and hm.profile_id = auth.uid()
+    select 1
+    from public.household_members as member
+    where member.profile_id = auth.uid()
+      and name = member.household_id::text || '/avatar'
   )
 );
 
@@ -32,18 +73,22 @@ create policy "profile_photos_update_own"
 on storage.objects for update to authenticated
 using (
   bucket_id = 'profile-photos'
+  and storage.filename(name) = 'avatar'
   and exists (
-    select 1 from public.household_members hm
-    where hm.household_id = ((storage.foldername(name))[1])::uuid
-    and hm.profile_id = auth.uid()
+    select 1
+    from public.household_members as member
+    where member.profile_id = auth.uid()
+      and name = member.household_id::text || '/avatar'
   )
 )
 with check (
   bucket_id = 'profile-photos'
+  and storage.filename(name) = 'avatar'
   and exists (
-    select 1 from public.household_members hm
-    where hm.household_id = ((storage.foldername(name))[1])::uuid
-    and hm.profile_id = auth.uid()
+    select 1
+    from public.household_members as member
+    where member.profile_id = auth.uid()
+      and name = member.household_id::text || '/avatar'
   )
 );
 
@@ -52,9 +97,10 @@ on storage.objects for delete to authenticated
 using (
   bucket_id = 'profile-photos'
   and exists (
-    select 1 from public.household_members hm
-    where hm.household_id = ((storage.foldername(name))[1])::uuid
-    and hm.profile_id = auth.uid()
+    select 1
+    from public.household_members as member
+    where member.profile_id = auth.uid()
+      and (storage.foldername(name))[1] = member.household_id::text
   )
 );
 
@@ -62,7 +108,7 @@ create or replace function public.delete_current_user()
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = pg_catalog, public, pg_temp
 as $$
 begin
   delete from public.profiles where id = auth.uid();
@@ -70,6 +116,7 @@ begin
 end;
 $$;
 
+revoke all on function public.delete_current_user() from public;
 grant execute on function public.delete_current_user() to authenticated;
 
 -- ============================================================
@@ -201,10 +248,8 @@ using (
   )
 );
 
-create policy "insert household"
-on public.households
-for insert
-with check (true);
+-- Household creation is performed by bootstrap_current_user_household(). A
+-- broad INSERT policy would let authenticated clients create orphan rows.
 
 create policy "update own household"
 on public.households
@@ -229,35 +274,19 @@ alter table public.household_members enable row level security;
 
 drop policy if exists "select own household members" on public.household_members;
 drop policy if exists "write own household members" on public.household_members;
+drop policy if exists "household_members_select_v2" on public.household_members;
+drop policy if exists "household_members_insert_v2" on public.household_members;
+drop policy if exists "household_members_update_v2" on public.household_members;
+drop policy if exists "household_members_delete_v2" on public.household_members;
 
-create policy "select own household members"
+create policy "household_members_select_v2"
 on public.household_members
 for select
-using (
-  household_id in (
-    select household_id
-    from public.household_members
-    where profile_id = auth.uid()
-  )
-);
+to authenticated
+using (public.is_household_member(household_id));
 
-create policy "write own household members"
-on public.household_members
-for all
-using (
-  household_id in (
-    select household_id
-    from public.household_members
-    where profile_id = auth.uid()
-  )
-)
-with check (
-  household_id in (
-    select household_id
-    from public.household_members
-    where profile_id = auth.uid()
-  )
-);
+-- Membership writes are RPC-only. A future invitation flow must validate the
+-- invite and the acting member inside a SECURITY DEFINER RPC.
 
 -- Cards RLS
 alter table public.cards enable row level security;
@@ -369,39 +398,17 @@ alter table public.monthly_snapshots enable row level security;
 drop policy if exists "select own monthly snapshots" on public.monthly_snapshots;
 drop policy if exists "insert own monthly snapshots" on public.monthly_snapshots;
 drop policy if exists "delete own monthly snapshots" on public.monthly_snapshots;
+drop policy if exists "monthly_snapshots_select_member" on public.monthly_snapshots;
+drop policy if exists "monthly_snapshots_insert_member" on public.monthly_snapshots;
+drop policy if exists "monthly_snapshots_delete_member" on public.monthly_snapshots;
 
-create policy "select own monthly snapshots"
+create policy "monthly_snapshots_select_member"
 on public.monthly_snapshots
 for select
-using (
-  household_id in (
-    select household_id
-    from public.household_members
-    where profile_id = auth.uid()
-  )
-);
+to authenticated
+using (public.is_household_member(household_id));
 
-create policy "insert own monthly snapshots"
-on public.monthly_snapshots
-for insert
-with check (
-  household_id in (
-    select household_id
-    from public.household_members
-    where profile_id = auth.uid()
-  )
-);
-
-create policy "delete own monthly snapshots"
-on public.monthly_snapshots
-for delete
-using (
-  household_id in (
-    select household_id
-    from public.household_members
-    where profile_id = auth.uid()
-  )
-);
+-- Snapshot writes are RPC-only so closing and reopening remain transactional.
 
 -- Expenses RLS
 alter table public.expenses enable row level security;

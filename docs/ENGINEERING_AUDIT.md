@@ -1,73 +1,63 @@
-# Engineering Audit
+# Auditoria de engenharia
 
-Data: 2026-06-30
+Data: 2026-08-07
 
 ## Contexto
 
-Together e uma aplicacao React + Vite + TypeScript com Supabase. Esta auditoria registra melhorias de engenharia sem alterar UX, layout ou regras de negocio.
+Together é uma aplicação React, Vite e TypeScript com Supabase, usada com dados financeiros reais.
+Esta revisão priorizou consistência das regras financeiras, isolamento entre domicílios e mudanças
+compatíveis com os dados já existentes.
 
-## Pontos implementados nesta sprint
+## Entregue nesta auditoria
 
-- Typecheck com `tsc --noEmit`.
-- ESLint flat config para TypeScript, React Hooks e React Refresh.
-- Prettier e EditorConfig.
-- Scripts padronizados: `lint`, `typecheck`, `build`, `check`, `format` e `format:check`.
-- CI no GitHub Actions com instalacao, lint, typecheck e build.
-- Dependabot para npm e GitHub Actions.
-- CodeQL para JavaScript/TypeScript.
-- Licenca MIT e documentos de contribuicao, seguranca e conduta.
-- Remocao de bloco morto em `Settings.tsx`.
-- Atualizacao de `react-router` para corrigir vulnerabilidade alta reportada por `npm audit`.
+- Fechamento de ciclo exclusivamente manual, com histórico e reabertura transacionais.
+- Ciclo aberto visível até o horizonte atual, sem ocultar lançamentos quando o fechamento atrasa.
+- Resumo de fechamento recalculado para a data escolhida pelo usuário.
+- Regra de fatura baseada em `closing_day` e `due_day` do cartão cadastrado, inclusive no banco.
+- Datas históricas de fatura preservadas quando a configuração do cartão muda.
+- Parcelamentos integralmente pagos excluídos dos compromissos ativos e normalizados como
+  `finished`.
+- Recorrências deduplicadas por versão e iniciadas pela data efetiva da primeira cobrança.
+- Projeção futura sem sobreposição com o ciclo manual ainda aberto.
+- Paginação determinística de gastos, rendas e compromissos, sem depender do limite padrão do
+  Supabase.
+- Sincronização protegida contra respostas obsoletas e estado financeiro isolado por usuário.
+- Cache financeiro removido no logout e na troca de conta.
+- Rotas protegidas carregadas sob demanda.
+- Upload de avatar limitado a 5 MB, JPEG/PNG/WebP e a um objeto por domicílio.
+- RLS de membros somente leitura; criação inicial feita por RPC atômica.
+- Integridade composta para impedir referências financeiras entre domicílios.
+- Scripts SQL legados alinhados ao hardening atual para não reabrirem permissões em uma reaplicação.
 
-## Arquitetura
+## Validação
 
-Arquivos acima de 500 linhas que merecem refatoracao futura:
+- ESLint sem erros; permanecem avisos não bloqueantes já mapeados.
+- TypeScript executado com `tsc --noEmit`.
+- 44 testes unitários cobrindo ciclos, faturas, recorrências, compromissos e resumo de fechamento.
+- Build de produção gerado com sucesso.
+- `git diff --check` sem erros de whitespace.
 
-- `src/app/components/Goals.tsx`: 1245 linhas.
-- `src/services/financeService.ts`: 1115 linhas.
-- `src/app/components/Settings.tsx`: 1108 linhas.
-- `src/app/components/Dashboard.tsx`: 1068 linhas.
-- `src/app/context/FinanceContext.tsx`: 866 linhas.
-- `src/app/components/Installments.tsx`: 767 linhas.
-- `src/app/components/ui/sidebar.tsx`: 726 linhas.
+Os SQLs receberam revisão estática e defensiva, e o operador confirmou a aplicação das três
+migrações finais no Supabase em 2026-08-07. Esta máquina ainda não possui uma instância
+PostgreSQL/Supabase local para executar testes automatizados de integração das policies e triggers.
 
-Recomendacoes futuras:
+## Riscos e decisões preservadas
 
-- Dividir `financeService.ts` por dominio: household, expenses, income, goals, commitments, snapshots.
-- Separar `FinanceContext` em estado, actions e selectors.
-- Extrair subcomponentes de `Goals`, `Dashboard` e `Settings`.
-- Criar testes unitarios para calculos financeiros antes de refatorar regras.
-- Regerar tipos oficiais do Supabase via CLI e remover casts/`any` progressivamente.
+- A exclusão de conta não apaga automaticamente um domicílio compartilhado nem seus arquivos. Essa
+  regra exige uma decisão explícita de propriedade e transferência; apagar dados automaticamente
+  poderia remover informações do outro familiar.
+- O bucket de avatar permanece público para manter compatibilidade com as URLs atuais, embora novas
+  gravações estejam restritas.
+- `npm audit` ainda reporta um advisory alto do React Router exclusivo do modo RSC. O app usa SPA
+  com `createBrowserRouter`; a correção indicada exige React Router 8 e não foi forçada por ser uma
+  mudança principal sem benefício para o modo atual.
+- O chunk inicial foi reduzido, mas ainda fica pouco acima de 500 kB. Uma divisão adicional de
+  bibliotecas compartilhadas deve ser feita somente após medição, não como alteração emergencial.
 
-## Supabase
+## Próximas melhorias seguras
 
-Achados:
-
-- RLS existe para tabelas principais nos SQLs versionados.
-- Policies usam `auth.uid()` e associacao por `household_members`.
-- Bucket `profile-photos` e publico para leitura.
-- O frontend usa `VITE_SUPABASE_ANON_KEY`, apropriado para cliente, mas depende das policies.
-- Os tipos locais de Supabase sao manuais e devem ser regenerados a partir do banco real.
-
-Riscos:
-
-- Leitura publica de fotos de perfil pode ser desejada, mas deve ser uma decisao consciente de produto.
-- Service concentrado aumenta risco de queries inconsistentes.
-- Faltam testes automatizados para validar isolamento por household.
-- SQLs incrementais podem divergir do banco real se aplicados fora de ordem.
-
-## Performance
-
-Achados:
-
-- Build atual gera um chunk JS de aproximadamente 742 kB minificado.
-- Rotas principais sao importadas de forma estatica em `routes.tsx`.
-- Ha warnings de hooks sobre dependencias e efeitos sincronizando estado.
-- Algumas imagens usam `<img>` diretamente, adequado em Vite, mas ainda exigem dimensoes/otimizacao manual.
-
-Recomendacoes futuras:
-
-- Introduzir lazy loading por rota com `React.lazy` e `Suspense`.
-- Avaliar divisao de vendor chunks no Vite depois de medir impacto.
-- Resolver warnings de hooks com refatoracoes pequenas e testes.
-- Auditar dependencias nao usadas antes de remover bibliotecas visuais.
+- Aplicar e validar as migrações primeiro em staging com cópia representativa dos dados.
+- Criar testes de integração contra PostgreSQL para RLS, triggers e concorrência de fechamento.
+- Dividir gradualmente `FinanceContext`, `financeService` e componentes extensos por domínio, sempre
+  mantendo os testes financeiros como rede de segurança.
+- Definir a política de proprietário, transferência e retenção antes de ampliar a exclusão de conta.

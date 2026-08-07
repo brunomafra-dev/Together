@@ -19,16 +19,19 @@ returns boolean
 language sql
 stable
 security definer
-set search_path = public
+set search_path = pg_catalog, public
 as $$
-  select exists (
-    select 1
-    from public.household_members
-    where household_id = target_household_id
-      and profile_id = auth.uid()
-  );
+  select auth.uid() is not null
+    and target_household_id is not null
+    and exists (
+      select 1
+      from public.household_members as member
+      where member.household_id = target_household_id
+        and member.profile_id = auth.uid()
+    );
 $$;
 
+revoke all on function public.is_household_member(uuid) from public;
 grant execute on function public.is_household_member(uuid) to authenticated;
 
 create table if not exists public.household_finance_state (
@@ -119,7 +122,9 @@ alter column cycle_end_date set not null;
 
 -- Derive the invoice closing date for existing credit-card purchases whenever
 -- both the purchase date and the card's closing day are known. Days such as 31
--- are clamped to the last valid day of shorter months.
+-- are clamped to the last valid day of shorter months. Rows whose current
+-- effective date is already closed are never backfilled, which keeps reruns
+-- idempotent after the history guard exists.
 with closing_candidates as (
   select
     expenses.id,
@@ -127,11 +132,20 @@ with closing_candidates as (
     cards.closing_day,
     date_trunc('month', expenses.purchase_date)::date as purchase_month_start
   from public.expenses
-  join public.cards on cards.id = expenses.card_id
+  join public.cards
+    on cards.id = expenses.card_id
+    and cards.household_id = expenses.household_id
   where expenses.invoice_closing_date is null
     and expenses.purchase_date is not null
     and cards.closing_day between 1 and 31
     and coalesce(cards.type, 'credit_card') = 'credit_card'
+    and not exists (
+      select 1
+      from public.monthly_snapshots as snapshot
+      where snapshot.household_id = expenses.household_id
+        and coalesce(expenses.invoice_due_date, expenses.purchase_date::date)
+          between snapshot.cycle_start_date and snapshot.cycle_end_date
+    )
 ), invoice_months as (
   select
     id,
@@ -170,6 +184,8 @@ where expenses.id = closing_schedule.id
 
 -- Due dates are calculated from the persisted closing date. If the due day in
 -- the closing month has already passed, the due date belongs to the next month.
+-- Both the old purchase date and the calculated due date must be outside every
+-- frozen cycle before this legacy-null backfill may update the row.
 with due_candidates as (
   select
     expenses.id,
@@ -177,11 +193,20 @@ with due_candidates as (
     cards.due_day,
     date_trunc('month', expenses.invoice_closing_date)::date as closing_month_start
   from public.expenses
-  join public.cards on cards.id = expenses.card_id
+  join public.cards
+    on cards.id = expenses.card_id
+    and cards.household_id = expenses.household_id
   where expenses.invoice_due_date is null
     and expenses.invoice_closing_date is not null
     and cards.due_day between 1 and 31
     and coalesce(cards.type, 'credit_card') = 'credit_card'
+    and not exists (
+      select 1
+      from public.monthly_snapshots as snapshot
+      where snapshot.household_id = expenses.household_id
+        and expenses.purchase_date::date
+          between snapshot.cycle_start_date and snapshot.cycle_end_date
+    )
 ), due_months as (
   select
     id,
@@ -214,7 +239,14 @@ update public.expenses
 set invoice_due_date = due_schedule.invoice_due_date
 from due_schedule
 where expenses.id = due_schedule.id
-  and expenses.invoice_due_date is null;
+  and expenses.invoice_due_date is null
+  and not exists (
+    select 1
+    from public.monthly_snapshots as snapshot
+    where snapshot.household_id = expenses.household_id
+      and due_schedule.invoice_due_date
+        between snapshot.cycle_start_date and snapshot.cycle_end_date
+  );
 
 alter table if exists public.monthly_snapshots
 drop constraint if exists monthly_snapshots_cycle_dates_check;
@@ -294,7 +326,7 @@ create or replace function public.initialize_financial_cycle_state(
 returns public.household_finance_state
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public, pg_temp
 as $$
 declare
   initialized_state public.household_finance_state;
@@ -393,7 +425,7 @@ create or replace function public.close_financial_cycle(
 returns public.monthly_snapshots
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public, pg_temp
 as $$
 declare
   created_snapshot public.monthly_snapshots;
@@ -631,6 +663,7 @@ begin
   from public.fixed_expenses as fixed
   left join public.fixed_expense_monthly_values as monthly_value
     on monthly_value.fixed_expense_id = fixed.id
+    and monthly_value.household_id = fixed.household_id
     and monthly_value.month = p_month
     and monthly_value.year = p_year
   where fixed.household_id = p_household_id;
@@ -639,7 +672,9 @@ begin
   into database_installment_total
   from public.financial_commitments as commitment
   where commitment.household_id = p_household_id
-    and commitment.status <> 'finished';
+    and commitment.status <> 'finished'
+    and coalesce(commitment.current_installment, 0)
+      < coalesce(commitment.total_installments, 1);
 
   if round(coalesce(p_monthly_income, 0), 2) <> round(database_monthly_income, 2)
     or round(coalesce(p_fixed_expenses_total, 0), 2) <> round(database_fixed_total, 2)
@@ -664,7 +699,9 @@ begin
       coalesce(nullif(category.name, ''), expense.category_id::text, 'Sem categoria') as name,
       expense.amount
     from public.expenses as expense
-    left join public.categories as category on category.id = expense.category_id
+    left join public.categories as category
+      on category.id = expense.category_id
+      and category.household_id = expense.household_id
     where expense.household_id = p_household_id
       and coalesce(expense.invoice_due_date, expense.purchase_date::date)
         between p_cycle_start_date and p_cycle_end_date
@@ -681,6 +718,7 @@ begin
     from public.fixed_expenses as fixed
     left join public.fixed_expense_monthly_values as monthly_value
       on monthly_value.fixed_expense_id = fixed.id
+      and monthly_value.household_id = fixed.household_id
       and monthly_value.month = p_month
       and monthly_value.year = p_year
     where fixed.household_id = p_household_id
@@ -691,9 +729,13 @@ begin
       coalesce(nullif(category.name, ''), commitment.category_id::text, 'Parcelas') as name,
       commitment.installment_value as amount
     from public.financial_commitments as commitment
-    left join public.categories as category on category.id = commitment.category_id
+    left join public.categories as category
+      on category.id = commitment.category_id
+      and category.household_id = commitment.household_id
     where commitment.household_id = p_household_id
       and commitment.status <> 'finished'
+      and coalesce(commitment.current_installment, 0)
+        < coalesce(commitment.total_installments, 1)
   ), grouped_categories as (
     select name, sum(amount) as amount
     from category_amounts
@@ -740,6 +782,7 @@ begin
     from public.cards as card
     left join public.expenses as expense
       on expense.card_id = card.id
+      and expense.household_id = card.household_id
       and coalesce(expense.invoice_due_date, expense.purchase_date::date)
         between p_cycle_start_date and p_cycle_end_date
     where card.household_id = p_household_id
@@ -921,7 +964,7 @@ create or replace function public.reopen_financial_cycle(p_snapshot_id uuid)
 returns public.monthly_snapshots
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public, pg_temp
 as $$
 declare
   reopened_snapshot public.monthly_snapshots;
@@ -1019,7 +1062,7 @@ create or replace function public.guard_closed_cycle_expense()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public, pg_temp
 as $$
 declare
   target_household_id uuid;
@@ -1082,7 +1125,7 @@ create or replace function public.guard_closed_cycle_income()
 returns trigger
 language plpgsql
 security definer
-set search_path = public, pg_temp
+set search_path = pg_catalog, public, pg_temp
 as $$
 declare
   target_household_id uuid;

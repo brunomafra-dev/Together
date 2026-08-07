@@ -110,6 +110,11 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
     e.preventDefault();
     const value = parseFloat(amount.replace(",", "."));
     if (!value || value <= 0 || isSaving) return;
+    const preservesLegacyBlankRecurrence = isEditing && Boolean(expense?.recurringMonthly);
+    if (recurringMonthly && !description.trim() && !preservesLegacyBlankRecurrence) {
+      toast.error("Informe uma descrição para identificar esta recorrência.");
+      return;
+    }
     if (creditCardNeedsBillingDates) {
       toast.error("Configure o fechamento e o vencimento deste cartão antes de lançar a compra.");
       return;
@@ -262,7 +267,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
 
           <div>
             <label className="block text-xs uppercase tracking-wider text-stone-500 mb-2">
-              Descrição (opcional)
+              Descrição {recurringMonthly ? "(obrigatória para nova recorrência)" : "(opcional)"}
             </label>
             <input
               type="text"

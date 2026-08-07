@@ -133,6 +133,20 @@ export function defaultCycleEnd(startDate: LocalDateInput): LocalDateString {
   return previousLocalDate(addLocalMonths(startDate, 1));
 }
 
+/**
+ * Display horizon for a manually open cycle. It preserves the normal monthly
+ * projection, but extends through today when the user deliberately keeps the
+ * cycle open longer instead of silently hiding newer transactions.
+ */
+export function openCycleReferenceEnd(
+  startDate: LocalDateInput,
+  today: LocalDateInput = new Date(),
+): LocalDateString {
+  const plannedEnd = defaultCycleEnd(startDate);
+  const todayDate = formatLocalDate(toLocalDate(today));
+  return todayDate > plannedEnd ? todayDate : plannedEnd;
+}
+
 /** Checks cycle bounds inclusively. A null end date represents an open cycle. */
 export function isDateWithinCycle(
   date: LocalDateInput,
@@ -141,15 +155,14 @@ export function isDateWithinCycle(
 ): boolean {
   const candidate = toLocalDate(date);
   const start = toLocalDate(cycleStart);
-
-  if (compareLocalDates(candidate, start) < 0) return false;
-  if (cycleEnd == null) return true;
+  if (cycleEnd == null) return compareLocalDates(candidate, start) >= 0;
 
   const end = toLocalDate(cycleEnd);
   if (compareLocalDates(end, start) < 0) {
     throw new RangeError("Cycle end date cannot be before its start date.");
   }
 
+  if (compareLocalDates(candidate, start) < 0) return false;
   return compareLocalDates(candidate, end) <= 0;
 }
 

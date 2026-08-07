@@ -47,17 +47,15 @@ alter table public.monthly_snapshots enable row level security;
 drop policy if exists "monthly_snapshots_select_member" on public.monthly_snapshots;
 drop policy if exists "monthly_snapshots_insert_member" on public.monthly_snapshots;
 drop policy if exists "monthly_snapshots_delete_member" on public.monthly_snapshots;
+drop policy if exists "select own monthly snapshots" on public.monthly_snapshots;
+drop policy if exists "insert own monthly snapshots" on public.monthly_snapshots;
+drop policy if exists "delete own monthly snapshots" on public.monthly_snapshots;
 
 create policy "monthly_snapshots_select_member"
 on public.monthly_snapshots for select to authenticated
 using (public.is_household_member(household_id));
 
-create policy "monthly_snapshots_insert_member"
-on public.monthly_snapshots for insert to authenticated
-with check (public.is_household_member(household_id));
-
-create policy "monthly_snapshots_delete_member"
-on public.monthly_snapshots for delete to authenticated
-using (public.is_household_member(household_id));
+-- Snapshot writes are RPC-only. Direct insert/delete would bypass the
+-- transactional close/reopen rules from the current manual-cycle migration.
 
 commit;
