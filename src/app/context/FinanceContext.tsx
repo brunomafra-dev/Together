@@ -642,15 +642,23 @@ function FinanceProviderState({
     settings,
   ]);
 
-  const updateSettings = async (newSettings: BudgetSettings) => {
-    if (household) {
-      const updated = await financeService.updateHouseholdSettings(
-        household.id,
-        newSettings.monthlyIncome,
-        newSettings.partnerNames,
+  const requireHouseholdId = () => {
+    if (!household?.id) {
+      throw new Error(
+        "Sua casa ainda está sendo carregada. Aguarde alguns segundos e tente novamente.",
       );
-      setHousehold(updated);
     }
+    return household.id;
+  };
+
+  const updateSettings = async (newSettings: BudgetSettings) => {
+    const currentHouseholdId = requireHouseholdId();
+    const updated = await financeService.updateHouseholdSettings(
+      currentHouseholdId,
+      newSettings.monthlyIncome,
+      newSettings.partnerNames,
+    );
+    setHousehold(updated);
     setSettings(newSettings);
   };
 
@@ -704,6 +712,7 @@ function FinanceProviderState({
   };
 
   const addExpense = async (expense: Omit<Expense, "id">) => {
+    const currentHouseholdId = requireHouseholdId();
     const billingDates = billingDatesForExpense(expense.date, expense.card);
     const expenseWithBilling: Expense = {
       ...expense,
@@ -719,7 +728,7 @@ function FinanceProviderState({
       createdBy: expense.paidBy,
       invoiceClosingDate: billingDates.closingDate,
       invoiceDueDate: billingDates.dueDate,
-      householdId: household?.id || "",
+      householdId: currentHouseholdId,
     });
     const newExpense: Expense = {
       id: data.id,
@@ -739,12 +748,13 @@ function FinanceProviderState({
   };
 
   const addInstallment = async (installment: Omit<Installment, "id">) => {
+    const currentHouseholdId = requireHouseholdId();
     const data = await financeService.addInstallment({
       ...installment,
       totalMonths: installment.remainingMonths + installment.currentMonth,
       categoryId: installment.category,
       expenseId: null,
-      householdId: household?.id || "",
+      householdId: currentHouseholdId,
     });
     const newInstallment: Installment = {
       id: data.id,
@@ -759,9 +769,10 @@ function FinanceProviderState({
   };
 
   const addFixedExpense = async (expense: Omit<FixedExpense, "id">) => {
+    const currentHouseholdId = requireHouseholdId();
     const data = await financeService.addFixedExpense({
       ...expense,
-      householdId: household?.id || "",
+      householdId: currentHouseholdId,
     });
     setFixedExpenses((prev) => [
       ...prev,

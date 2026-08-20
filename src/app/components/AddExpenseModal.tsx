@@ -340,6 +340,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
               type="submit"
               disabled={
                 isSaving ||
+                !household?.id ||
                 !amount ||
                 parseFloat(amount.replace(",", ".")) <= 0 ||
                 !paidBy ||

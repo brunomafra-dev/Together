@@ -104,10 +104,15 @@ export function Settings() {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const hasEditedSettingsRef = useRef(false);
   const defaultPaymentMethodNames = new Set(["Pix", "Dinheiro", "Débito"]);
   const coupleName = [partner1, partner2].filter(Boolean).join(" & ") || profile?.name || "Perfil";
   const accountEmail = profile?.email || user?.email || "";
   const plannedIncome = parseFloat(monthlyIncome) || 0;
+  const hasSettingsChanges =
+    plannedIncome !== settings.monthlyIncome ||
+    partner1.trim() !== settings.partnerNames[0].trim() ||
+    partner2.trim() !== settings.partnerNames[1].trim();
   const fixedExpensesTotal = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const creditCardCount = paymentMethods.filter((method) => method.type === "credit_card").length;
   const initials =
@@ -135,8 +140,23 @@ export function Settings() {
     setHouseholdAvatarUrl(household?.avatarUrl || "");
   }, [household?.avatarUrl]);
 
+  useEffect(() => {
+    if (hasEditedSettingsRef.current) return;
+    setMonthlyIncome(settings.monthlyIncome ? settings.monthlyIncome.toString() : "");
+    setPartner1(settings.partnerNames[0]);
+    setPartner2(settings.partnerNames[1]);
+  }, [settings.monthlyIncome, settings.partnerNames]);
+
   const handleSaveSettings = async () => {
     if (settingsSaving) return;
+    if (!partner1.trim()) {
+      setSettingsError("Informe pelo menos o primeiro nome do perfil.");
+      return;
+    }
+    if (!partner2.trim()) {
+      setSettingsError("Informe o nome do Parceiro 2 antes de salvar.");
+      return;
+    }
 
     setSettingsSaving(true);
     setSettingsError(null);
@@ -145,8 +165,9 @@ export function Settings() {
     try {
       await updateSettings({
         monthlyIncome: parseFloat(monthlyIncome) || 0,
-        partnerNames: [partner1, partner2],
+        partnerNames: [partner1.trim(), partner2.trim()],
       });
+      hasEditedSettingsRef.current = false;
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2000);
     } catch (error) {
@@ -193,10 +214,27 @@ export function Settings() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div>
-          <h1 className="text-2xl font-semibold text-stone-900">Perfil</h1>
-          <p className="text-sm text-stone-600 mt-1">Perfil, renda, casal e contas fixas</p>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-semibold text-stone-900">Perfil</h1>
+            <p className="text-sm text-stone-600 mt-1">Perfil, renda, casal e contas fixas</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => void handleSaveSettings()}
+            disabled={settingsSaving || !hasSettingsChanges}
+            aria-busy={settingsSaving}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+          >
+            <Save className="w-4 h-4" />
+            {settingsSaving ? "Salvando..." : saved ? "Salvo!" : "Salvar alterações"}
+          </button>
         </div>
+        {settingsError && (
+          <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+            {settingsError}
+          </p>
+        )}
 
         <ExpandableSection title="Perfil" summary={accountEmail || "Conta conectada"} defaultOpen>
           <h2 className="font-medium text-stone-900 mb-5">Perfil</h2>
@@ -264,7 +302,11 @@ export function Settings() {
               <input
                 type="text"
                 value={partner1}
-                onChange={(e) => setPartner1(e.target.value)}
+                onChange={(e) => {
+                  hasEditedSettingsRef.current = true;
+                  setPartner1(e.target.value);
+                }}
+                required
                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
@@ -275,7 +317,11 @@ export function Settings() {
               <input
                 type="text"
                 value={partner2}
-                onChange={(e) => setPartner2(e.target.value)}
+                onChange={(e) => {
+                  hasEditedSettingsRef.current = true;
+                  setPartner2(e.target.value);
+                }}
+                required
                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
@@ -287,26 +333,14 @@ export function Settings() {
                 type="number"
                 step="0.01"
                 value={monthlyIncome}
-                onChange={(e) => setMonthlyIncome(e.target.value)}
+                onChange={(e) => {
+                  hasEditedSettingsRef.current = true;
+                  setMonthlyIncome(e.target.value);
+                }}
                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
           </div>
-          <button
-            type="button"
-            onClick={() => void handleSaveSettings()}
-            disabled={settingsSaving}
-            aria-busy={settingsSaving}
-            className="mt-4 flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            <Save className="w-4 h-4" />
-            {settingsSaving ? "Salvando..." : saved ? "Salvo!" : "Salvar perfil"}
-          </button>
-          {settingsError && (
-            <p className="mt-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
-              {settingsError}
-            </p>
-          )}
         </ExpandableSection>
 
         <ExpandableSection
@@ -939,7 +973,7 @@ function AddPaymentMethodModal({ onClose, editingId }: AddPaymentMethodModalProp
 }
 
 function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalProps) {
-  const { addFixedExpense, updateFixedExpense, categories } = useFinance();
+  const { addFixedExpense, updateFixedExpense, categories, household, loading } = useFinance();
   const selectedCategoryId = fixedExpense
     ? (categories.find((category) => category.name === fixedExpense.category)?.id ?? "")
     : "";
@@ -953,12 +987,19 @@ function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalPro
     fixedExpense?.amountType ?? "fixed",
   );
   const [saving, setSaving] = useState(false);
+  const householdReady = Boolean(household?.id) && !loading;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = parseFloat(amount.replace(",", "."));
     const parsedDueDate = parseInt(dueDate, 10);
     if (!name.trim() || !value || !parsedDueDate || saving) return;
+    if (!householdReady) {
+      toast.error(
+        "Sua casa ainda está sendo carregada. Aguarde alguns segundos e tente novamente.",
+      );
+      return;
+    }
 
     const selectedCategory = categories.find((c) => c.id === categoryId);
     const categoryName = selectedCategory?.name || "";
@@ -1099,12 +1140,15 @@ function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalPro
             </button>
             <button
               type="submit"
-              disabled={saving}
+              disabled={saving || !householdReady}
               className="flex-1 px-4 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 disabled:opacity-60 transition-colors font-medium"
             >
               {saving ? "Salvando..." : fixedExpense ? "Salvar edição" : "Salvar"}
             </button>
           </div>
+          {!householdReady && (
+            <p className="text-center text-xs text-stone-500">Carregando os dados da casa…</p>
+          )}
         </form>
       </div>
     </div>
