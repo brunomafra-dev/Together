@@ -67,6 +67,7 @@ export interface Category extends TimestampedRow {
   id: string;
   household_id: string | null;
   name: string | null;
+  goal_plan_item_id: string | null;
 }
 
 export interface Expense extends TimestampedRow {
@@ -97,6 +98,7 @@ export interface Installment extends TimestampedRow {
 export interface FixedExpense extends TimestampedRow {
   id: string;
   household_id: string | null;
+  category_id: string | null;
   name: string | null;
   amount: number | null;
   category: string | null;

@@ -2,6 +2,7 @@
 import { Layout } from "./Layout";
 import { ExpandableSection } from "./ExpandableSection";
 import {
+  CategoryModel,
   FixedExpense,
   FixedExpenseMonthlyValueModel,
   useFinance,
@@ -69,6 +70,7 @@ export function Settings() {
   const { user, signOut } = useAuth();
   const {
     household,
+    categories,
     fixedExpenses,
     fixedExpenseMonthlyValues,
     settings,
@@ -81,6 +83,8 @@ export function Settings() {
     updateHouseholdAvatar,
     deletePaymentMethod,
     reopenMonth,
+    addCategory,
+    updateCategory,
   } = useFinance();
 
   const [monthlyIncome, setMonthlyIncome] = useState(
@@ -103,6 +107,13 @@ export function Settings() {
   const [householdAvatarUrl, setHouseholdAvatarUrl] = useState("");
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileError, setProfileError] = useState<string | null>(null);
+  const [categoryPlanItems, setCategoryPlanItems] = useState<financeService.GoalPlanItemModel[]>(
+    [],
+  );
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [newCategoryPlanItemId, setNewCategoryPlanItemId] = useState("");
+  const [categorySaving, setCategorySaving] = useState(false);
+  const [categoryError, setCategoryError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasEditedSettingsRef = useRef(false);
   const defaultPaymentMethodNames = new Set(["Pix", "Dinheiro", "Débito"]);
@@ -146,6 +157,84 @@ export function Settings() {
     setPartner1(settings.partnerNames[0]);
     setPartner2(settings.partnerNames[1]);
   }, [settings.monthlyIncome, settings.partnerNames]);
+
+  useEffect(() => {
+    if (!household?.id) {
+      setCategoryPlanItems([]);
+      return;
+    }
+
+    const loadPlanItems = async () => {
+      try {
+        const goals = await financeService.fetchGoals(household.id);
+        const currentGoal = goals[0];
+        setCategoryPlanItems(
+          currentGoal ? await financeService.fetchGoalPlanItems(currentGoal.id) : [],
+        );
+      } catch (error) {
+        setCategoryError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível carregar as divisões do planejamento.",
+        );
+      }
+    };
+
+    void loadPlanItems();
+  }, [household?.id]);
+
+  const handleAddCategory = async () => {
+    const name = newCategoryName.trim();
+    if (!name || categorySaving) return;
+    if (categories.some((category) => category.name.trim().toLowerCase() === name.toLowerCase())) {
+      setCategoryError("Já existe uma categoria com esse nome.");
+      return;
+    }
+
+    setCategorySaving(true);
+    setCategoryError(null);
+    try {
+      await addCategory(name, newCategoryPlanItemId || null);
+      setNewCategoryName("");
+      setNewCategoryPlanItemId("");
+      toast.success("Categoria adicionada.");
+    } catch (error) {
+      setCategoryError(
+        error instanceof Error ? error.message : "Não foi possível adicionar a categoria.",
+      );
+    } finally {
+      setCategorySaving(false);
+    }
+  };
+
+  const handleUpdateCategory = async (id: string, changes: Partial<Omit<CategoryModel, "id">>) => {
+    const name = changes.name?.trim() ?? "";
+    if (!name) throw new Error("Informe um nome para a categoria.");
+    if (
+      categories.some(
+        (category) =>
+          category.id !== id && category.name.trim().toLowerCase() === name.toLowerCase(),
+      )
+    ) {
+      const error = new Error("Já existe uma categoria com esse nome.");
+      setCategoryError(error.message);
+      throw error;
+    }
+
+    setCategoryError(null);
+    try {
+      await updateCategory(id, {
+        name,
+        goalPlanItemId: changes.goalPlanItemId ?? null,
+      });
+      toast.success("Categoria atualizada.");
+    } catch (error) {
+      setCategoryError(
+        error instanceof Error ? error.message : "Não foi possível atualizar a categoria.",
+      );
+      throw error;
+    }
+  };
 
   const handleSaveSettings = async () => {
     if (settingsSaving) return;
@@ -340,6 +429,85 @@ export function Settings() {
                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
+          </div>
+        </ExpandableSection>
+
+        <ExpandableSection
+          title="Categorias de gastos"
+          summary={`${categories.length} categorias · personalize e vincule ao planejamento`}
+        >
+          <div className="space-y-4">
+            <div>
+              <h2 className="font-medium text-stone-900">Categorias de gastos</h2>
+              <p className="mt-1 text-sm text-stone-500">
+                Vincule categorias como Gasolina e Manutenção à divisão Carro para consolidar o
+                gasto real automaticamente.
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              {categories.map((category) => (
+                <CategoryEditorRow
+                  key={category.id}
+                  category={category}
+                  planItems={categoryPlanItems}
+                  onSave={handleUpdateCategory}
+                />
+              ))}
+            </div>
+
+            <div className="grid gap-3 rounded-2xl border border-dashed border-emerald-200 bg-emerald-50/60 p-4 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+              <label className="block">
+                <span className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+                  Nova categoria
+                </span>
+                <input
+                  type="text"
+                  value={newCategoryName}
+                  onChange={(event) => setNewCategoryName(event.target.value)}
+                  placeholder="Ex: Manutenção"
+                  className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+                  Divisão do planejamento
+                </span>
+                <select
+                  value={newCategoryPlanItemId}
+                  onChange={(event) => setNewCategoryPlanItemId(event.target.value)}
+                  className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="">Sem divisão</option>
+                  {categoryPlanItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button
+                type="button"
+                onClick={() => void handleAddCategory()}
+                disabled={categorySaving || !newCategoryName.trim()}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <Plus className="h-4 w-4" />
+                Adicionar
+              </button>
+            </div>
+
+            {categoryPlanItems.length === 0 && (
+              <p className="text-xs text-stone-500">
+                Salve primeiro o “Planejamento do casal” na tela Metas para disponibilizar as
+                divisões aqui.
+              </p>
+            )}
+            {categoryError && (
+              <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {categoryError}
+              </p>
+            )}
           </div>
         </ExpandableSection>
 
@@ -590,6 +758,89 @@ export function Settings() {
         />
       )}
     </Layout>
+  );
+}
+
+function CategoryEditorRow({
+  category,
+  planItems,
+  onSave,
+}: {
+  category: CategoryModel;
+  planItems: financeService.GoalPlanItemModel[];
+  onSave: (id: string, changes: Partial<Omit<CategoryModel, "id">>) => Promise<void>;
+}) {
+  const [name, setName] = useState(category.name);
+  const [goalPlanItemId, setGoalPlanItemId] = useState(category.goalPlanItemId ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const hasChanges =
+    name.trim() !== category.name.trim() || goalPlanItemId !== (category.goalPlanItemId ?? "");
+
+  useEffect(() => {
+    setName(category.name);
+    setGoalPlanItemId(category.goalPlanItemId ?? "");
+  }, [category.goalPlanItemId, category.name]);
+
+  const handleSave = async () => {
+    if (!name.trim() || !hasChanges || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(category.id, {
+        name: name.trim(),
+        goalPlanItemId: goalPlanItemId || null,
+      });
+    } catch (saveError) {
+      setError(
+        saveError instanceof Error ? saveError.message : "Não foi possível salvar a categoria.",
+      );
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
+      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+        <label className="block">
+          <span className="mb-1.5 block text-xs uppercase tracking-wider text-stone-500">Nome</span>
+          <input
+            type="text"
+            value={name}
+            onChange={(event) => setName(event.target.value)}
+            className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          />
+        </label>
+        <label className="block">
+          <span className="mb-1.5 block text-xs uppercase tracking-wider text-stone-500">
+            Entra na divisão
+          </span>
+          <select
+            value={goalPlanItemId}
+            onChange={(event) => setGoalPlanItemId(event.target.value)}
+            className="w-full rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+          >
+            <option value="">Sem divisão</option>
+            {planItems.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.name}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => void handleSave()}
+          disabled={!hasChanges || !name.trim() || saving}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-200 bg-white px-3 py-2.5 text-sm font-medium text-emerald-700 transition-colors hover:bg-emerald-50 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Save className="h-4 w-4" />
+          {saving ? "Salvando..." : "Salvar"}
+        </button>
+      </div>
+      {error && <p className="mt-2 text-xs text-rose-700">{error}</p>}
+    </div>
   );
 }
 
@@ -975,7 +1226,9 @@ function AddPaymentMethodModal({ onClose, editingId }: AddPaymentMethodModalProp
 function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalProps) {
   const { addFixedExpense, updateFixedExpense, categories, household, loading } = useFinance();
   const selectedCategoryId = fixedExpense
-    ? (categories.find((category) => category.name === fixedExpense.category)?.id ?? "")
+    ? (fixedExpense.categoryId ??
+      categories.find((category) => category.name === fixedExpense.category)?.id ??
+      "")
     : "";
   const [name, setName] = useState(fixedExpense?.name ?? "");
   const [amount, setAmount] = useState(
@@ -1009,6 +1262,7 @@ function AddFixedExpenseModal({ fixedExpense, onClose }: AddFixedExpenseModalPro
       const payload = {
         name: name.trim(),
         amount: value,
+        categoryId: selectedCategory?.id ?? null,
         category: categoryName,
         dueDate: parsedDueDate,
         amountType,

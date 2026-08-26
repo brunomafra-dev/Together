@@ -45,12 +45,14 @@ export interface InstallmentModel {
 export interface CategoryModel {
   id: string;
   name: string;
+  goalPlanItemId: string | null;
 }
 
 export interface FixedExpenseModel {
   id: string;
   name: string;
   amount: number;
+  categoryId: string | null;
   category: string;
   dueDate: number;
   amountType: "fixed" | "variable";
@@ -302,6 +304,7 @@ const mapInstallmentRow = (row: any): InstallmentModel => ({
 const mapCategoryRow = (row: TableRow<"categories">): CategoryModel => ({
   id: row.id,
   name: toString(row.name),
+  goalPlanItemId: row.goal_plan_item_id ? toString(row.goal_plan_item_id) : null,
 });
 
 const mapPaymentMethodRow = (row: CardRow): PaymentMethodModel => ({
@@ -401,6 +404,7 @@ const mapFixedExpenseRow = (row: FixedExpenseRow): FixedExpenseModel => ({
   id: row.id,
   name: toString(row.name),
   amount: toNumber(row.amount),
+  categoryId: row.category_id ? toString(row.category_id) : null,
   category: toString(row.category),
   dueDate: toNumber(row.due_day),
   amountType: row.amount_type === "variable" ? "variable" : "fixed",
@@ -603,6 +607,7 @@ export async function addFixedExpense(
 ): Promise<FixedExpenseModel> {
   const payload = {
     household_id: fixedExpense.householdId,
+    category_id: fixedExpense.categoryId,
     name: fixedExpense.name,
     amount: fixedExpense.amount,
     category: fixedExpense.category,
@@ -632,6 +637,7 @@ export async function updateFixedExpense(
   const payload = {
     name: changes.name,
     amount: changes.amount,
+    category_id: changes.categoryId,
     category: changes.category,
     due_day: changes.dueDate,
     amount_type: changes.amountType,
@@ -938,10 +944,14 @@ export async function deleteInstallment(id: string): Promise<void> {
   throwIfError(error);
 }
 
-export async function addCategory(name: string, householdId: string): Promise<CategoryModel> {
+export async function addCategory(
+  name: string,
+  householdId: string,
+  goalPlanItemId: string | null = null,
+): Promise<CategoryModel> {
   const { data, error } = await supabase
     .from("categories")
-    .insert({ name, household_id: householdId })
+    .insert({ name, household_id: householdId, goal_plan_item_id: goalPlanItemId })
     .select("*")
     .single();
   throwIfError(error);
@@ -954,7 +964,10 @@ export async function updateCategory(
 ): Promise<CategoryModel> {
   const { data, error } = await supabase
     .from("categories")
-    .update({ name: changes.name })
+    .update({
+      name: changes.name,
+      goal_plan_item_id: changes.goalPlanItemId,
+    })
     .eq("id", id)
     .select("*")
     .single();

@@ -66,6 +66,7 @@ export interface FixedExpense {
   id: string;
   name: string;
   amount: number;
+  categoryId: string | null;
   category: string;
   dueDate: number;
   amountType: "fixed" | "variable";
@@ -145,7 +146,7 @@ interface FinanceContextType {
   deletePaymentMethod: (id: string) => Promise<void>;
   closeMonth: (nextCycleStartDate?: string) => Promise<MonthlySnapshotModel>;
   reopenMonth: (snapshot: MonthlySnapshotModel) => Promise<void>;
-  addCategory: (name: string) => Promise<void>;
+  addCategory: (name: string, goalPlanItemId?: string | null) => Promise<void>;
   updateCategory: (id: string, changes: Partial<Omit<CategoryModel, "id">>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
 }
@@ -494,6 +495,7 @@ function FinanceProviderState({
             id: expense.id,
             name: expense.name,
             amount: expense.amount,
+            categoryId: expense.categoryId,
             category: expense.category,
             dueDate: expense.dueDate,
             amountType: expense.amountType,
@@ -780,6 +782,7 @@ function FinanceProviderState({
         id: data.id,
         name: data.name,
         amount: data.amount,
+        categoryId: data.categoryId,
         category: data.category,
         dueDate: data.dueDate,
         amountType: data.amountType,
@@ -796,6 +799,7 @@ function FinanceProviderState({
               id: updated.id,
               name: updated.name,
               amount: updated.amount,
+              categoryId: updated.categoryId,
               category: updated.category,
               dueDate: updated.dueDate,
               amountType: updated.amountType,
@@ -985,9 +989,9 @@ function FinanceProviderState({
     setIncomeEntries((prev) => prev.filter((entry) => entry.id !== id));
   };
 
-  const addCategoryCtx = async (name: string) => {
+  const addCategoryCtx = async (name: string, goalPlanItemId: string | null = null) => {
     if (!householdId) throw new Error("Casa não encontrada");
-    const newCat = await financeService.addCategory(name, householdId);
+    const newCat = await financeService.addCategory(name, householdId, goalPlanItemId);
     setCategories((prev) => [...prev, newCat]);
     await refreshAfterMutation();
   };

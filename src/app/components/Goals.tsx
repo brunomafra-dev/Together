@@ -13,6 +13,7 @@ import {
   openCycleReferenceEnd,
 } from "../utils/financialCycles";
 import { isOutstandingCommitment } from "../utils/financialCommitments";
+import { summarizeCategorySpending } from "../utils/categoryBudgetLinks";
 
 type GoalTone = "stone" | "emerald" | "cyan" | "amber" | "indigo";
 
@@ -208,6 +209,7 @@ export function Goals() {
     fixedExpenseMonthlyValues,
     financialCommitments,
     categories,
+    updateCategory,
     activeCycle,
   } = useFinance();
   const [goal, setGoal] = useState<GoalSnapshot | null>(null);
@@ -227,7 +229,6 @@ export function Goals() {
     const today = formatLocalDate(new Date());
     const cycleEndDate = openCycleReferenceEnd(activeCycle.startDate, today);
     const referenceDate = today < activeCycle.startDate ? activeCycle.startDate : today;
-    const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
     const monthExpenses = expenses.filter((expense) => {
       const effectiveDate = isLocalDateString(expense.invoiceDueDate)
         ? expense.invoiceDueDate
@@ -267,26 +268,24 @@ export function Goals() {
     );
     const projectedVariable = (variableSpent / elapsedDays) * cycleDays;
     const projectedEndBalance = realIncome - fixedSpent - installmentSpent - projectedVariable;
-    const categoryTotals = new Map<string, number>();
-
-    for (const expense of monthExpenses) {
-      const name = categoryNames.get(expense.category) || expense.category || "Sem categoria";
-      categoryTotals.set(name, (categoryTotals.get(name) || 0) + expense.amount);
-    }
-
-    for (const expense of fixedExpenses) {
-      const name = expense.category || "Sem categoria";
-      categoryTotals.set(name, (categoryTotals.get(name) || 0) + fixedExpenseAmount(expense));
-    }
-
-    for (const commitment of financialCommitments.filter(isOutstandingCommitment)) {
-      const name = categoryNames.get(commitment.categoryId) || commitment.categoryId || "Parcelas";
-      categoryTotals.set(name, (categoryTotals.get(name) || 0) + commitment.installmentValue);
-    }
-
-    const sortedCategories = Array.from(categoryTotals.entries())
-      .map(([name, amount]) => ({ name, amount }))
-      .sort((left, right) => right.amount - left.amount);
+    const spendingSummary = summarizeCategorySpending(categories, [
+      ...monthExpenses.map((expense) => ({
+        categoryId: expense.category,
+        fallbackName: expense.category,
+        amount: expense.amount,
+      })),
+      ...fixedExpenses.map((expense) => ({
+        categoryId: expense.categoryId,
+        fallbackName: expense.category,
+        amount: fixedExpenseAmount(expense),
+      })),
+      ...financialCommitments.filter(isOutstandingCommitment).map((commitment) => ({
+        categoryId: commitment.categoryId,
+        fallbackName: "Parcelas",
+        amount: commitment.installmentValue,
+      })),
+    ]);
+    const sortedCategories = spendingSummary.categoryTotals;
     const highestCategory = sortedCategories[0] ?? null;
     const lowestCategory =
       sortedCategories.length > 1 ? sortedCategories[sortedCategories.length - 1] : null;
@@ -309,6 +308,7 @@ export function Goals() {
       realIncome,
       totalSpent,
       categoryTotals: sortedCategories,
+      planItemTotals: spendingSummary.planItemTotals,
       remainingBalance,
       projectedEndBalance,
       highestCategory,
@@ -770,16 +770,35 @@ export function Goals() {
       }));
 
       const existingPlan = await financeService.fetchGoalPlanItems(savedGoal.id);
-      for (const item of existingPlan) {
-        await financeService.deleteGoalPlanItem(item.id);
-      }
+      const retainedIds = new Set(
+        normalizedAllocations.flatMap((item) => (item.id ? [item.id] : [])),
+      );
       for (const item of normalizedAllocations) {
-        await financeService.addGoalPlanItem(savedGoal.id, {
+        const payload = {
           name: item.name,
           share: buildPercentText(item.percent),
           amount: income * (item.percent / 100),
           tone: item.tone,
-        });
+        };
+        if (item.id) {
+          await financeService.updateGoalPlanItem(item.id, payload);
+        } else {
+          await financeService.addGoalPlanItem(savedGoal.id, payload);
+        }
+      }
+      for (const item of existingPlan) {
+        if (!retainedIds.has(item.id)) {
+          const linkedCategories = categories.filter(
+            (category) => category.goalPlanItemId === item.id,
+          );
+          for (const category of linkedCategories) {
+            await updateCategory(category.id, {
+              name: category.name,
+              goalPlanItemId: null,
+            });
+          }
+          await financeService.deleteGoalPlanItem(item.id);
+        }
       }
 
       const planItems = await financeService.fetchGoalPlanItems(savedGoal.id);
@@ -990,9 +1009,11 @@ export function Goals() {
               >
                 {(() => {
                   const spent =
+                    (card.id ? financialData.planItemTotals.get(card.id) : undefined) ??
                     financialData.categoryTotals.find(
                       (item) => item.name.toLowerCase() === card.name.toLowerCase(),
-                    )?.amount ?? 0;
+                    )?.amount ??
+                    0;
                   const remaining = card.amount - spent;
                   return (
                     <>
