@@ -10,12 +10,18 @@ import {
   MonthlySnapshotModel,
   FinancialCycle,
 } from "../context/FinanceContext";
-import { Camera, LogOut, Mail, Plus, Trash2, Save, X, Edit2 } from "lucide-react";
+import type { FinancialRoutine } from "../context/FinanceContext";
+import { CalendarDays, Camera, LogOut, Mail, Plus, Trash2, Save, X, Edit2 } from "lucide-react";
 import { toast } from "sonner";
 import { CategorySelect } from "./CategorySelect";
 import { useAuth } from "../context/AuthContext";
 import * as financeService from "../../services/financeService";
-import { parseLocalDate } from "../utils/financialCycles";
+import { formatLocalDate, parseLocalDate } from "../utils/financialCycles";
+import {
+  CYCLE_MODE_LABELS,
+  INCOME_MODE_LABELS,
+  suggestedFinancialCycle,
+} from "../utils/financialRoutine";
 import { useNavigate } from "react-router";
 
 const PAYMENT_TYPE_LABELS = {
@@ -83,6 +89,8 @@ export function Settings() {
     upsertFixedExpenseMonthlyValue,
     updateSettings,
     updateHouseholdAvatar,
+    updateFinancialRoutine,
+    resetOnboarding,
     deletePaymentMethod,
     reopenMonth,
     addCategory,
@@ -117,6 +125,14 @@ export function Settings() {
   const [newCategoryPlanItemId, setNewCategoryPlanItemId] = useState("");
   const [categorySaving, setCategorySaving] = useState(false);
   const [categoryError, setCategoryError] = useState<string | null>(null);
+  const [financialRoutine, setFinancialRoutine] = useState<FinancialRoutine>(() => ({
+    incomeMode: household?.incomeMode ?? "fixed",
+    primaryIncomeDay: household?.primaryIncomeDay ?? 5,
+    cycleMode: household?.cycleMode ?? "payment_day",
+    cycleCloseDay: household?.cycleCloseDay ?? null,
+  }));
+  const [routineSaving, setRoutineSaving] = useState(false);
+  const [routineError, setRoutineError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const hasEditedSettingsRef = useRef(false);
   const defaultPaymentMethodNames = new Set(["Pix", "Dinheiro", "Débito"]);
@@ -136,6 +152,8 @@ export function Settings() {
       .join("")
       .slice(0, 2)
       .toUpperCase() || "BL";
+  const routinePreview = suggestedFinancialCycle(formatLocalDate(new Date()), financialRoutine);
+  const routineSummary = `${INCOME_MODE_LABELS[financialRoutine.incomeMode]} · ${CYCLE_MODE_LABELS[financialRoutine.cycleMode]}`;
 
   useEffect(() => {
     const loadProfile = async () => {
@@ -153,6 +171,21 @@ export function Settings() {
   useEffect(() => {
     setHouseholdAvatarUrl(household?.avatarUrl || "");
   }, [household?.avatarUrl]);
+
+  useEffect(() => {
+    if (!household) return;
+    setFinancialRoutine({
+      incomeMode: household.incomeMode,
+      primaryIncomeDay: household.primaryIncomeDay,
+      cycleMode: household.cycleMode,
+      cycleCloseDay: household.cycleCloseDay,
+    });
+  }, [
+    household?.cycleCloseDay,
+    household?.cycleMode,
+    household?.incomeMode,
+    household?.primaryIncomeDay,
+  ]);
 
   useEffect(() => {
     if (hasEditedSettingsRef.current) return;
@@ -336,6 +369,53 @@ export function Settings() {
     await signOut();
   };
 
+  const handleSaveFinancialRoutine = async () => {
+    if (routineSaving) return;
+    const dayIsValid = (day: number | null) => day !== null && day >= 1 && day <= 31;
+    if (
+      financialRoutine.cycleMode === "payment_day" &&
+      !dayIsValid(financialRoutine.primaryIncomeDay)
+    ) {
+      setRoutineError("Informe um dia de recebimento entre 1 e 31.");
+      return;
+    }
+    if (
+      financialRoutine.cycleMode === "custom_day" &&
+      !dayIsValid(financialRoutine.cycleCloseDay)
+    ) {
+      setRoutineError("Informe um dia de virada entre 1 e 31.");
+      return;
+    }
+
+    setRoutineSaving(true);
+    setRoutineError(null);
+    try {
+      await updateFinancialRoutine(financialRoutine);
+      toast.success("Rotina financeira salva.");
+    } catch (error) {
+      setRoutineError(
+        error instanceof Error ? error.message : "Não foi possível salvar a rotina financeira.",
+      );
+    } finally {
+      setRoutineSaving(false);
+    }
+  };
+
+  const handleRestartGuide = async () => {
+    if (routineSaving) return;
+    setRoutineSaving(true);
+    setRoutineError(null);
+    try {
+      await resetOnboarding();
+    } catch (error) {
+      setRoutineError(
+        error instanceof Error ? error.message : "Não foi possível abrir o guia inicial.",
+      );
+    } finally {
+      setRoutineSaving(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="space-y-6">
@@ -464,6 +544,162 @@ export function Settings() {
                 }}
                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
+            </div>
+          </div>
+        </ExpandableSection>
+
+        <ExpandableSection
+          title="Minha rotina financeira"
+          summary={routineSummary}
+          icon={CalendarDays}
+          tone="teal"
+        >
+          <div className="space-y-5">
+            <div>
+              <h2 className="font-medium text-stone-900">Como seu mês funciona</h2>
+              <p className="mt-1 text-sm text-stone-500">
+                O dia de receber e o dia de virar o ciclo são configurações diferentes. Isso não
+                altera o fechamento individual das faturas dos cartões.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="block">
+                <span className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+                  Tipo de renda
+                </span>
+                <select
+                  value={financialRoutine.incomeMode}
+                  onChange={(event) => {
+                    const incomeMode = event.target.value as FinancialRoutine["incomeMode"];
+                    setFinancialRoutine((current) => ({
+                      ...current,
+                      incomeMode,
+                      primaryIncomeDay:
+                        incomeMode === "variable" ? null : (current.primaryIncomeDay ?? 5),
+                      cycleMode:
+                        incomeMode === "variable" && current.cycleMode === "payment_day"
+                          ? "manual"
+                          : current.cycleMode,
+                    }));
+                  }}
+                  className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  {Object.entries(INCOME_MODE_LABELS).map(([value, label]) => (
+                    <option key={value} value={value}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+                  Dia principal do recebimento
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  max={31}
+                  disabled={financialRoutine.incomeMode === "variable"}
+                  value={financialRoutine.primaryIncomeDay ?? ""}
+                  onChange={(event) =>
+                    setFinancialRoutine((current) => ({
+                      ...current,
+                      primaryIncomeDay: Number(event.target.value) || null,
+                    }))
+                  }
+                  placeholder={financialRoutine.incomeMode === "variable" ? "Sem dia fixo" : "5"}
+                  className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500 disabled:bg-stone-50 disabled:text-stone-400"
+                />
+              </label>
+
+              <label className="block">
+                <span className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+                  Virada do ciclo
+                </span>
+                <select
+                  value={financialRoutine.cycleMode}
+                  onChange={(event) =>
+                    setFinancialRoutine((current) => ({
+                      ...current,
+                      cycleMode: event.target.value as FinancialRoutine["cycleMode"],
+                    }))
+                  }
+                  className="w-full rounded-xl border border-stone-200 bg-white px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                >
+                  <option value="payment_day" disabled={financialRoutine.primaryIncomeDay === null}>
+                    {CYCLE_MODE_LABELS.payment_day}
+                  </option>
+                  <option value="custom_day">{CYCLE_MODE_LABELS.custom_day}</option>
+                  <option value="manual">{CYCLE_MODE_LABELS.manual}</option>
+                </select>
+              </label>
+
+              {financialRoutine.cycleMode === "custom_day" && (
+                <label className="block">
+                  <span className="mb-2 block text-xs uppercase tracking-wider text-stone-500">
+                    Dia da virada
+                  </span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={31}
+                    value={financialRoutine.cycleCloseDay ?? ""}
+                    onChange={(event) =>
+                      setFinancialRoutine((current) => ({
+                        ...current,
+                        cycleCloseDay: Number(event.target.value) || null,
+                      }))
+                    }
+                    className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </label>
+              )}
+            </div>
+
+            <div className="rounded-2xl border border-teal-100 bg-teal-50 p-4 text-sm text-teal-950">
+              {routinePreview ? (
+                <>
+                  Pela configuração atual, o ciclo em andamento vai de{" "}
+                  <strong>
+                    {parseLocalDate(routinePreview.startDate).toLocaleDateString("pt-BR")}
+                  </strong>{" "}
+                  até{" "}
+                  <strong>
+                    {parseLocalDate(routinePreview.endDate).toLocaleDateString("pt-BR")}
+                  </strong>
+                  . O fechamento continua sendo confirmado por você.
+                </>
+              ) : (
+                "Você escolheu a virada manual. O app acompanha as datas e você decide quando encerrar o ciclo."
+              )}
+            </div>
+
+            {routineError && (
+              <p className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700">
+                {routineError}
+              </p>
+            )}
+
+            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+              <button
+                type="button"
+                onClick={() => void handleRestartGuide()}
+                disabled={routineSaving}
+                className="rounded-xl border border-stone-200 px-4 py-3 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60"
+              >
+                Refazer guia inicial
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleSaveFinancialRoutine()}
+                disabled={routineSaving}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
+              >
+                <Save className="h-4 w-4" />
+                {routineSaving ? "Salvando..." : "Salvar rotina"}
+              </button>
             </div>
           </div>
         </ExpandableSection>
@@ -848,9 +1084,7 @@ function CategoryEditorRow({
       await onDelete(category);
     } catch (deleteError) {
       setError(
-        deleteError instanceof Error
-          ? deleteError.message
-          : "Não foi possível apagar a categoria.",
+        deleteError instanceof Error ? deleteError.message : "Não foi possível apagar a categoria.",
       );
     } finally {
       setDeleting(false);

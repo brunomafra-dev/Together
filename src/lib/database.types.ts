@@ -17,6 +17,11 @@ export interface Household extends TimestampedRow {
   partner_1_name: string | null;
   partner_2_name: string | null;
   avatar_url: string | null;
+  income_mode: "fixed" | "variable" | "mixed" | null;
+  primary_income_day: number | null;
+  cycle_mode: "payment_day" | "custom_day" | "manual" | null;
+  cycle_close_day: number | null;
+  onboarding_completed_at: string | null;
 }
 
 export interface HouseholdMember extends TimestampedRow {

@@ -29,6 +29,7 @@ import type {
   IncomeEntryModel,
   MonthlySnapshotModel,
   PaymentMethodModel,
+  FinancialRoutine,
 } from "../../services/financeService";
 
 export type { CategoryModel, HouseholdModel, PaymentMethodModel };
@@ -36,6 +37,7 @@ export type { FinancialCommitmentModel };
 export type { FixedExpenseMonthlyValueModel };
 export type { MonthlySnapshotModel };
 export type { IncomeEntryModel };
+export type { FinancialRoutine };
 
 export interface Expense {
   id: string;
@@ -129,6 +131,11 @@ interface FinanceContextType {
   ) => Promise<void>;
   updateSettings: (settings: BudgetSettings) => Promise<void>;
   updateHouseholdAvatar: (avatarUrl: string) => Promise<void>;
+  updateFinancialRoutine: (
+    routine: FinancialRoutine,
+    completeOnboarding?: boolean,
+  ) => Promise<void>;
+  resetOnboarding: () => Promise<void>;
   addPaymentMethod: (
     name: string,
     limitAmount?: number,
@@ -177,7 +184,7 @@ const DEFAULT_CATEGORY_NAMES = [
 
 const loadErrorMessage = "Não foi possível carregar os dados do Supabase.";
 
-const FINANCE_CACHE_VERSION = 2;
+const FINANCE_CACHE_VERSION = 3;
 const FINANCE_CACHE_PREFIX = "together:finance:";
 
 const currentCycle = () => {
@@ -661,14 +668,33 @@ function FinanceProviderState({
       newSettings.monthlyIncome,
       newSettings.partnerNames,
     );
-    setHousehold(updated);
+    setHousehold((current) => (current ? { ...updated, partnerIds: current.partnerIds } : updated));
     setSettings(newSettings);
   };
 
   const updateHouseholdAvatarCtx = async (avatarUrl: string) => {
     if (!household?.id) throw new Error("Casa não encontrada");
     const updated = await financeService.updateHouseholdAvatar(household.id, avatarUrl);
-    setHousehold(updated);
+    setHousehold((current) => (current ? { ...updated, partnerIds: current.partnerIds } : updated));
+  };
+
+  const updateFinancialRoutineCtx = async (
+    routine: FinancialRoutine,
+    completeOnboarding = false,
+  ) => {
+    const currentHouseholdId = requireHouseholdId();
+    const updated = await financeService.updateHouseholdFinancialRoutine(
+      currentHouseholdId,
+      routine,
+      completeOnboarding,
+    );
+    setHousehold((current) => (current ? { ...updated, partnerIds: current.partnerIds } : updated));
+  };
+
+  const resetOnboardingCtx = async () => {
+    const currentHouseholdId = requireHouseholdId();
+    const updated = await financeService.resetHouseholdOnboarding(currentHouseholdId);
+    setHousehold((current) => (current ? { ...updated, partnerIds: current.partnerIds } : updated));
   };
 
   const billingDatesForExpense = (date: string, paymentMethodId?: string | null) => {
@@ -1277,6 +1303,8 @@ function FinanceProviderState({
     upsertFixedExpenseMonthlyValue: upsertFixedExpenseMonthlyValueCtx,
     updateSettings,
     updateHouseholdAvatar: updateHouseholdAvatarCtx,
+    updateFinancialRoutine: updateFinancialRoutineCtx,
+    resetOnboarding: resetOnboardingCtx,
     addPaymentMethod: addPaymentMethodCtx,
     updatePaymentMethod: updatePaymentMethodCtx,
     deletePaymentMethod: deletePaymentMethodCtx,

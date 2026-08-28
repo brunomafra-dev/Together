@@ -96,7 +96,17 @@ export interface HouseholdModel {
   partnerNames: [string, string];
   partnerIds: [string, string];
   avatarUrl: string;
+  incomeMode: "fixed" | "variable" | "mixed";
+  primaryIncomeDay: number | null;
+  cycleMode: "payment_day" | "custom_day" | "manual";
+  cycleCloseDay: number | null;
+  onboardingCompletedAt: string | null;
 }
+
+export type FinancialRoutine = Pick<
+  HouseholdModel,
+  "incomeMode" | "primaryIncomeDay" | "cycleMode" | "cycleCloseDay"
+>;
 
 export interface GoalModel {
   id: string;
@@ -448,6 +458,13 @@ const mapHouseholdRow = (
   ],
   partnerIds,
   avatarUrl: toString(row.avatar_url),
+  incomeMode:
+    row.income_mode === "variable" || row.income_mode === "mixed" ? row.income_mode : "fixed",
+  primaryIncomeDay: row.primary_income_day === null ? null : toNumber(row.primary_income_day),
+  cycleMode:
+    row.cycle_mode === "custom_day" || row.cycle_mode === "manual" ? row.cycle_mode : "payment_day",
+  cycleCloseDay: row.cycle_close_day === null ? null : toNumber(row.cycle_close_day),
+  onboardingCompletedAt: row.onboarding_completed_at ? toString(row.onboarding_completed_at) : null,
 });
 
 const mapGoalRow = (row: GoalRow): GoalModel => ({
@@ -1058,7 +1075,7 @@ export async function updateHouseholdSettings(
   householdId: string,
   monthlyIncome: number,
   partnerNames: [string, string],
-): Promise<HouseholdModel | null> {
+): Promise<HouseholdModel> {
   const { data, error } = await supabase
     .from("households")
     .update({
@@ -1072,6 +1089,40 @@ export async function updateHouseholdSettings(
     .single();
   throwIfError(error);
   return mapHouseholdRow(data as HouseholdRow, partnerNames, ["", ""]);
+}
+
+export async function updateHouseholdFinancialRoutine(
+  householdId: string,
+  routine: FinancialRoutine,
+  completeOnboarding = false,
+): Promise<HouseholdModel> {
+  const payload: Partial<TableInsert<"households">> = {
+    income_mode: routine.incomeMode,
+    primary_income_day: routine.primaryIncomeDay,
+    cycle_mode: routine.cycleMode,
+    cycle_close_day: routine.cycleCloseDay,
+  };
+  if (completeOnboarding) payload.onboarding_completed_at = new Date().toISOString();
+
+  const { data, error } = await supabase
+    .from("households")
+    .update(payload)
+    .eq("id", householdId)
+    .select("*")
+    .single();
+  throwIfError(error);
+  return mapHouseholdRow(data as HouseholdRow, ["", ""], ["", ""]);
+}
+
+export async function resetHouseholdOnboarding(householdId: string): Promise<HouseholdModel> {
+  const { data, error } = await supabase
+    .from("households")
+    .update({ onboarding_completed_at: null })
+    .eq("id", householdId)
+    .select("*")
+    .single();
+  throwIfError(error);
+  return mapHouseholdRow(data as HouseholdRow, ["", ""], ["", ""]);
 }
 
 export async function fetchGoals(householdId: string): Promise<GoalModel[]> {
