@@ -1,10 +1,13 @@
 ﻿import { useMemo } from "react";
 import { format } from "date-fns";
+import { useState } from "react";
 import { ptBR } from "date-fns/locale";
-import { Calendar, CreditCard, TrendingDown, TrendingUp } from "lucide-react";
+import { Calendar, CreditCard, Pencil, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import { toast } from "sonner";
+import { AddExpenseModal } from "./AddExpenseModal";
 import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
-import { formatBRL, useFinance } from "../context/FinanceContext";
+import { Expense, formatBRL, useFinance } from "../context/FinanceContext";
 import {
   addLocalMonths,
   defaultCycleEnd,
@@ -30,7 +33,14 @@ export function FutureCommitments() {
     activeCycle,
     categories,
     paymentMethods,
+    deleteExpense,
   } = useFinance();
+  const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
+  const [deletingExpenseId, setDeletingExpenseId] = useState<string | null>(null);
+  const categoryNames = useMemo(
+    () => new Map(categories.map((category) => [category.id, category.name])),
+    [categories],
+  );
   const subscriptionCategoryIds = useMemo(
     () =>
       new Set(
@@ -83,6 +93,7 @@ export function FutureCommitments() {
         dueDate: string | null;
         amount: number;
         purchaseCount: number;
+        purchases: Expense[];
       }
     >();
 
@@ -103,19 +114,40 @@ export function FutureCommitments() {
         dueDate,
         amount: (current?.amount ?? 0) + expense.amount,
         purchaseCount: (current?.purchaseCount ?? 0) + 1,
+        purchases: [...(current?.purchases ?? []), expense],
       });
     }
 
-    return Array.from(invoices.values()).sort(
-      (left, right) =>
-        left.closingDate.localeCompare(right.closingDate) ||
-        left.cardName.localeCompare(right.cardName, "pt-BR"),
-    );
+    return Array.from(invoices.values())
+      .map((invoice) => ({
+        ...invoice,
+        purchases: invoice.purchases.sort(
+          (left, right) => right.date.localeCompare(left.date) || right.id.localeCompare(left.id),
+        ),
+      }))
+      .sort(
+        (left, right) =>
+          left.closingDate.localeCompare(right.closingDate) ||
+          left.cardName.localeCompare(right.cardName, "pt-BR"),
+      );
   }, [activeCycleEndDate, expenses, paymentMethods]);
   const futureCardInvoiceTotal = futureCardInvoices.reduce(
     (sum, invoice) => sum + invoice.amount,
     0,
   );
+
+  const handleDeleteExpense = async (expense: Expense) => {
+    if (!window.confirm(`Apagar ${expense.description || "esta compra"}?`)) return;
+    setDeletingExpenseId(expense.id);
+    try {
+      await deleteExpense(expense.id);
+      toast.success("Compra apagada.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Não foi possível apagar a compra.");
+    } finally {
+      setDeletingExpenseId(null);
+    }
+  };
 
   const futureMonths = useMemo(() => {
     const months = [];
@@ -219,26 +251,71 @@ export function FutureCommitments() {
               futureCardInvoices.map((invoice) => (
                 <div
                   key={`${invoice.cardId}:${invoice.closingDate}:${invoice.dueDate ?? ""}`}
-                  className="flex flex-col gap-3 rounded-xl border border-violet-100 bg-violet-50/60 p-4 sm:flex-row sm:items-center sm:justify-between"
+                  className="rounded-xl border border-violet-100 bg-violet-50/60 p-4"
                 >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
-                    <div className="min-w-0">
-                      <p className="break-words text-sm font-medium text-stone-900">
-                        {invoice.cardName}
-                      </p>
-                      <p className="mt-0.5 text-xs text-stone-600">
-                        Fecha em {format(parseLocalDate(invoice.closingDate), "dd/MM/yyyy")}
-                        {invoice.dueDate
-                          ? ` · vence em ${format(parseLocalDate(invoice.dueDate), "dd/MM/yyyy")}`
-                          : ""}
-                        {` · ${invoice.purchaseCount} ${invoice.purchaseCount === 1 ? "compra" : "compras"}`}
-                      </p>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-start gap-3">
+                      <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+                      <div className="min-w-0">
+                        <p className="break-words text-sm font-medium text-stone-900">
+                          {invoice.cardName}
+                        </p>
+                        <p className="mt-0.5 text-xs text-stone-600">
+                          Fecha em {format(parseLocalDate(invoice.closingDate), "dd/MM/yyyy")}
+                          {invoice.dueDate
+                            ? ` · vence em ${format(parseLocalDate(invoice.dueDate), "dd/MM/yyyy")}`
+                            : ""}
+                          {` · ${invoice.purchaseCount} ${invoice.purchaseCount === 1 ? "compra" : "compras"}`}
+                        </p>
+                      </div>
                     </div>
+                    <p className="break-words text-sm font-semibold text-violet-900 sm:text-right">
+                      {formatBRL(invoice.amount)}
+                    </p>
                   </div>
-                  <p className="break-words text-sm font-semibold text-violet-900 sm:text-right">
-                    {formatBRL(invoice.amount)}
-                  </p>
+
+                  <div className="mt-4 divide-y divide-violet-100 border-t border-violet-100">
+                    {invoice.purchases.map((expense) => (
+                      <div
+                        key={expense.id}
+                        className="flex flex-col gap-2 py-3 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="break-words text-sm font-medium text-stone-900">
+                            {expense.description ||
+                              categoryNames.get(expense.category) ||
+                              "Sem descrição"}
+                          </p>
+                          <p className="mt-0.5 text-xs text-stone-500">
+                            Compra em {format(parseLocalDate(expense.date), "dd/MM/yyyy")} ·{" "}
+                            {categoryNames.get(expense.category) || "Sem categoria"}
+                          </p>
+                        </div>
+                        <div className="flex items-center justify-between gap-2 sm:justify-end">
+                          <p className="mr-1 text-sm font-semibold text-stone-900">
+                            {formatBRL(expense.amount)}
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setEditingExpense(expense)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-stone-200 bg-white text-stone-500 transition-colors hover:border-emerald-200 hover:text-emerald-700"
+                            aria-label="Editar compra"
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            disabled={deletingExpenseId === expense.id}
+                            onClick={() => void handleDeleteExpense(expense)}
+                            className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-rose-200 bg-white text-rose-600 transition-colors hover:bg-rose-50 disabled:opacity-50"
+                            aria-label="Apagar compra"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ))
             )}
@@ -477,6 +554,9 @@ export function FutureCommitments() {
           </div>
         </ExpandableSection>
       </div>
+      {editingExpense && (
+        <AddExpenseModal expense={editingExpense} onClose={() => setEditingExpense(null)} />
+      )}
     </Layout>
   );
 }

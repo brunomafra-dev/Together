@@ -71,7 +71,9 @@ export function Settings() {
   const {
     household,
     categories,
+    expenses,
     fixedExpenses,
+    financialCommitments,
     fixedExpenseMonthlyValues,
     settings,
     paymentMethods,
@@ -85,6 +87,7 @@ export function Settings() {
     reopenMonth,
     addCategory,
     updateCategory,
+    deleteCategory,
   } = useFinance();
 
   const [monthlyIncome, setMonthlyIncome] = useState(
@@ -232,6 +235,39 @@ export function Settings() {
       setCategoryError(
         error instanceof Error ? error.message : "Não foi possível atualizar a categoria.",
       );
+      throw error;
+    }
+  };
+
+  const handleDeleteCategory = async (category: CategoryModel) => {
+    const variableUsage = expenses.filter((expense) => expense.category === category.id).length;
+    const fixedUsage = fixedExpenses.filter(
+      (expense) =>
+        expense.categoryId === category.id ||
+        (!expense.categoryId &&
+          expense.category.trim().toLowerCase() === category.name.trim().toLowerCase()),
+    ).length;
+    const commitmentUsage = financialCommitments.filter(
+      (commitment) => commitment.categoryId === category.id,
+    ).length;
+    const usageCount = variableUsage + fixedUsage + commitmentUsage;
+
+    if (usageCount > 0) {
+      const message = `Esta categoria está sendo usada em ${usageCount} ${usageCount === 1 ? "lançamento" : "lançamentos"}. Reclassifique-os antes de apagar.`;
+      setCategoryError(message);
+      toast.error(message);
+      throw new Error(message);
+    }
+    if (!window.confirm(`Apagar a categoria “${category.name}”?`)) return;
+
+    setCategoryError(null);
+    try {
+      await deleteCategory(category.id);
+      toast.success("Categoria apagada.");
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Não foi possível apagar a categoria.";
+      setCategoryError(message);
       throw error;
     }
   };
@@ -452,6 +488,7 @@ export function Settings() {
                   category={category}
                   planItems={categoryPlanItems}
                   onSave={handleUpdateCategory}
+                  onDelete={handleDeleteCategory}
                 />
               ))}
             </div>
@@ -765,14 +802,17 @@ function CategoryEditorRow({
   category,
   planItems,
   onSave,
+  onDelete,
 }: {
   category: CategoryModel;
   planItems: financeService.GoalPlanItemModel[];
   onSave: (id: string, changes: Partial<Omit<CategoryModel, "id">>) => Promise<void>;
+  onDelete: (category: CategoryModel) => Promise<void>;
 }) {
   const [name, setName] = useState(category.name);
   const [goalPlanItemId, setGoalPlanItemId] = useState(category.goalPlanItemId ?? "");
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const hasChanges =
     name.trim() !== category.name.trim() || goalPlanItemId !== (category.goalPlanItemId ?? "");
@@ -800,9 +840,26 @@ function CategoryEditorRow({
     }
   };
 
+  const handleDelete = async () => {
+    if (saving || deleting) return;
+    setDeleting(true);
+    setError(null);
+    try {
+      await onDelete(category);
+    } catch (deleteError) {
+      setError(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Não foi possível apagar a categoria.",
+      );
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="rounded-2xl border border-stone-200 bg-stone-50 p-3">
-      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+      <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto_auto] sm:items-end">
         <label className="block">
           <span className="mb-1.5 block text-xs uppercase tracking-wider text-stone-500">Nome</span>
           <input
@@ -837,6 +894,17 @@ function CategoryEditorRow({
         >
           <Save className="h-4 w-4" />
           {saving ? "Salvando..." : "Salvar"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleDelete()}
+          disabled={saving || deleting}
+          className="inline-flex items-center justify-center gap-2 rounded-xl border border-rose-200 bg-white px-3 py-2.5 text-sm font-medium text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+          aria-label={`Apagar categoria ${category.name}`}
+          title="Apagar categoria"
+        >
+          <X className="h-4 w-4" />
+          <span className="sm:hidden">{deleting ? "Apagando..." : "Apagar"}</span>
         </button>
       </div>
       {error && <p className="mt-2 text-xs text-rose-700">{error}</p>}
