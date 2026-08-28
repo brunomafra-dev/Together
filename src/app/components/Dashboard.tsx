@@ -30,6 +30,7 @@ import {
   addLocalMonths,
   daysBetweenLocalDates,
   formatLocalDate,
+  getExpenseCycleDate,
   isDateWithinCycle,
   isLocalDateString,
   nextLocalDate,
@@ -128,8 +129,7 @@ export function Dashboard() {
         .filter(([id]) => Boolean(id)),
     );
 
-    const effectiveDate = (expense: (typeof expenses)[number]) =>
-      isLocalDateString(expense.invoiceDueDate) ? expense.invoiceDueDate : expense.date;
+    const effectiveDate = (expense: (typeof expenses)[number]) => getExpenseCycleDate(expense);
     const cycleExpenses = expenses.filter((expense) =>
       isDateWithinCycle(effectiveDate(expense), activeCycle.startDate, cycleEndDate),
     );

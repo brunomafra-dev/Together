@@ -4,6 +4,7 @@ import {
   daysBetweenLocalDates,
   defaultCycleEnd,
   getCreditCardBillingDates,
+  getExpenseCycleDate,
   getExpenseEffectiveDate,
   isDateWithinCycle,
   nextLocalDate,
@@ -92,15 +93,22 @@ describe("credit-card invoices", () => {
     expect(() => getCreditCardBillingDates("2026-08-01", 20, day)).toThrow(RangeError);
   });
 
-  it("uses due date only for a fully configured credit card", () => {
+  it("uses the statement closing date as the card purchase competence", () => {
     expect(
       getExpenseEffectiveDate("2026-08-29", {
         type: "credit_card",
         closingDay: 28,
         dueDay: 5,
       }),
-    ).toBe("2026-10-05");
+    ).toBe("2026-09-28");
     expect(getExpenseEffectiveDate("2026-08-29", { type: "pix" })).toBe("2026-08-29");
+    expect(
+      getExpenseEffectiveDate("2026-08-29", {
+        type: "credit_card",
+        closingDay: 28,
+        dueDay: null,
+      }),
+    ).toBe("2026-09-28");
     expect(
       getExpenseEffectiveDate("2026-08-29", {
         type: "credit_card",
@@ -108,5 +116,25 @@ describe("credit-card invoices", () => {
         dueDay: 5,
       }),
     ).toBe("2026-08-29");
+  });
+
+  it("uses a persisted closing date without replacing it with the due date", () => {
+    expect(
+      getExpenseCycleDate({
+        date: "2026-08-28",
+        invoiceClosingDate: "2026-09-26",
+      }),
+    ).toBe("2026-09-26");
+    expect(getExpenseCycleDate({ date: "2026-08-28" })).toBe("2026-08-28");
+  });
+
+  it("moves a post-closing purchase only when its statement enters the active cycle", () => {
+    const competenceDate = getExpenseCycleDate({
+      date: "2026-08-28",
+      invoiceClosingDate: "2026-09-26",
+    });
+
+    expect(isDateWithinCycle(competenceDate, "2026-08-01", "2026-08-31")).toBe(false);
+    expect(isDateWithinCycle(competenceDate, "2026-08-28", "2026-09-27")).toBe(true);
   });
 });

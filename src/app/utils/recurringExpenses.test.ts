@@ -12,6 +12,7 @@ type ExpenseFixture = {
   createdAt?: string;
   amount: number;
   card: string | null;
+  invoiceClosingDate?: string | null;
   invoiceDueDate?: string | null;
   paidBy: string;
   recurringMonthly: boolean;
@@ -118,16 +119,20 @@ describe("selectCurrentRecurringExpenses", () => {
 });
 
 describe("recurringExpenseAppliesToCycle", () => {
-  it("starts a card recurrence in the cycle containing its invoice due date", () => {
-    const template = expense({ date: "2026-08-29", invoiceDueDate: "2026-10-05" });
+  it("starts a card recurrence in the cycle containing its invoice closing date", () => {
+    const template = expense({
+      date: "2026-08-29",
+      invoiceClosingDate: "2026-09-28",
+      invoiceDueDate: "2026-10-05",
+    });
 
-    expect(recurringExpenseAppliesToCycle(template, "2026-10-04")).toBe(false);
-    expect(recurringExpenseAppliesToCycle(template, "2026-10-05")).toBe(true);
+    expect(recurringExpenseAppliesToCycle(template, "2026-09-27")).toBe(false);
+    expect(recurringExpenseAppliesToCycle(template, "2026-09-28")).toBe(true);
     expect(recurringExpenseAppliesToCycle(template, "2026-11-04")).toBe(true);
   });
 
   it("falls back to purchase date when no valid invoice date exists", () => {
-    const template = expense({ date: "2026-03-29", invoiceDueDate: null });
+    const template = expense({ date: "2026-03-29", invoiceClosingDate: null });
 
     expect(recurringExpenseAppliesToCycle(template, "2026-03-28")).toBe(false);
     expect(recurringExpenseAppliesToCycle(template, "2026-03-29")).toBe(true);

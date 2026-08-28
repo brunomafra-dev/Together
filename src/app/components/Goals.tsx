@@ -8,8 +8,8 @@ import * as financeService from "../../services/financeService";
 import {
   daysBetweenLocalDates,
   formatLocalDate,
+  getExpenseCycleDate,
   isDateWithinCycle,
-  isLocalDateString,
   openCycleReferenceEnd,
 } from "../utils/financialCycles";
 import { isOutstandingCommitment } from "../utils/financialCommitments";
@@ -230,9 +230,7 @@ export function Goals() {
     const cycleEndDate = openCycleReferenceEnd(activeCycle.startDate, today);
     const referenceDate = today < activeCycle.startDate ? activeCycle.startDate : today;
     const monthExpenses = expenses.filter((expense) => {
-      const effectiveDate = isLocalDateString(expense.invoiceDueDate)
-        ? expense.invoiceDueDate
-        : expense.date;
+      const effectiveDate = getExpenseCycleDate(expense);
       return isDateWithinCycle(effectiveDate, activeCycle.startDate, cycleEndDate);
     });
     const monthIncomeEntries = incomeEntries.filter((entry) =>

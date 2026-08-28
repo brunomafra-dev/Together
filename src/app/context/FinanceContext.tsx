@@ -13,6 +13,7 @@ import { canonicalCategoryName, normalizeCategoryName } from "../utils/categorie
 import {
   addLocalMonths,
   formatLocalDate,
+  getExpenseCycleDate,
   getCreditCardBillingDates,
   isDateWithinCycle,
   isLocalDateString,
@@ -679,11 +680,9 @@ function FinanceProviderState({
   };
 
   const effectiveDateForExpense = (expense: Expense) => {
-    if (isLocalDateString(expense.invoiceDueDate)) return expense.invoiceDueDate;
-    // Invoice dates are assigned and persisted when a credit-card purchase is
-    // saved. Falling back to the purchase date keeps legacy rows stable instead
-    // of moving them when the card configuration is changed later.
-    return expense.date;
+    // The closing date defines the financial competence. The due date remains
+    // available for cash-flow information without moving the purchase twice.
+    return getExpenseCycleDate(expense);
   };
 
   const closedSnapshotForExpense = (expense: Expense) => {

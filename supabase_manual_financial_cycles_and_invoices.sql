@@ -586,7 +586,7 @@ begin
       jsonb_build_object(
         'id', expense.id::text,
         'purchaseDate', expense.purchase_date::date::text,
-        'effectiveDate', coalesce(expense.invoice_due_date, expense.purchase_date::date)::text,
+        'effectiveDate', coalesce(expense.invoice_closing_date, expense.purchase_date::date)::text,
         'invoiceClosingDate', expense.invoice_closing_date::text,
         'invoiceDueDate', expense.invoice_due_date::text,
         'description', coalesce(expense.description, ''),
@@ -602,7 +602,7 @@ begin
   into database_expense_signature
   from public.expenses as expense
   where expense.household_id = p_household_id
-    and coalesce(expense.invoice_due_date, expense.purchase_date::date)
+    and coalesce(expense.invoice_closing_date, expense.purchase_date::date)
       between p_cycle_start_date and p_cycle_end_date;
 
   select coalesce(
@@ -635,7 +635,7 @@ begin
   into database_variable_total
   from public.expenses as expense
   where expense.household_id = p_household_id
-    and coalesce(expense.invoice_due_date, expense.purchase_date::date)
+    and coalesce(expense.invoice_closing_date, expense.purchase_date::date)
       between p_cycle_start_date and p_cycle_end_date;
 
   select coalesce(monthly_income, 0)
@@ -703,7 +703,7 @@ begin
       on category.id = expense.category_id
       and category.household_id = expense.household_id
     where expense.household_id = p_household_id
-      and coalesce(expense.invoice_due_date, expense.purchase_date::date)
+      and coalesce(expense.invoice_closing_date, expense.purchase_date::date)
         between p_cycle_start_date and p_cycle_end_date
 
     union all
@@ -783,7 +783,7 @@ begin
     left join public.expenses as expense
       on expense.card_id = card.id
       and expense.household_id = card.household_id
-      and coalesce(expense.invoice_due_date, expense.purchase_date::date)
+      and coalesce(expense.invoice_closing_date, expense.purchase_date::date)
         between p_cycle_start_date and p_cycle_end_date
     where card.household_id = p_household_id
       and coalesce(card.type, 'credit_card') = 'credit_card'
@@ -1087,10 +1087,17 @@ begin
 
   if tg_op <> 'INSERT' and exists (
     select 1
-    from public.monthly_snapshots
-    where household_id = old.household_id
-      and coalesce(old.invoice_due_date, old.purchase_date::date)
-        between cycle_start_date and cycle_end_date
+    from public.monthly_snapshots as snapshot
+    where snapshot.household_id = old.household_id
+      and (
+        coalesce(old.invoice_closing_date, old.purchase_date::date)
+          between snapshot.cycle_start_date and snapshot.cycle_end_date
+        or exists (
+          select 1
+          from jsonb_array_elements(coalesce(snapshot.expense_rows, '[]'::jsonb)) as item
+          where item ->> 'id' = old.id::text
+        )
+      )
   ) then
     raise exception 'Este gasto pertence a um ciclo fechado. Reabra o ciclo antes de alterá-lo.'
       using errcode = '23514';
@@ -1098,10 +1105,10 @@ begin
 
   if tg_op <> 'DELETE' and exists (
     select 1
-    from public.monthly_snapshots
-    where household_id = new.household_id
-      and coalesce(new.invoice_due_date, new.purchase_date::date)
-        between cycle_start_date and cycle_end_date
+    from public.monthly_snapshots as snapshot
+    where snapshot.household_id = new.household_id
+      and coalesce(new.invoice_closing_date, new.purchase_date::date)
+        between snapshot.cycle_start_date and snapshot.cycle_end_date
   ) then
     raise exception 'Não é possível lançar um gasto dentro de um ciclo já fechado.'
       using errcode = '23514';

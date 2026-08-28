@@ -1,4 +1,4 @@
-import { isLocalDateString } from "./financialCycles";
+import { getExpenseCycleDate } from "./financialCycles";
 
 export interface RecurringExpenseLike {
   id: string;
@@ -7,6 +7,7 @@ export interface RecurringExpenseLike {
   date: string;
   createdAt?: string;
   card?: string | null;
+  invoiceClosingDate?: string | null;
   invoiceDueDate?: string | null;
   paidBy?: string;
   recurringMonthly?: boolean;
@@ -72,14 +73,12 @@ export function selectCurrentRecurringExpenses<T extends RecurringExpenseLike>(
 
 /**
  * A recurring template starts in the first cycle whose end reaches its
- * effective date. Credit-card expenses use their frozen invoice due date.
+ * competence date. Credit-card expenses use their frozen invoice closing date.
  */
 export function recurringExpenseAppliesToCycle(
-  expense: Pick<RecurringExpenseLike, "date" | "invoiceDueDate">,
+  expense: Pick<RecurringExpenseLike, "date" | "invoiceClosingDate">,
   cycleEndDate: string,
 ): boolean {
-  const effectiveDate = isLocalDateString(expense.invoiceDueDate)
-    ? expense.invoiceDueDate
-    : expense.date;
+  const effectiveDate = getExpenseCycleDate(expense);
   return effectiveDate <= cycleEndDate;
 }

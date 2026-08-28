@@ -1,10 +1,11 @@
-import { isDateWithinCycle, isLocalDateString } from "./financialCycles";
+import { getExpenseCycleDate, isDateWithinCycle } from "./financialCycles";
 
 export interface CycleClosingExpense {
   amount: number;
   category: string;
   paidBy: string;
   date: string;
+  invoiceClosingDate?: string | null;
   invoiceDueDate?: string | null;
 }
 
@@ -26,9 +27,7 @@ export interface CycleClosingSummaryInput {
 
 export function buildCycleClosingSummary(input: CycleClosingSummaryInput) {
   const selectedExpenses = input.expenses.filter((expense) => {
-    const effectiveDate = isLocalDateString(expense.invoiceDueDate)
-      ? expense.invoiceDueDate
-      : expense.date;
+    const effectiveDate = getExpenseCycleDate(expense);
     return isDateWithinCycle(effectiveDate, input.cycleStartDate, input.cycleEndDate);
   });
   const selectedIncomeEntries = input.incomeEntries.filter((entry) =>

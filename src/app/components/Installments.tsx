@@ -9,8 +9,9 @@ import { formatBRL, useFinance } from "../context/FinanceContext";
 import { CategorySelect } from "./CategorySelect";
 import {
   isDateWithinCycle,
-  isLocalDateString,
+  getExpenseCycleDate,
   openCycleReferenceEnd,
+  isLocalDateString,
   parseLocalDate,
 } from "../utils/financialCycles";
 import {
@@ -120,8 +121,7 @@ export function Installments() {
         (commitment) => commitment.paymentMethodId === method.id,
       );
       const methodExpenses = expenses.filter((expense) => expense.card === method.id);
-      const effectiveDate = (expense: (typeof expenses)[number]) =>
-        isLocalDateString(expense.invoiceDueDate) ? expense.invoiceDueDate : expense.date;
+      const effectiveDate = (expense: (typeof expenses)[number]) => getExpenseCycleDate(expense);
       const cycleBillExpenses = methodExpenses.filter((expense) =>
         isDateWithinCycle(effectiveDate(expense), activeCycle.startDate, cycleEndDate),
       );
@@ -144,7 +144,13 @@ export function Installments() {
         ),
         closingDay: method.closingDay,
         dueDay: method.dueDay,
-        billDueDates: Array.from(new Set(cycleBillExpenses.map(effectiveDate))).sort(),
+        billDueDates: Array.from(
+          new Set(
+            cycleBillExpenses.flatMap((expense) =>
+              isLocalDateString(expense.invoiceDueDate) ? [expense.invoiceDueDate] : [],
+            ),
+          ),
+        ).sort(),
         commitments: methodCommitments,
       };
     });
@@ -208,7 +214,7 @@ export function Installments() {
       <div className="space-y-6">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
-            <h1 className="text-2xl font-semibold text-stone-900">Parcelas</h1>
+            <h1 className="text-2xl font-semibold text-stone-900">Cartões e parcelas</h1>
             <p className="mt-1 text-sm text-stone-600">
               Cartões, limite usado e faturas atribuídas pelo fechamento de cada cartão.
             </p>

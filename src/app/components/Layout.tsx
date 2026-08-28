@@ -32,7 +32,7 @@ export function Layout({ children }: LayoutProps) {
   const navItems = [
     { to: "/", label: "Hoje", icon: Home },
     { to: "/goals", label: "Metas", icon: Target },
-    { to: "/installments", label: "Parcelas", icon: CreditCard },
+    { to: "/installments", label: "Cartões e parcelas", icon: CreditCard },
     { to: "/future", label: "Impacto futuro", icon: Calendar },
     { to: "/settings", label: "Perfil", icon: UserCircle },
   ];
@@ -120,7 +120,11 @@ export function Layout({ children }: LayoutProps) {
             >
               <Icon className="h-5 w-5" />
               <span className="max-w-full truncate">
-                {label === "Impacto futuro" ? "Futuro" : label}
+                {label === "Impacto futuro"
+                  ? "Futuro"
+                  : label === "Cartões e parcelas"
+                    ? "Cartões"
+                    : label}
               </span>
             </Link>
           ))}

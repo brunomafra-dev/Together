@@ -1,7 +1,7 @@
 ﻿import { useMemo } from "react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { Calendar, TrendingDown, TrendingUp } from "lucide-react";
+import { Calendar, CreditCard, TrendingDown, TrendingUp } from "lucide-react";
 import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
@@ -9,6 +9,7 @@ import {
   addLocalMonths,
   defaultCycleEnd,
   formatLocalDate,
+  getExpenseCycleDate,
   isDateWithinCycle,
   isLocalDateString,
   nextLocalDate,
@@ -65,8 +66,55 @@ export function FutureCommitments() {
     () => fixedExpenses.filter((expense) => expense.amountType === "variable"),
     [fixedExpenses],
   );
-  const firstFutureCycleStartDate = nextLocalDate(
-    openCycleReferenceEnd(activeCycle.startDate, formatLocalDate(new Date())),
+  const activeCycleEndDate = openCycleReferenceEnd(
+    activeCycle.startDate,
+    formatLocalDate(new Date()),
+  );
+  const firstFutureCycleStartDate = nextLocalDate(activeCycleEndDate);
+
+  const futureCardInvoices = useMemo(() => {
+    const paymentMethodsById = new Map(paymentMethods.map((method) => [method.id, method]));
+    const invoices = new Map<
+      string,
+      {
+        cardId: string;
+        cardName: string;
+        closingDate: string;
+        dueDate: string | null;
+        amount: number;
+        purchaseCount: number;
+      }
+    >();
+
+    for (const expense of expenses) {
+      const method = expense.card ? paymentMethodsById.get(expense.card) : null;
+      if (method?.type !== "credit_card" || !isLocalDateString(expense.invoiceClosingDate)) {
+        continue;
+      }
+      if (expense.invoiceClosingDate <= activeCycleEndDate) continue;
+
+      const dueDate = isLocalDateString(expense.invoiceDueDate) ? expense.invoiceDueDate : null;
+      const key = `${method.id}:${expense.invoiceClosingDate}:${dueDate ?? ""}`;
+      const current = invoices.get(key);
+      invoices.set(key, {
+        cardId: method.id,
+        cardName: method.name,
+        closingDate: expense.invoiceClosingDate,
+        dueDate,
+        amount: (current?.amount ?? 0) + expense.amount,
+        purchaseCount: (current?.purchaseCount ?? 0) + 1,
+      });
+    }
+
+    return Array.from(invoices.values()).sort(
+      (left, right) =>
+        left.closingDate.localeCompare(right.closingDate) ||
+        left.cardName.localeCompare(right.cardName, "pt-BR"),
+    );
+  }, [activeCycleEndDate, expenses, paymentMethods]);
+  const futureCardInvoiceTotal = futureCardInvoices.reduce(
+    (sum, invoice) => sum + invoice.amount,
+    0,
   );
 
   const futureMonths = useMemo(() => {
@@ -97,9 +145,7 @@ export function FutureCommitments() {
           if (expense.recurringMonthly) return false;
           const method = expense.card ? paymentMethodsById.get(expense.card) : null;
           if (method?.type !== "credit_card") return false;
-          const effectiveDate = isLocalDateString(expense.invoiceDueDate)
-            ? expense.invoiceDueDate
-            : expense.date;
+          const effectiveDate = getExpenseCycleDate(expense);
           return isDateWithinCycle(effectiveDate, cycleStartDate, cycleEndDate);
         })
         .reduce((sum, expense) => sum + expense.amount, 0);
@@ -153,6 +199,51 @@ export function FutureCommitments() {
             abaixo como cada mês vai ficar mais leve.
           </p>
         </div>
+
+        <ExpandableSection
+          title="Próximas faturas dos cartões"
+          summary={
+            futureCardInvoices.length > 0
+              ? `${futureCardInvoices.length} faturas · ${formatBRL(futureCardInvoiceTotal)} já lançado`
+              : "Nenhuma compra lançada em faturas futuras"
+          }
+          defaultOpen={futureCardInvoices.length > 0}
+        >
+          <div className="space-y-2">
+            {futureCardInvoices.length === 0 ? (
+              <p className="rounded-xl bg-stone-50 p-4 text-sm text-stone-500">
+                Compras feitas depois do fechamento do cartão aparecerão aqui até o ciclo delas
+                começar.
+              </p>
+            ) : (
+              futureCardInvoices.map((invoice) => (
+                <div
+                  key={`${invoice.cardId}:${invoice.closingDate}:${invoice.dueDate ?? ""}`}
+                  className="flex flex-col gap-3 rounded-xl border border-violet-100 bg-violet-50/60 p-4 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="flex min-w-0 items-start gap-3">
+                    <CreditCard className="mt-0.5 h-4 w-4 shrink-0 text-violet-600" />
+                    <div className="min-w-0">
+                      <p className="break-words text-sm font-medium text-stone-900">
+                        {invoice.cardName}
+                      </p>
+                      <p className="mt-0.5 text-xs text-stone-600">
+                        Fecha em {format(parseLocalDate(invoice.closingDate), "dd/MM/yyyy")}
+                        {invoice.dueDate
+                          ? ` · vence em ${format(parseLocalDate(invoice.dueDate), "dd/MM/yyyy")}`
+                          : ""}
+                        {` · ${invoice.purchaseCount} ${invoice.purchaseCount === 1 ? "compra" : "compras"}`}
+                      </p>
+                    </div>
+                  </div>
+                  <p className="break-words text-sm font-semibold text-violet-900 sm:text-right">
+                    {formatBRL(invoice.amount)}
+                  </p>
+                </div>
+              ))
+            )}
+          </div>
+        </ExpandableSection>
 
         <ExpandableSection
           title="Próximos meses"

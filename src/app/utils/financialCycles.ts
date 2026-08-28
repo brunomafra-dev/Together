@@ -17,6 +17,10 @@ export interface ExpenseDateLike {
   date: LocalDateInput;
 }
 
+export interface ExpenseCycleDateLike extends ExpenseDateLike {
+  invoiceClosingDate?: LocalDateString | null;
+}
+
 const LOCAL_DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 const padDatePart = (value: number, length = 2) => String(value).padStart(length, "0");
@@ -220,8 +224,8 @@ export function getCreditCardDueDate(
 }
 
 /**
- * Returns when an expense affects cash flow: the card due date for configured credit cards,
- * or the purchase date for every other payment method (and incomplete legacy card records).
+ * Calculates the competence date before an expense is persisted: the statement
+ * closing date for configured credit cards, or the purchase date otherwise.
  */
 export function getExpenseEffectiveDate(
   expenseOrDate: ExpenseDateLike | LocalDateInput,
@@ -234,13 +238,22 @@ export function getExpenseEffectiveDate(
 
   if (
     paymentMethod?.type !== "credit_card" ||
-    paymentMethod.closingDay == null ||
-    paymentMethod.dueDay == null
+    paymentMethod.closingDay == null
   ) {
     return formatLocalDate(toLocalDate(purchaseDate));
   }
 
-  return getCreditCardDueDate(purchaseDate, paymentMethod.closingDay, paymentMethod.dueDay);
+  return getCreditCardClosingDate(purchaseDate, paymentMethod.closingDay);
+}
+
+/**
+ * Returns the date that assigns a saved expense to a financial cycle.
+ * Card purchases use the frozen statement closing date; all other purchases
+ * use their purchase date. The due date remains payment information only.
+ */
+export function getExpenseCycleDate(expense: ExpenseCycleDateLike): LocalDateString {
+  if (isLocalDateString(expense.invoiceClosingDate)) return expense.invoiceClosingDate;
+  return formatLocalDate(toLocalDate(expense.date));
 }
 
 export const previousDay = previousLocalDate;

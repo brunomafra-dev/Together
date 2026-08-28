@@ -4,7 +4,7 @@ import { Expense, useFinance } from "../context/FinanceContext";
 import { X } from "lucide-react";
 import { CategorySelect } from "./CategorySelect";
 import { PaymentMethodSelect } from "./PaymentMethodSelect";
-import { getCreditCardBillingDates } from "../utils/financialCycles";
+import { getCreditCardBillingDates, isLocalDateString } from "../utils/financialCycles";
 
 interface AddExpenseModalProps {
   onClose: () => void;
@@ -110,6 +110,10 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
     e.preventDefault();
     const value = parseFloat(amount.replace(",", "."));
     if (!value || value <= 0 || isSaving) return;
+    if (!isLocalDateString(purchaseDate)) {
+      toast.error("Informe uma data válida para a compra.");
+      return;
+    }
     const preservesLegacyBlankRecurrence = isEditing && Boolean(expense?.recurringMonthly);
     if (recurringMonthly && !description.trim() && !preservesLegacyBlankRecurrence) {
       toast.error("Informe uma descrição para identificar esta recorrência.");
@@ -244,6 +248,7 @@ export function AddExpenseModal({ onClose, expense }: AddExpenseModalProps) {
             </label>
             <input
               type="date"
+              required
               value={purchaseDate}
               onChange={(e) => setPurchaseDate(e.target.value)}
               className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-white"

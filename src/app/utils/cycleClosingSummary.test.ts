@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { buildCycleClosingSummary } from "./cycleClosingSummary";
 
 describe("cycle closing summary", () => {
-  it("uses the selected manual range and the persisted card due date", () => {
+  it("uses the selected manual range and the persisted card closing date", () => {
     const summary = buildCycleClosingSummary({
       cycleStartDate: "2026-08-05",
       cycleEndDate: "2026-09-04",
@@ -15,14 +15,16 @@ describe("cycle closing summary", () => {
           category: "Mercado",
           paidBy: "Ana",
           date: "2026-08-29",
-          invoiceDueDate: "2026-09-04",
+          invoiceClosingDate: "2026-09-04",
+          invoiceDueDate: "2026-09-10",
         },
         {
           amount: 250,
           category: "Mercado",
           paidBy: "Ana",
           date: "2026-08-29",
-          invoiceDueDate: "2026-09-05",
+          invoiceClosingDate: "2026-09-05",
+          invoiceDueDate: "2026-09-10",
         },
       ],
       incomeEntries: [],
