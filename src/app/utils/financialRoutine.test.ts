@@ -6,6 +6,7 @@ import {
   suggestedFinancialCycle,
   suggestedNextCycleStartForClosing,
 } from "./financialRoutine";
+import { getExpenseCycleDate, isDateWithinCycle } from "./financialCycles";
 
 describe("suggested financial routine", () => {
   it("labels a day-5 cycle by the month in which it starts", () => {
@@ -60,7 +61,7 @@ describe("suggested financial routine", () => {
     );
   });
 
-  it("preserves legacy unaligned cycles until the user closes them", () => {
+  it("transitions a legacy calendar cycle at the next configured close", () => {
     const routine = {
       incomeMode: "fixed" as const,
       primaryIncomeDay: 5,
@@ -68,18 +69,57 @@ describe("suggested financial routine", () => {
       cycleCloseDay: null,
     };
 
-    expect(plannedFinancialCycleEnd("2026-08-01", routine)).toBe("2026-08-31");
-    expect(suggestedNextCycleStartForClosing("2026-08-01", "2026-09-06", routine)).toBeNull();
+    expect(plannedFinancialCycleEnd("2026-08-01", routine)).toBe("2026-09-05");
+    expect(suggestedNextCycleStartForClosing("2026-08-01", "2026-09-06", routine)).toBe(
+      "2026-09-06",
+    );
   });
 
-  it("projects a partial future range up to the next configured closing day", () => {
+  it("projects an unaligned future cycle with the same horizon used after opening it", () => {
+    const projectedCycle = projectedFinancialCycle("2026-09-01", {
+      incomeMode: "fixed",
+      primaryIncomeDay: 5,
+      cycleMode: "payment_day",
+      cycleCloseDay: null,
+    });
+
+    expect(projectedCycle).toEqual({ startDate: "2026-09-01", endDate: "2026-10-05" });
     expect(
-      projectedFinancialCycle("2026-09-11", {
+      isDateWithinCycle(
+        getExpenseCycleDate({
+          date: "2026-08-29",
+          invoiceClosingDate: "2026-09-26",
+        }),
+        projectedCycle.startDate,
+        projectedCycle.endDate,
+      ),
+    ).toBe(true);
+  });
+
+  it("keeps the configured closing day when the projected cycle is aligned", () => {
+    expect(
+      projectedFinancialCycle("2026-09-06", {
         incomeMode: "fixed",
         primaryIncomeDay: 5,
         cycleMode: "payment_day",
         cycleCloseDay: null,
       }),
-    ).toEqual({ startDate: "2026-09-11", endDate: "2026-10-05" });
+    ).toEqual({ startDate: "2026-09-06", endDate: "2026-10-05" });
+  });
+
+  it.each([
+    ["2026-01-01", "2026-01-31"],
+    ["2026-02-01", "2026-02-28"],
+    ["2028-02-01", "2028-02-29"],
+    ["2026-04-01", "2026-04-30"],
+  ])("clamps a day-31 routine to the real end of the month", (startDate, endDate) => {
+    expect(
+      projectedFinancialCycle(startDate, {
+        incomeMode: "fixed",
+        primaryIncomeDay: null,
+        cycleMode: "custom_day",
+        cycleCloseDay: 31,
+      }),
+    ).toEqual({ startDate, endDate });
   });
 });

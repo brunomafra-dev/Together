@@ -33,7 +33,7 @@ compatíveis com os dados já existentes.
 
 - ESLint sem erros; permanecem avisos não bloqueantes já mapeados.
 - TypeScript executado com `tsc --noEmit`.
-- 55 testes unitários cobrindo ciclos, rotina financeira, faturas, recorrências, compromissos e
+- 62 testes unitários cobrindo ciclos, rotina financeira, faturas, recorrências, compromissos e
   resumo de fechamento.
 - Build de produção gerado com sucesso.
 - `git diff --check` sem erros de whitespace.

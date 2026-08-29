@@ -43,6 +43,7 @@ import {
 } from "../utils/financialCycles";
 import { isOutstandingCommitment } from "../utils/financialCommitments";
 import { buildCycleClosingSummary } from "../utils/cycleClosingSummary";
+import { summarizeCycleBudget } from "../utils/cycleBudget";
 import {
   CYCLE_MODE_LABELS,
   openFinancialCycleReferenceEnd,
@@ -190,12 +191,19 @@ export function Dashboard() {
     const commitmentsTotal = financialCommitments
       .filter(isOutstandingCommitment)
       .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
-    const committed = fixedTotal + commitmentsTotal;
-    const totalSpent = committed + variableSpent;
     const baseIncome = settings.monthlyIncome;
     const extraIncome = monthIncomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
-    const income = baseIncome + extraIncome;
-    const available = income - totalSpent;
+    const budget = summarizeCycleBudget({
+      baseIncome,
+      extraIncome,
+      fixedExpenses: fixedTotal,
+      commitments: commitmentsTotal,
+      recordedExpenses: variableSpent,
+    });
+    const income = budget.income;
+    const committed = budget.fixedAndCommitments;
+    const totalSpent = budget.recordedTotal;
+    const available = budget.availableNow;
 
     const spendByPerson = monthExpenses.reduce(
       (acc, expense) => {

@@ -73,15 +73,16 @@ export function previousSuggestedCycleEnd(
   return cycle ? previousLocalDate(cycle.startDate) : null;
 }
 
-export function isRoutineCycleStart(startDate: string, routine: FinancialRoutine): boolean {
-  const cycle = suggestedFinancialCycle(startDate, routine);
-  return cycle?.startDate === startDate;
-}
-
 export function plannedFinancialCycleEnd(startDate: string, routine: FinancialRoutine): string {
   if (routine.cycleMode === "manual") return defaultCycleEnd(startDate);
   const cycle = suggestedFinancialCycle(startDate, routine);
-  return cycle?.startDate === startDate ? cycle.endDate : defaultCycleEnd(startDate);
+  if (cycle?.startDate === startDate) return cycle.endDate;
+
+  // A legacy calendar cycle keeps at least its original monthly horizon, then
+  // transitions at the first configured close. This avoids both truncating it
+  // to a few days and perpetuating a calendar cycle that ignores the routine.
+  const legacyEnd = defaultCycleEnd(startDate);
+  return suggestedFinancialCycle(legacyEnd, routine)?.endDate ?? legacyEnd;
 }
 
 export function openFinancialCycleReferenceEnd(
@@ -98,13 +99,12 @@ export function projectedFinancialCycle(
   startDate: string,
   routine: FinancialRoutine,
 ): { startDate: string; endDate: string } {
-  if (routine.cycleMode === "manual") {
-    return { startDate, endDate: defaultCycleEnd(startDate) };
-  }
-  const scheduled = suggestedFinancialCycle(startDate, routine);
   return {
     startDate,
-    endDate: scheduled?.endDate ?? defaultCycleEnd(startDate),
+    // A projection must use the same horizon that the Dashboard will use
+    // after this start date becomes active. Legacy/partial starts therefore
+    // remain calendar-length cycles instead of becoming a misleading stub.
+    endDate: plannedFinancialCycleEnd(startDate, routine),
   };
 }
 
@@ -113,7 +113,6 @@ export function suggestedNextCycleStartForClosing(
   today: string,
   routine: FinancialRoutine,
 ): string | null {
-  if (!isRoutineCycleStart(activeStartDate, routine)) return null;
   const nextStart = nextLocalDate(plannedFinancialCycleEnd(activeStartDate, routine));
   return nextStart <= today ? nextStart : null;
 }

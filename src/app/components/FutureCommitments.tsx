@@ -19,19 +19,18 @@ import { Layout } from "./Layout";
 import { Expense, formatBRL, useFinance } from "../context/FinanceContext";
 import {
   defaultCycleEnd,
-  formatLocalDate,
   getExpenseCycleDate,
   isDateWithinCycle,
   isLocalDateString,
   nextLocalDate,
-  openCycleReferenceEnd,
   parseLocalDate,
 } from "../utils/financialCycles";
 import {
   recurringExpenseAppliesToCycle,
   selectCurrentRecurringExpenses,
 } from "../utils/recurringExpenses";
-import { openFinancialCycleReferenceEnd, projectedFinancialCycle } from "../utils/financialRoutine";
+import { plannedFinancialCycleEnd, projectedFinancialCycle } from "../utils/financialRoutine";
+import { summarizeCycleBudget } from "../utils/cycleBudget";
 
 export function FutureCommitments() {
   const {
@@ -88,10 +87,9 @@ export function FutureCommitments() {
     () => fixedExpenses.filter((expense) => expense.amountType === "variable"),
     [fixedExpenses],
   );
-  const today = formatLocalDate(new Date());
   const activeCycleEndDate = household
-    ? openFinancialCycleReferenceEnd(activeCycle.startDate, today, household)
-    : openCycleReferenceEnd(activeCycle.startDate, today);
+    ? plannedFinancialCycleEnd(activeCycle.startDate, household)
+    : defaultCycleEnd(activeCycle.startDate);
   const firstFutureCycleStartDate = nextLocalDate(activeCycleEndDate);
 
   const futureCardInvoices = useMemo(() => {
@@ -163,7 +161,6 @@ export function FutureCommitments() {
 
   const futureMonths = useMemo(() => {
     const months = [];
-    const paymentMethodsById = new Map(paymentMethods.map((method) => [method.id, method]));
     let cycleStartDate = firstFutureCycleStartDate;
 
     for (let index = 0; index < 6; index++) {
@@ -193,31 +190,37 @@ export function FutureCommitments() {
         return sum + amount;
       }, 0);
       const monthSubscriptions = activeSubscriptions
-        .filter((expense) => recurringExpenseAppliesToCycle(expense, cycleEndDate))
+        .filter(
+          (expense) =>
+            recurringExpenseAppliesToCycle(expense, cycleEndDate) &&
+            !isDateWithinCycle(getExpenseCycleDate(expense), cycleStartDate, cycleEndDate),
+        )
         .reduce((sum, expense) => sum + expense.amount, 0);
       const monthRecurringPurchases = activeRecurringPurchases
-        .filter((expense) => recurringExpenseAppliesToCycle(expense, cycleEndDate))
+        .filter(
+          (expense) =>
+            recurringExpenseAppliesToCycle(expense, cycleEndDate) &&
+            !isDateWithinCycle(getExpenseCycleDate(expense), cycleStartDate, cycleEndDate),
+        )
         .reduce((sum, expense) => sum + expense.amount, 0);
-      const monthCardPurchases = expenses
-        .filter((expense) => {
-          if (expense.recurringMonthly) return false;
-          const method = expense.card ? paymentMethodsById.get(expense.card) : null;
-          if (method?.type !== "credit_card") return false;
-          const effectiveDate = getExpenseCycleDate(expense);
-          return isDateWithinCycle(effectiveDate, cycleStartDate, cycleEndDate);
-        })
+      const monthRecordedPurchases = expenses
+        .filter((expense) =>
+          isDateWithinCycle(getExpenseCycleDate(expense), cycleStartDate, cycleEndDate),
+        )
         .reduce((sum, expense) => sum + expense.amount, 0);
-      const total =
-        monthCommitments +
-        monthFixed +
-        monthSubscriptions +
-        monthRecurringPurchases +
-        monthCardPurchases;
+      const recurringReservations = monthSubscriptions + monthRecurringPurchases;
       const extraIncome = incomeEntries
         .filter((entry) => isDateWithinCycle(entry.date, cycleStartDate, cycleEndDate))
         .reduce((sum, entry) => sum + entry.amount, 0);
-      const income = settings.monthlyIncome + extraIncome;
-      const reserved = total - monthCardPurchases;
+      const budget = summarizeCycleBudget({
+        baseIncome: settings.monthlyIncome,
+        extraIncome,
+        fixedExpenses: monthFixed,
+        commitments: monthCommitments,
+        recordedExpenses: monthRecordedPurchases,
+        recurringReservations,
+      });
+      const reserved = budget.projectedTotal - monthRecordedPurchases;
       months.push({
         date: monthDate,
         label: `${format(monthDate, "MMMM 'de' yyyy", { locale: ptBR })} · ${format(
@@ -228,12 +231,14 @@ export function FutureCommitments() {
         fixed: monthFixed,
         subscriptions: monthSubscriptions,
         recurringPurchases: monthRecurringPurchases,
-        cardPurchases: monthCardPurchases,
+        recurringReservations,
+        recordedPurchases: monthRecordedPurchases,
         reserved,
         extraIncome,
-        income,
-        total,
-        free: income - total,
+        income: budget.income,
+        total: budget.projectedTotal,
+        dashboardFree: budget.availableNow,
+        free: budget.availableAfterReservations,
       });
       cycleStartDate = nextLocalDate(cycleEndDate);
     }
@@ -248,7 +253,6 @@ export function FutureCommitments() {
     firstFutureCycleStartDate,
     household,
     incomeEntries,
-    paymentMethods,
     settings.monthlyIncome,
   ]);
   const nextCyclePreview = futureMonths[0] ?? null;
@@ -318,9 +322,11 @@ export function FutureCommitments() {
                 <div className="rounded-xl bg-sky-50 p-4">
                   <p className="text-xs text-sky-700">Já gasto no próximo ciclo</p>
                   <p className="mt-1 break-words text-lg font-semibold text-sky-950">
-                    {formatBRL(nextCyclePreview.cardPurchases)}
+                    {formatBRL(nextCyclePreview.recordedPurchases)}
                   </p>
-                  <p className="mt-1 text-xs text-sky-700">Compras já lançadas nas novas faturas</p>
+                  <p className="mt-1 text-xs text-sky-700">
+                    Compras já lançadas, inclusive nas novas faturas
+                  </p>
                 </div>
                 <div className="rounded-xl bg-amber-50 p-4">
                   <p className="text-xs text-amber-700">Já reservado</p>
@@ -416,6 +422,11 @@ export function FutureCommitments() {
                     extras já cadastradas.
                   </p>
                 )}
+                <p className="mt-2 text-xs text-stone-500">
+                  {nextCyclePreview.recurringReservations > 0
+                    ? `Ao abrir este ciclo agora, o Dashboard mostraria ${formatBRL(nextCyclePreview.dashboardFree)} livres. A prévia também reserva ${formatBRL(nextCyclePreview.recurringReservations)} em recorrências ainda não lançadas.`
+                    : `O disponível usa a mesma fórmula do Dashboard e será ${formatBRL(nextCyclePreview.dashboardFree)} ao abrir este ciclo agora.`}
+                </p>
               </div>
             </div>
           </section>
@@ -567,9 +578,9 @@ export function FutureCommitments() {
                       </p>
                     </div>
                     <div className="rounded-xl bg-violet-50 p-3">
-                      <p className="mb-1 text-xs text-violet-700">Faturas futuras</p>
+                      <p className="mb-1 text-xs text-violet-700">Compras lançadas</p>
                       <p className="break-words font-semibold text-violet-900">
-                        {formatBRL(month.cardPurchases)}
+                        {formatBRL(month.recordedPurchases)}
                       </p>
                     </div>
                     <div className="bg-emerald-50 rounded-xl p-3">
