@@ -2,14 +2,22 @@
 import { format } from "date-fns";
 import { useState } from "react";
 import { ptBR } from "date-fns/locale";
-import { Calendar, CreditCard, Pencil, Trash2, TrendingDown, TrendingUp } from "lucide-react";
+import {
+  AlertTriangle,
+  Calendar,
+  CheckCircle2,
+  CreditCard,
+  Pencil,
+  Trash2,
+  TrendingDown,
+  TrendingUp,
+} from "lucide-react";
 import { toast } from "sonner";
 import { AddExpenseModal } from "./AddExpenseModal";
 import { ExpandableSection } from "./ExpandableSection";
 import { Layout } from "./Layout";
 import { Expense, formatBRL, useFinance } from "../context/FinanceContext";
 import {
-  addLocalMonths,
   defaultCycleEnd,
   formatLocalDate,
   getExpenseCycleDate,
@@ -23,14 +31,18 @@ import {
   recurringExpenseAppliesToCycle,
   selectCurrentRecurringExpenses,
 } from "../utils/recurringExpenses";
+import { openFinancialCycleReferenceEnd, projectedFinancialCycle } from "../utils/financialRoutine";
 
 export function FutureCommitments() {
   const {
     fixedExpenses,
+    fixedExpenseMonthlyValues,
     financialCommitments: commitments,
+    incomeEntries,
     expenses,
     settings,
     activeCycle,
+    household,
     categories,
     paymentMethods,
     deleteExpense,
@@ -76,10 +88,10 @@ export function FutureCommitments() {
     () => fixedExpenses.filter((expense) => expense.amountType === "variable"),
     [fixedExpenses],
   );
-  const activeCycleEndDate = openCycleReferenceEnd(
-    activeCycle.startDate,
-    formatLocalDate(new Date()),
-  );
+  const today = formatLocalDate(new Date());
+  const activeCycleEndDate = household
+    ? openFinancialCycleReferenceEnd(activeCycle.startDate, today, household)
+    : openCycleReferenceEnd(activeCycle.startDate, today);
   const firstFutureCycleStartDate = nextLocalDate(activeCycleEndDate);
 
   const futureCardInvoices = useMemo(() => {
@@ -152,11 +164,13 @@ export function FutureCommitments() {
   const futureMonths = useMemo(() => {
     const months = [];
     const paymentMethodsById = new Map(paymentMethods.map((method) => [method.id, method]));
+    let cycleStartDate = firstFutureCycleStartDate;
 
     for (let index = 0; index < 6; index++) {
       const futureCycleNumber = index + 1;
-      const cycleStartDate = addLocalMonths(firstFutureCycleStartDate, index);
-      const cycleEndDate = defaultCycleEnd(cycleStartDate);
+      const cycleEndDate = household
+        ? projectedFinancialCycle(cycleStartDate, household).endDate
+        : defaultCycleEnd(cycleStartDate);
       const monthDate = parseLocalDate(cycleStartDate);
       const monthCommitments = commitments
         .filter(
@@ -165,7 +179,19 @@ export function FutureCommitments() {
             commitment.totalInstallments - commitment.currentInstallment >= futureCycleNumber,
         )
         .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
-      const monthFixed = fixedExpenses.reduce((s, e) => s + e.amount, 0);
+      const monthFixed = fixedExpenses.reduce((sum, expense) => {
+        const monthlyValue = fixedExpenseMonthlyValues.find(
+          (value) =>
+            value.fixedExpenseId === expense.id &&
+            value.month === monthDate.getMonth() + 1 &&
+            value.year === monthDate.getFullYear(),
+        );
+        const amount =
+          monthlyValue?.status === "confirmed" && monthlyValue.actualAmount !== null
+            ? monthlyValue.actualAmount
+            : (monthlyValue?.estimatedAmount ?? expense.amount);
+        return sum + amount;
+      }, 0);
       const monthSubscriptions = activeSubscriptions
         .filter((expense) => recurringExpenseAppliesToCycle(expense, cycleEndDate))
         .reduce((sum, expense) => sum + expense.amount, 0);
@@ -187,6 +213,11 @@ export function FutureCommitments() {
         monthSubscriptions +
         monthRecurringPurchases +
         monthCardPurchases;
+      const extraIncome = incomeEntries
+        .filter((entry) => isDateWithinCycle(entry.date, cycleStartDate, cycleEndDate))
+        .reduce((sum, entry) => sum + entry.amount, 0);
+      const income = settings.monthlyIncome + extraIncome;
+      const reserved = total - monthCardPurchases;
       months.push({
         date: monthDate,
         label: `${format(monthDate, "MMMM 'de' yyyy", { locale: ptBR })} · ${format(
@@ -198,9 +229,13 @@ export function FutureCommitments() {
         subscriptions: monthSubscriptions,
         recurringPurchases: monthRecurringPurchases,
         cardPurchases: monthCardPurchases,
+        reserved,
+        extraIncome,
+        income,
         total,
-        free: settings.monthlyIncome - total,
+        free: income - total,
       });
+      cycleStartDate = nextLocalDate(cycleEndDate);
     }
     return months;
   }, [
@@ -208,11 +243,20 @@ export function FutureCommitments() {
     activeSubscriptions,
     commitments,
     fixedExpenses,
+    fixedExpenseMonthlyValues,
     expenses,
     firstFutureCycleStartDate,
+    household,
+    incomeEntries,
     paymentMethods,
     settings.monthlyIncome,
   ]);
+  const nextCyclePreview = futureMonths[0] ?? null;
+  const hasNextCycleIncome = Boolean(nextCyclePreview && nextCyclePreview.income > 0);
+  const nextCycleUsage =
+    nextCyclePreview && hasNextCycleIncome
+      ? (nextCyclePreview.total / nextCyclePreview.income) * 100
+      : 0;
 
   return (
     <Layout>
@@ -231,6 +275,151 @@ export function FutureCommitments() {
             abaixo como cada mês vai ficar mais leve.
           </p>
         </div>
+
+        {nextCyclePreview && (
+          <section className="overflow-hidden rounded-2xl border border-sky-100 bg-white shadow-sm">
+            <div className="border-b border-sky-100 bg-gradient-to-r from-sky-50 to-cyan-50 p-5 sm:p-6">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <p className="text-sm font-medium text-sky-700">Prévia do próximo ciclo</p>
+                  <h2 className="mt-1 font-semibold capitalize text-stone-900">
+                    {nextCyclePreview.label}
+                  </h2>
+                  <p className="mt-1 text-xs text-stone-600">
+                    Compras de cartões que já fecharam entram aqui automaticamente, sem fechar o
+                    ciclo atual.
+                  </p>
+                </div>
+                <div
+                  className={`inline-flex w-fit items-center gap-2 rounded-full px-3 py-1.5 text-xs font-medium ${
+                    !hasNextCycleIncome
+                      ? "bg-amber-100 text-amber-800"
+                      : nextCyclePreview.free >= 0
+                        ? "bg-emerald-100 text-emerald-800"
+                        : "bg-rose-100 text-rose-800"
+                  }`}
+                >
+                  {hasNextCycleIncome && nextCyclePreview.free >= 0 ? (
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                  ) : (
+                    <AlertTriangle className="h-3.5 w-3.5" />
+                  )}
+                  {!hasNextCycleIncome
+                    ? "Renda ainda não prevista"
+                    : nextCyclePreview.free >= 0
+                      ? "Dentro do planejado"
+                      : "Acima do planejado"}
+                </div>
+              </div>
+            </div>
+
+            <div className="p-5 sm:p-6">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl bg-sky-50 p-4">
+                  <p className="text-xs text-sky-700">Já gasto no próximo ciclo</p>
+                  <p className="mt-1 break-words text-lg font-semibold text-sky-950">
+                    {formatBRL(nextCyclePreview.cardPurchases)}
+                  </p>
+                  <p className="mt-1 text-xs text-sky-700">Compras já lançadas nas novas faturas</p>
+                </div>
+                <div className="rounded-xl bg-amber-50 p-4">
+                  <p className="text-xs text-amber-700">Já reservado</p>
+                  <p className="mt-1 break-words text-lg font-semibold text-amber-950">
+                    {formatBRL(nextCyclePreview.reserved)}
+                  </p>
+                  <p className="mt-1 text-xs text-amber-700">
+                    Fixas, parcelas, assinaturas e recorrências
+                  </p>
+                </div>
+                <div className="rounded-xl bg-violet-50 p-4">
+                  <p className="text-xs text-violet-700">Total comprometido</p>
+                  <p className="mt-1 break-words text-lg font-semibold text-violet-950">
+                    {formatBRL(nextCyclePreview.total)}
+                  </p>
+                  <p className="mt-1 text-xs text-violet-700">
+                    De {formatBRL(nextCyclePreview.income)} previstos
+                  </p>
+                </div>
+                <div
+                  className={`rounded-xl p-4 ${
+                    !hasNextCycleIncome
+                      ? "bg-stone-50"
+                      : nextCyclePreview.free >= 0
+                        ? "bg-emerald-50"
+                        : "bg-rose-50"
+                  }`}
+                >
+                  <p
+                    className={`text-xs ${
+                      !hasNextCycleIncome
+                        ? "text-stone-600"
+                        : nextCyclePreview.free >= 0
+                          ? "text-emerald-700"
+                          : "text-rose-700"
+                    }`}
+                  >
+                    {!hasNextCycleIncome
+                      ? "Disponibilidade a calcular"
+                      : nextCyclePreview.free >= 0
+                        ? "Ainda pode gastar"
+                        : "Orçamento excedido em"}
+                  </p>
+                  <p
+                    className={`mt-1 break-words text-lg font-semibold ${
+                      !hasNextCycleIncome
+                        ? "text-stone-900"
+                        : nextCyclePreview.free >= 0
+                          ? "text-emerald-950"
+                          : "text-rose-950"
+                    }`}
+                  >
+                    {hasNextCycleIncome ? formatBRL(Math.abs(nextCyclePreview.free)) : "—"}
+                  </p>
+                  <p
+                    className={`mt-1 text-xs ${
+                      !hasNextCycleIncome
+                        ? "text-stone-500"
+                        : nextCyclePreview.free >= 0
+                          ? "text-emerald-700"
+                          : "text-rose-700"
+                    }`}
+                  >
+                    {hasNextCycleIncome
+                      ? "Disponibilidade do orçamento, não do limite do cartão"
+                      : "Cadastre uma renda prevista para calcular"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5">
+                <div className="mb-2 flex items-center justify-between gap-3 text-xs text-stone-600">
+                  <span>Orçamento comprometido</span>
+                  <span>
+                    {hasNextCycleIncome ? `${nextCycleUsage.toFixed(0)}%` : "Renda não informada"}
+                  </span>
+                </div>
+                <div className="h-2.5 overflow-hidden rounded-full bg-stone-100">
+                  <div
+                    className={`h-full rounded-full transition-[width] ${
+                      nextCycleUsage > 100
+                        ? "bg-rose-500"
+                        : nextCycleUsage > 80
+                          ? "bg-amber-500"
+                          : "bg-emerald-500"
+                    }`}
+                    style={{ width: `${Math.min(Math.max(nextCycleUsage, 0), 100)}%` }}
+                  />
+                </div>
+                {nextCyclePreview.extraIncome > 0 && (
+                  <p className="mt-2 text-xs text-stone-500">
+                    A renda prevista inclui {formatBRL(nextCyclePreview.extraIncome)} em entradas
+                    extras já cadastradas.
+                  </p>
+                )}
+              </div>
+            </div>
+          </section>
+        )}
 
         <ExpandableSection
           title="Próximas faturas dos cartões"

@@ -236,10 +236,7 @@ export function getExpenseEffectiveDate(
       ? expenseOrDate.date
       : expenseOrDate;
 
-  if (
-    paymentMethod?.type !== "credit_card" ||
-    paymentMethod.closingDay == null
-  ) {
+  if (paymentMethod?.type !== "credit_card" || paymentMethod.closingDay == null) {
     return formatLocalDate(toLocalDate(purchaseDate));
   }
 

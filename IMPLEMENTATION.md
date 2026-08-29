@@ -1,172 +1,56 @@
-# Implementação de CRUD Completo e Sistema de Categorias
+# Implementação atual do Together
 
-## ✅ Implementações Realizadas
+## Domínios financeiros
 
-### 1. **Serviço Centralizado de Finanças** (`src/services/financeService.ts`)
+- `expenses`: gastos e compras, com categoria, responsável, forma de pagamento e datas congeladas
+  de fechamento/vencimento da fatura.
+- `financial_commitments`: empréstimos, parcelamentos e compromissos com ou sem cartão.
+- `fixed_expenses` e `fixed_expense_monthly_values`: contas fixas ou variáveis e seus valores por
+  ciclo.
+- `income_entries`: entradas extras ou variáveis.
+- `goals`, `goal_plan_items` e `goal_progress_rows`: objetivos, planejamento e progresso.
+- `monthly_snapshots` e `household_finance_state`: histórico fechado e ciclo atualmente aberto.
 
-Criado um serviço reutilizável que encapsula todas as operações Supabase:
+A antiga tabela `installments` permanece apenas no schema histórico. O runtime atual não consulta
+nem grava nessa tabela; parcelamentos são gerenciados por `financial_commitments`.
 
-#### Despesas (Expenses)
+## Categorias
 
-- `fetchExpenses()` - Carrega todas as despesas
-- `addExpense()` - Cria nova despesa
-- `updateExpense()` - Edita despesa existente
-- `deleteExpense()` - Remove despesa
+As categorias usam UUID e pertencem a uma casa. Elas podem ser criadas, renomeadas, apagadas quando
+não possuem lançamentos e vinculadas a uma divisão do planejamento. As categorias iniciais são
+criadas somente para uma casa ainda vazia e antes da conclusão do onboarding; uma categoria apagada
+pelo usuário não é recriada posteriormente.
 
-#### Parcelas (Installments)
+## Ciclos e cartões
 
-- `fetchInstallments()` - Carrega todas as parcelas
-- `addInstallment()` - Cria nova parcela
-- `updateInstallment()` - Edita parcela existente
-- `deleteInstallment()` - Remove parcela
+- O fechamento do ciclo é sempre confirmado pelo usuário.
+- Compras de crédito usam `invoice_closing_date` como competência financeira.
+- `invoice_due_date` permanece informação de fluxo de caixa e não desloca a compra novamente.
+- Ciclos fechados são protegidos por triggers e só podem ser alterados depois da reabertura.
+- A rotina financeira configurada define o horizonte planejado de Dashboard, Metas, Cartões e
+  Impacto futuro.
+- Ao concluir o onboarding, somente uma casa sem gastos, rendas ou snapshots pode alinhar o primeiro
+  ciclo automaticamente. Ciclos com atividade nunca são movidos silenciosamente.
 
-#### Categorias (Categories)
+## Perfil e onboarding
 
-- `fetchCategories()` - Carrega categorias do Supabase
-- `initializeDefaultCategories()` - Inicializa com 9 categorias padrão se vazio
-- `addCategory()` - Cria nova categoria
-- `updateCategory()` - Edita categoria existente
-- `deleteCategory()` - Remove categoria
+O Perfil possui um salvamento único para nomes, renda planejada e rotina financeira. O segundo
+parceiro é opcional. O guia inicial permite renda fixa, variável ou mista e virada pelo pagamento,
+por dia personalizado ou manual. Ele pode ser reaberto em **Perfil → Minha rotina financeira**.
 
-**Categorias Padrão:**
+## Estado e persistência
 
-1. Alimentação
-2. Mercado
-3. Combustível
-4. Moradia
-5. Saúde
-6. Filho
-7. Assinaturas
-8. Lazer
-9. Outros
+`FinanceContext` coordena o estado compartilhado e o cache local versionado. `financeService`
+encapsula as operações Supabase. O cache é apenas uma otimização: a sincronização com o servidor
+continua sendo a fonte de verdade.
 
-### 2. **Contexto Atualizado** (`src/app/context/FinanceContext.tsx`)
+## Validação
 
-Extensões ao FinanceProvider:
+Use a verificação completa antes de publicar:
 
-- **Estado de Categorias**: `categories: CategoryModel[]`
-- **Métodos CRUD de Despesas**: `updateExpense()`, `deleteExpense()`
-- **Métodos CRUD de Parcelas**: `updateInstallment()`, `deleteInstallment()`
-- **Métodos CRUD de Contas Fixas**: `updateFixedExpense()`, `deleteFixedExpense()`
-- **Gerenciamento de Cartões**: `addCard()`, `updateCard()`, `deleteCard()`
-- **Gerenciamento de Categorias**: `addCategory()`, `updateCategory()`, `deleteCategory()`
-
-**Fluxo de Inicialização:**
-
-1. Carrega despesas, parcelas e categorias do Supabase em paralelo
-2. Se nenhuma categoria existir, cria as 9 categorias padrão
-3. Expõe tudo via hook `useFinance()`
-
-### 3. **Componente de Seleção de Categorias** (`src/app/components/CategorySelect.tsx`)
-
-Dropdown reutilizável para seleção de categorias:
-
-- Props: `value`, `onChange`, `placeholder`, `className`
-- Extrai categorias do contexto
-- Mantém consistência visual com o resto da aplicação
-- Pronto para estatísticas e gráficos
-
-### 4. **Modais Atualizadas**
-
-#### `AddExpenseModal.tsx`
-
-- ✅ Categoria digitável **removida**
-- ✅ Dropdown CategorySelect adicionado
-- ✅ Mapeia ID da categoria para nome antes de salvar
-- ✅ Mantém retrocompatibilidade com dados existentes
-
-#### `Installments.tsx` → `AddInstallmentModal`
-
-- ✅ Categoria digitável **removida**
-- ✅ Dropdown CategorySelect adicionado
-- ✅ Mesmo padrão de mapeamento
-
-#### `Settings.tsx` → `AddFixedExpenseModal`
-
-- ✅ Categoria digitável **removida**
-- ✅ Dropdown CategorySelect adicionado
-- ✅ Mesmo padrão de mapeamento
-
-### 5. **Propagação de Alterações Automática**
-
-Qualquer alteração em despesas, parcelas ou contas fixas atualiza automaticamente:
-
-- ✅ Dashboard (recalcula totais em tempo real)
-- ✅ FutureCommitments (recalcula projeções)
-- ✅ Estatísticas/CategoryBreakdown (recomputa dados por categoria)
-
-Isso acontece porque o contexto React propaga mudanças de estado para todos os componentes que usam `useFinance()`.
-
----
-
-## 📊 Estrutura de Dados
-
-### Categoria (CategoryModel)
-
-```typescript
-{
-  id: string;
-  name: string;
-  color?: string;          // Para gráficos futuros
-  icon?: string;           // Para UI aprimorada
-}
+```bash
+npm run check
+npm run format:check
 ```
 
-### Fluxo de Dados
-
-1. **Criação**: ID da categoria → Nome armazenado no banco
-2. **Leitura**: Nome exibido na UI
-3. **Atualização**: Usa ID para editar
-4. **Estatísticas**: Agrupa por nome da categoria
-5. **Gráficos**: Pode usar ID, name, color, icon
-
----
-
-## 🎯 Requisitos Atendidos
-
-✅ **Dropdown** - CategorySelect component  
-✅ **Dados do Supabase** - Carregados em inicialização  
-✅ **Preparado para estatísticas** - Categorias centralizadas, fácil agrupar por nome  
-✅ **Preparado para gráficos** - Suporte a color/icon, estrutura escalável  
-✅ **CRUD completo** - Criar, editar, excluir para all entities  
-✅ **Sem duplicação** - Serviço centralizado  
-✅ **Atualização automática** - Dashboard/Future/Stats atualizam via contexto  
-✅ **Padrão do projeto** - Segue conventions existentes (Context API, modals, styling)
-
----
-
-## 🚀 Como Usar
-
-### Adicionar Nova Despesa
-
-```typescript
-const { addExpense, categories } = useFinance();
-// CategorySelect mostra dropdown com categorias
-// Ao submeter, mapeia categoryId → categoryName automaticamente
-```
-
-### Editar Despesa
-
-```typescript
-const { updateExpense } = useFinance();
-await updateExpense(expenseId, { category: "Nova categoria" });
-// Dashboard atualiza automaticamente
-```
-
-### Gerenciar Categorias
-
-```typescript
-const { addCategory, updateCategory, deleteCategory } = useFinance();
-await addCategory("Viagens", "#FF6B6B", "plane");
-```
-
----
-
-## ✔️ Verificação
-
-- ✅ Build sem erros
-- ✅ Todas as modais usando CategorySelect
-- ✅ Nenhum campo de categoria digitável restante
-- ✅ Inicialização automática de categorias padrão
-- ✅ Contexto propaga mudanças para Dashboard/Stats
-- ✅ Retrocompatível com dados existentes
+As migrations necessárias e sua ordem estão documentadas no `README.md`.

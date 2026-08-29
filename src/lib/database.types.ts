@@ -275,6 +275,15 @@ export interface Database {
         };
         Returns: HouseholdFinanceState[];
       };
+      align_empty_financial_cycle: {
+        Args: {
+          p_household_id: string;
+          p_active_month: number;
+          p_active_year: number;
+          p_active_cycle_start_date: string;
+        };
+        Returns: HouseholdFinanceState[];
+      };
       delete_current_user: {
         Args: Record<string, never>;
         Returns: void;

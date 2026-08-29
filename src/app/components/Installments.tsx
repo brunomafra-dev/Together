@@ -8,6 +8,7 @@ import { Layout } from "./Layout";
 import { formatBRL, useFinance } from "../context/FinanceContext";
 import { CategorySelect } from "./CategorySelect";
 import {
+  formatLocalDate,
   isDateWithinCycle,
   getExpenseCycleDate,
   openCycleReferenceEnd,
@@ -19,6 +20,7 @@ import {
   normalizedCommitmentStatus,
   remainingInstallmentCount,
 } from "../utils/financialCommitments";
+import { openFinancialCycleReferenceEnd } from "../utils/financialRoutine";
 
 type Commitment = {
   id: string;
@@ -94,6 +96,7 @@ export function Installments() {
     expenses,
     categories,
     activeCycle,
+    household,
     deleteFinancialCommitment,
   } = useFinance();
   const [showAddForm, setShowAddForm] = useState(false);
@@ -107,8 +110,15 @@ export function Installments() {
   const activeMonthDate = parseLocalDate(activeCycle.startDate);
   const nextBillDate = activeMonthDate;
   const cycleEndDate = useMemo(
-    () => openCycleReferenceEnd(activeCycle.startDate),
-    [activeCycle.startDate],
+    () =>
+      household
+        ? openFinancialCycleReferenceEnd(
+            activeCycle.startDate,
+            formatLocalDate(new Date()),
+            household,
+          )
+        : openCycleReferenceEnd(activeCycle.startDate),
+    [activeCycle.startDate, household],
   );
   const cycleLabel = `${format(activeMonthDate, "dd/MM/yyyy")} a ${format(
     parseLocalDate(cycleEndDate),

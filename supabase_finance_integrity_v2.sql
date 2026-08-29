@@ -517,10 +517,12 @@ commit;
 -- rows. For a very large production table, create them CONCURRENTLY in a
 -- separate maintenance step instead of running this section inside a wrapper
 -- transaction supplied by a migration platform.
-create index if not exists expenses_household_effective_date_idx
+drop index if exists public.expenses_household_effective_date_idx;
+
+create index expenses_household_effective_date_idx
 on public.expenses (
   household_id,
-  (coalesce(invoice_due_date, purchase_date::date))
+  (coalesce(invoice_closing_date, purchase_date::date))
 );
 
 create index if not exists expenses_household_purchase_created_id_idx

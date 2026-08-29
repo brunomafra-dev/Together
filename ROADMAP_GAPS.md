@@ -1,25 +1,30 @@
 # Together Production Readiness Gaps
 
-## Completed in this pass
+## Estado atual
 
-- Added Supabase schema for `goals`, `goal_plan_items`, `goal_progress_rows`, and `financial_commitments`.
-- Added service functions for goals and financial commitments.
-- Updated Goals screen to read from Supabase when data exists.
-- Updated Installments screen to read real financial commitments when data exists.
-- Kept local fallback behavior for empty databases.
+- Metas, divisões de planejamento e linhas de progresso possuem leitura e CRUD no Supabase.
+- Compromissos financeiros possuem criação, edição e exclusão pela tela Cartões e parcelas.
+- Categorias personalizadas podem ser criadas, editadas, apagadas e vinculadas ao planejamento.
+- Ciclos são fechados e reabertos por RPC transacional, usando o fechamento da fatura como
+  competência das compras de crédito.
+- A rotina financeira pode ser configurada no onboarding e no Perfil; ciclos vazios são alinhados
+  com segurança e ciclos com atividade são preservados.
 
-## Remaining gaps
+## Lacunas restantes
 
-- Goals CRUD UI is still read-first and needs dedicated add/edit/delete controls.
-- Goal plan items and goal progress rows are not editable from the UI yet.
-- Financial commitments currently load from Supabase, but create/edit/delete UI is still placeholder-only.
-- Migration file must be executed in Supabase before production data will appear.
-- You should review and seed at least one goal and one commitment per household for a good first-run experience.
-- Some screens still contain fallback content that should be removed once the database is fully seeded.
+- O convite e ingresso do segundo parceiro em uma casa compartilhada ainda precisam de fluxo
+  dedicado.
+- O tutorial de configuração é da casa. Um tour individual por usuário pode ser adicionado quando o
+  fluxo de convites existir.
+- Policies, triggers e concorrência das RPCs ainda precisam de testes automatizados contra uma
+  instância PostgreSQL/Supabase de integração.
+- `FinanceContext`, `financeService`, Dashboard e Settings continuam extensos e devem ser separados
+  gradualmente por domínio.
+- Relatórios comparativos entre ciclos e exportações mais completas ainda podem evoluir.
 
-## Recommended next steps
+## Próximos passos recomendados
 
-1. Add a goal editor modal.
-2. Add a commitment editor modal tied to `financial_commitments`.
-3. Seed starter goals and commitments for each household.
-4. Remove fallback content once the database is populated.
+1. Implementar convite e aceite do parceiro com RPC validada.
+2. Criar suíte de integração para RLS, fechamento, reabertura e alinhamento do ciclo inicial.
+3. Separar estado e serviços por domínio sem alterar os contratos financeiros existentes.
+4. Medir os fluxos reais de onboarding antes de adicionar um tour individual por usuário.

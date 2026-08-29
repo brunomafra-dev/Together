@@ -43,7 +43,12 @@ import {
 } from "../utils/financialCycles";
 import { isOutstandingCommitment } from "../utils/financialCommitments";
 import { buildCycleClosingSummary } from "../utils/cycleClosingSummary";
-import { CYCLE_MODE_LABELS, suggestedFinancialCycle } from "../utils/financialRoutine";
+import {
+  CYCLE_MODE_LABELS,
+  openFinancialCycleReferenceEnd,
+  suggestedFinancialCycle,
+  suggestedNextCycleStartForClosing,
+} from "../utils/financialRoutine";
 
 export function Dashboard() {
   const navigate = useNavigate();
@@ -121,7 +126,9 @@ export function Dashboard() {
 
   const cycleMonthDate = new Date(activeCycle.year, activeCycle.month - 1, 1);
   const todayDate = formatLocalDate(new Date());
-  const cycleEndDate = openCycleReferenceEnd(activeCycle.startDate, todayDate);
+  const cycleEndDate = household
+    ? openFinancialCycleReferenceEnd(activeCycle.startDate, todayDate, household)
+    : openCycleReferenceEnd(activeCycle.startDate, todayDate);
   const paceReferenceDate = todayDate < activeCycle.startDate ? activeCycle.startDate : todayDate;
 
   const data = useMemo(() => {
@@ -303,6 +310,9 @@ export function Dashboard() {
         ? `${data.peopleTotals[0].name} ${formatBRL(data.peopleTotals[0].amount)}`
         : "Nenhum gasto real";
   const routinePreview = household ? suggestedFinancialCycle(todayDate, household) : null;
+  const routineNextCycleStart = household
+    ? suggestedNextCycleStartForClosing(activeCycle.startDate, todayDate, household)
+    : null;
   const setupItems = household
     ? [
         {
@@ -796,9 +806,10 @@ export function Dashboard() {
           monthLabel={monthLabel}
           cycleStartDate={activeCycle.startDate}
           suggestedNextCycleStartDate={
-            addLocalMonths(activeCycle.startDate, 1) <= todayDate
+            routineNextCycleStart ??
+            (addLocalMonths(activeCycle.startDate, 1) <= todayDate
               ? addLocalMonths(activeCycle.startDate, 1)
-              : todayDate
+              : todayDate)
           }
           latestAllowedStartDate={todayDate}
           data={data}

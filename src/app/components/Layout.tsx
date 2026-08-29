@@ -40,7 +40,16 @@ export function Layout({ children }: LayoutProps) {
 
   return (
     <div className="min-h-screen bg-stone-50">
-      <FinancialOnboarding />
+      <FinancialOnboarding
+        key={[
+          household?.id,
+          household?.onboardingCompletedAt,
+          household?.incomeMode,
+          household?.primaryIncomeDay,
+          household?.cycleMode,
+          household?.cycleCloseDay,
+        ].join(":")}
+      />
       <nav className="sticky top-0 z-10 border-b border-stone-200 bg-white/85 backdrop-blur dark:border-stone-800 dark:bg-stone-950/85">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="grid h-20 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 lg:flex lg:h-16 lg:justify-between">

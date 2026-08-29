@@ -2,7 +2,6 @@ import { supabase } from "../lib/supabase";
 import type { Json, TableInsert, TableRow } from "../lib/database.types";
 
 type ExpenseRow = TableRow<"expenses">;
-type InstallmentRow = TableRow<"installments">;
 type CardRow = TableRow<"cards">;
 type HouseholdRow = TableRow<"households">;
 type FixedExpenseRow = TableRow<"fixed_expenses">;
@@ -29,17 +28,6 @@ export interface ExpenseModel {
   invoiceDueDate?: string | null;
   notes?: string;
   recurringMonthly?: boolean;
-}
-
-export interface InstallmentModel {
-  id: string;
-  name: string;
-  totalAmount: number;
-  monthlyAmount: number;
-  remainingMonths: number;
-  totalMonths: number;
-  categoryId: string;
-  expenseId?: string | null;
 }
 
 export interface CategoryModel {
@@ -295,20 +283,6 @@ const mapExpenseRow = (row: any): ExpenseModel => ({
   invoiceDueDate: row.invoice_due_date ? toString(row.invoice_due_date) : null,
   notes: toString(row.notes),
   recurringMonthly: Boolean(row.recurring_monthly),
-});
-
-const mapInstallmentRow = (row: any): InstallmentModel => ({
-  id: row.id,
-  name: `Parcela ${row.installment_number ?? 1}`,
-  totalAmount: toNumber(row.amount) * toNumber(row.total_installments),
-  monthlyAmount: toNumber(row.amount),
-  remainingMonths: Math.max(
-    (toNumber(row.total_installments) || 0) - (toNumber(row.installment_number) || 0),
-    0,
-  ),
-  totalMonths: toNumber(row.total_installments),
-  categoryId: toString(row.expenses?.category_id),
-  expenseId: row.expense_id,
 });
 
 const mapCategoryRow = (row: TableRow<"categories">): CategoryModel => ({
@@ -574,16 +548,6 @@ export async function fetchExpenses(householdId: string): Promise<ExpenseModel[]
   }
 
   return rows.map(mapExpenseRow);
-}
-
-export async function fetchInstallments(householdId: string): Promise<InstallmentModel[]> {
-  const { data, error } = await supabase
-    .from("installments")
-    .select("*, expenses!inner(household_id, category_id)")
-    .eq("expenses.household_id", householdId)
-    .order("due_month", { ascending: false });
-  throwIfError(error);
-  return (data ?? []).map(mapInstallmentRow);
 }
 
 export async function fetchCategories(householdId: string): Promise<CategoryModel[]> {
@@ -920,44 +884,6 @@ export async function updateExpense(
 
 export async function deleteExpense(id: string): Promise<void> {
   const { error } = await supabase.from("expenses").delete().eq("id", id);
-  throwIfError(error);
-}
-
-export async function addInstallment(
-  installment: Omit<InstallmentModel, "id"> & { householdId: string },
-): Promise<InstallmentModel> {
-  const payload: TableInsert<"installments"> = {
-    expense_id: installment.expenseId || null,
-    installment_number: 1,
-    total_installments: installment.totalMonths,
-    amount: installment.monthlyAmount,
-    due_month: new Date().toISOString().slice(0, 10),
-  };
-  const { data, error } = await supabase.from("installments").insert(payload).select("*").single();
-  throwIfError(error);
-  return mapInstallmentRow(data as InstallmentRow);
-}
-
-export async function updateInstallment(
-  id: string,
-  changes: Partial<Omit<InstallmentModel, "id">>,
-): Promise<InstallmentModel> {
-  const payload: Partial<TableInsert<"installments">> = {};
-  if (changes.monthlyAmount !== undefined) payload.amount = changes.monthlyAmount;
-  if (changes.totalMonths !== undefined) payload.total_installments = changes.totalMonths;
-  if (changes.expenseId !== undefined) payload.expense_id = changes.expenseId || null;
-  const { data, error } = await supabase
-    .from("installments")
-    .update(payload)
-    .eq("id", id)
-    .select("*")
-    .single();
-  throwIfError(error);
-  return mapInstallmentRow(data as InstallmentRow);
-}
-
-export async function deleteInstallment(id: string): Promise<void> {
-  const { error } = await supabase.from("installments").delete().eq("id", id);
   throwIfError(error);
 }
 
@@ -1421,6 +1347,34 @@ export async function initializeHouseholdFinanceState(
   if (error && isFinancialCycleSchemaError(error)) throw financialCycleMigrationError();
   throwIfError(error);
   if (!data) throw new Error("O Supabase não retornou o ciclo financeiro inicial.");
+  return mapHouseholdFinanceStateRow(data as HouseholdFinanceStateRow);
+}
+
+export async function alignEmptyFinancialCycle(
+  householdId: string,
+  activeMonth: number,
+  activeYear: number,
+  activeCycleStartDate: string,
+): Promise<HouseholdFinanceStateModel> {
+  const { data, error } = await supabase
+    .rpc("align_empty_financial_cycle", {
+      p_household_id: householdId,
+      p_active_month: activeMonth,
+      p_active_year: activeYear,
+      p_active_cycle_start_date: activeCycleStartDate,
+    })
+    .single();
+  if (
+    error &&
+    (String(error.message || "").includes("align_empty_financial_cycle") ||
+      String(error.message || "").includes("schema cache"))
+  ) {
+    throw new Error(
+      "Alinhamento da rotina financeira indisponível. Rode o SQL supabase_financial_routine_cycle_alignment.sql no Supabase.",
+    );
+  }
+  throwIfError(error);
+  if (!data) throw new Error("O Supabase não retornou o ciclo financeiro alinhado.");
   return mapHouseholdFinanceStateRow(data as HouseholdFinanceStateRow);
 }
 

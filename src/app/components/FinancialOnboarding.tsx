@@ -60,15 +60,7 @@ export function FinancialOnboarding() {
     if (saving) return;
     setSaving(true);
     try {
-      const nextRoutine = skip
-        ? {
-            ...routine,
-            cycleMode:
-              routine.cycleMode === "payment_day" && routine.primaryIncomeDay === null
-                ? ("manual" as const)
-                : routine.cycleMode,
-          }
-        : normalizedRoutine();
+      const nextRoutine = normalizedRoutine();
       await updateFinancialRoutine(nextRoutine, true);
       toast.success(
         skip ? "Você pode refazer o guia pelo Perfil." : "Rotina financeira configurada.",

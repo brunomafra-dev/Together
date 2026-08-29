@@ -1,7 +1,9 @@
 import type { FinancialRoutine } from "../../services/financeService";
 import {
+  defaultCycleEnd,
   formatLocalDate,
   nextLocalDate,
+  openCycleReferenceEnd,
   parseLocalDate,
   previousLocalDate,
 } from "./financialCycles";
@@ -69,4 +71,49 @@ export function previousSuggestedCycleEnd(
 ): string | null {
   const cycle = suggestedFinancialCycle(referenceDate, routine);
   return cycle ? previousLocalDate(cycle.startDate) : null;
+}
+
+export function isRoutineCycleStart(startDate: string, routine: FinancialRoutine): boolean {
+  const cycle = suggestedFinancialCycle(startDate, routine);
+  return cycle?.startDate === startDate;
+}
+
+export function plannedFinancialCycleEnd(startDate: string, routine: FinancialRoutine): string {
+  if (routine.cycleMode === "manual") return defaultCycleEnd(startDate);
+  const cycle = suggestedFinancialCycle(startDate, routine);
+  return cycle?.startDate === startDate ? cycle.endDate : defaultCycleEnd(startDate);
+}
+
+export function openFinancialCycleReferenceEnd(
+  startDate: string,
+  today: string,
+  routine: FinancialRoutine,
+): string {
+  if (routine.cycleMode === "manual") return openCycleReferenceEnd(startDate, today);
+  const plannedEnd = plannedFinancialCycleEnd(startDate, routine);
+  return today > plannedEnd ? today : plannedEnd;
+}
+
+export function projectedFinancialCycle(
+  startDate: string,
+  routine: FinancialRoutine,
+): { startDate: string; endDate: string } {
+  if (routine.cycleMode === "manual") {
+    return { startDate, endDate: defaultCycleEnd(startDate) };
+  }
+  const scheduled = suggestedFinancialCycle(startDate, routine);
+  return {
+    startDate,
+    endDate: scheduled?.endDate ?? defaultCycleEnd(startDate),
+  };
+}
+
+export function suggestedNextCycleStartForClosing(
+  activeStartDate: string,
+  today: string,
+  routine: FinancialRoutine,
+): string | null {
+  if (!isRoutineCycleStart(activeStartDate, routine)) return null;
+  const nextStart = nextLocalDate(plannedFinancialCycleEnd(activeStartDate, routine));
+  return nextStart <= today ? nextStart : null;
 }

@@ -17,9 +17,11 @@ import {
   getCreditCardBillingDates,
   isDateWithinCycle,
   isLocalDateString,
+  parseLocalDate,
   previousLocalDate,
 } from "../utils/financialCycles";
 import { isOutstandingCommitment } from "../utils/financialCommitments";
+import { suggestedFinancialCycle } from "../utils/financialRoutine";
 import type {
   CategoryModel,
   FinancialCommitmentModel,
@@ -55,16 +57,6 @@ export interface Expense {
   recurringMonthly?: boolean;
 }
 
-export interface Installment {
-  id: string;
-  name: string;
-  totalAmount: number;
-  monthlyAmount: number;
-  remainingMonths: number;
-  currentMonth: number;
-  category: string;
-}
-
 export interface FixedExpense {
   id: string;
   name: string;
@@ -89,7 +81,6 @@ export interface FinancialCycle {
 interface FinanceContextType {
   household: HouseholdModel | null;
   expenses: Expense[];
-  installments: Installment[];
   financialCommitments: FinancialCommitmentModel[];
   incomeEntries: IncomeEntryModel[];
   fixedExpenses: FixedExpense[];
@@ -104,9 +95,6 @@ interface FinanceContextType {
   addExpense: (expense: Omit<Expense, "id">) => Promise<void>;
   updateExpense: (id: string, changes: Partial<Omit<Expense, "id">>) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
-  addInstallment: (installment: Omit<Installment, "id">) => Promise<void>;
-  updateInstallment: (id: string, changes: Partial<Omit<Installment, "id">>) => Promise<void>;
-  deleteInstallment: (id: string) => Promise<void>;
   addFinancialCommitment: (
     commitment: Omit<FinancialCommitmentModel, "id" | "householdId">,
   ) => Promise<FinancialCommitmentModel>;
@@ -184,7 +172,7 @@ const DEFAULT_CATEGORY_NAMES = [
 
 const loadErrorMessage = "Não foi possível carregar os dados do Supabase.";
 
-const FINANCE_CACHE_VERSION = 3;
+const FINANCE_CACHE_VERSION = 4;
 const FINANCE_CACHE_PREFIX = "together:finance:";
 
 const currentCycle = () => {
@@ -221,7 +209,6 @@ type FinanceCache = {
   householdId: string | null;
   household: HouseholdModel | null;
   expenses: Expense[];
-  installments: Installment[];
   financialCommitments: FinancialCommitmentModel[];
   incomeEntries: IncomeEntryModel[];
   fixedExpenses: FixedExpense[];
@@ -259,7 +246,6 @@ function FinanceProviderState({
   const [householdId, setHouseholdId] = useState<string | null>(null);
   const [household, setHousehold] = useState<HouseholdModel | null>(null);
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [installments, setInstallments] = useState<Installment[]>([]);
   const [financialCommitments, setFinancialCommitments] = useState<FinancialCommitmentModel[]>([]);
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntryModel[]>([]);
   const [fixedExpenses, setFixedExpenses] = useState<FixedExpense[]>([]);
@@ -341,7 +327,6 @@ function FinanceProviderState({
       setHouseholdId(cache.householdId);
       setHousehold(cache.household);
       setExpenses(cache.expenses ?? []);
-      setInstallments(cache.installments ?? []);
       setFinancialCommitments(cache.financialCommitments ?? []);
       setIncomeEntries(cache.incomeEntries ?? []);
       setFixedExpenses(cache.fixedExpenses ?? []);
@@ -375,7 +360,6 @@ function FinanceProviderState({
       try {
         const [
           expensesRes,
-          installmentsRes,
           financialCommitmentsRes,
           incomeEntriesRes,
           categoriesRes,
@@ -387,7 +371,6 @@ function FinanceProviderState({
           financeStateRes,
         ] = await Promise.all([
           financeService.fetchExpenses(householdId),
-          financeService.fetchInstallments(householdId),
           financeService.fetchFinancialCommitments(householdId),
           financeService.fetchIncomeEntries(householdId),
           financeService.fetchCategories(householdId),
@@ -415,17 +398,6 @@ function FinanceProviderState({
             invoiceDueDate: e.invoiceDueDate,
             notes: e.notes,
             recurringMonthly: e.recurringMonthly,
-          })),
-        );
-        setInstallments(
-          installmentsRes.map((i) => ({
-            id: i.id,
-            name: i.name,
-            totalAmount: i.totalAmount,
-            monthlyAmount: i.monthlyAmount,
-            remainingMonths: i.remainingMonths,
-            currentMonth: i.totalMonths - i.remainingMonths,
-            category: i.categoryId,
           })),
         );
         let resolvedCategories = categoriesRes;
@@ -517,30 +489,12 @@ function FinanceProviderState({
         });
 
         if (householdId) {
-          if (uniqueCategories.length === 0) {
+          if (uniqueCategories.length === 0 && !householdRes?.onboardingCompletedAt) {
             const seededCategories = await Promise.all(
               DEFAULT_CATEGORY_NAMES.map((name) => financeService.addCategory(name, householdId)),
             );
             if (currentHouseholdIdRef.current !== householdId) return;
             setCategories(seededCategories);
-          } else {
-            const existingNames = new Set(
-              uniqueCategories.map((category) => normalizeCategoryName(category.name)),
-            );
-            const missingNames = DEFAULT_CATEGORY_NAMES.filter(
-              (name) => !existingNames.has(normalizeCategoryName(name)),
-            );
-            if (missingNames.length > 0) {
-              const newCategories = await Promise.all(
-                missingNames.map((name) => financeService.addCategory(name, householdId)),
-              );
-              if (currentHouseholdIdRef.current !== householdId) return;
-              setCategories(
-                [...uniqueCategories, ...newCategories].sort((a, b) =>
-                  a.name.localeCompare(b.name),
-                ),
-              );
-            }
           }
 
           if (paymentMethodsRes.length === 0) {
@@ -618,7 +572,6 @@ function FinanceProviderState({
       householdId,
       household,
       expenses,
-      installments,
       financialCommitments,
       incomeEntries,
       fixedExpenses,
@@ -640,7 +593,6 @@ function FinanceProviderState({
     householdId,
     household,
     expenses,
-    installments,
     financialCommitments,
     incomeEntries,
     fixedExpenses,
@@ -683,12 +635,32 @@ function FinanceProviderState({
     completeOnboarding = false,
   ) => {
     const currentHouseholdId = requireHouseholdId();
+    let alignedState: financeService.HouseholdFinanceStateModel | null = null;
+    if (completeOnboarding) {
+      const suggestedCycle = suggestedFinancialCycle(formatLocalDate(new Date()), routine);
+      if (suggestedCycle) {
+        const labelDate = parseLocalDate(suggestedCycle.labelDate);
+        alignedState = await financeService.alignEmptyFinancialCycle(
+          currentHouseholdId,
+          labelDate.getMonth() + 1,
+          labelDate.getFullYear(),
+          suggestedCycle.startDate,
+        );
+      }
+    }
     const updated = await financeService.updateHouseholdFinancialRoutine(
       currentHouseholdId,
       routine,
       completeOnboarding,
     );
     setHousehold((current) => (current ? { ...updated, partnerIds: current.partnerIds } : updated));
+    if (alignedState) {
+      setActiveCycle({
+        month: alignedState.activeMonth,
+        year: alignedState.activeYear,
+        startDate: alignedState.activeCycleStartDate,
+      });
+    }
   };
 
   const resetOnboardingCtx = async () => {
@@ -772,27 +744,6 @@ function FinanceProviderState({
       recurringMonthly: data.recurringMonthly,
     };
     setExpenses((prev) => [newExpense, ...prev]);
-  };
-
-  const addInstallment = async (installment: Omit<Installment, "id">) => {
-    const currentHouseholdId = requireHouseholdId();
-    const data = await financeService.addInstallment({
-      ...installment,
-      totalMonths: installment.remainingMonths + installment.currentMonth,
-      categoryId: installment.category,
-      expenseId: null,
-      householdId: currentHouseholdId,
-    });
-    const newInstallment: Installment = {
-      id: data.id,
-      name: data.name,
-      totalAmount: data.totalAmount,
-      monthlyAmount: data.monthlyAmount,
-      remainingMonths: data.remainingMonths,
-      currentMonth: data.totalMonths - data.remainingMonths,
-      category: data.categoryId,
-    };
-    setInstallments((prev) => [newInstallment, ...prev]);
   };
 
   const addFixedExpense = async (expense: Omit<FixedExpense, "id">) => {
@@ -928,30 +879,6 @@ function FinanceProviderState({
     ensureExpenseCycleIsOpen(expense);
     await financeService.deleteExpense(id);
     setExpenses((prev) => prev.filter((e) => e.id !== id));
-  };
-
-  const updateInstallment = async (id: string, changes: Partial<Omit<Installment, "id">>) => {
-    const updated = await financeService.updateInstallment(id, changes);
-    setInstallments((prev) =>
-      prev.map((i) =>
-        i.id === id
-          ? {
-              ...i,
-              name: updated.name,
-              totalAmount: updated.totalAmount,
-              monthlyAmount: updated.monthlyAmount,
-              remainingMonths: updated.remainingMonths,
-              currentMonth: updated.totalMonths - updated.remainingMonths,
-              category: updated.categoryId,
-            }
-          : i,
-      ),
-    );
-  };
-
-  const deleteInstallment = async (id: string) => {
-    await financeService.deleteInstallment(id);
-    setInstallments((prev) => prev.filter((i) => i.id !== id));
   };
 
   const addFinancialCommitmentCtx = async (
@@ -1273,7 +1200,6 @@ function FinanceProviderState({
   const value = {
     expenses,
     household,
-    installments,
     financialCommitments,
     incomeEntries,
     fixedExpenses,
@@ -1288,9 +1214,6 @@ function FinanceProviderState({
     addExpense,
     updateExpense,
     deleteExpense,
-    addInstallment,
-    updateInstallment,
-    deleteInstallment,
     addFinancialCommitment: addFinancialCommitmentCtx,
     updateFinancialCommitment: updateFinancialCommitmentCtx,
     deleteFinancialCommitment: deleteFinancialCommitmentCtx,

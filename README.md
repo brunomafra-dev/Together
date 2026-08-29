@@ -92,7 +92,7 @@ supabase_*_sql
 ## Roadmap
 
 - Adicionar screenshots reais em `docs/screenshots/`.
-- Refinar onboarding do casal e convite do parceiro.
+- Evoluir o tour individual depois do fluxo de convite do parceiro.
 - Evoluir relatórios por categoria, método de pagamento e período.
 - Melhorar projeção de longo prazo para compromissos recorrentes.
 - Consolidar testes automatizados para regras financeiras.
@@ -147,8 +147,7 @@ Scripts disponíveis:
 | `npm run format:check` | Verifica formatação sem alterar arquivos. |
 
 Em uma instância que já contenha as tabelas-base do projeto (`profiles`, `households`,
-`household_members`, `cards`, `categories` e `expenses`), aplique os SQLs nesta ordem (a migração
-de integridade deve ser a última):
+`household_members`, `cards`, `categories` e `expenses`), aplique os SQLs na ordem apresentada:
 
 ```text
 supabase_setup.sql
@@ -157,8 +156,15 @@ supabase_fixed_expense_amount_type.sql
 supabase_fixed_expense_monthly_values.sql
 supabase_income_entries.sql
 supabase_goals_commitments.sql
+supabase_financial_commitments_category.sql
+supabase_category_budget_links.sql
+supabase_expense_recurring_monthly.sql
 supabase_manual_financial_cycles_and_invoices.sql
 supabase_finance_integrity_v2.sql
+supabase_invoice_closing_competence.sql
+supabase_household_partner_2_nullable.sql
+supabase_financial_routine_onboarding.sql
+supabase_financial_routine_cycle_alignment.sql
 ```
 
 `supabase_rls_foundation.sql` deve ser aplicado depois do setup e antes de metas/compromissos. Ele
@@ -170,10 +176,10 @@ ao objeto único `<household_id>/avatar`, mantendo a leitura pública e sem apag
 
 Em um banco já existente que já recebeu a migração de ciclos, aplique
 `supabase_rls_foundation.sql`, reaplique a versão atual de
-`supabase_manual_financial_cycles_and_invoices.sql` e finalize com
-`supabase_finance_integrity_v2.sql`. A reaplicação mantém a RPC original e instala nela o predicado
-defensivo; seus backfills ignoram ciclos fechados. As duas novas migrações são idempotentes e não
-exigem recriar os dados nem reaplicar os demais SQLs intermediários.
+`supabase_manual_financial_cycles_and_invoices.sql`, depois
+`supabase_finance_integrity_v2.sql` e as migrações posteriores da lista. A reaplicação mantém a RPC
+original e instala nela o predicado defensivo; seus backfills ignoram ciclos fechados. As migrações
+são idempotentes e não exigem recriar os dados.
 
 Essa migração preserva os meses antigos como ciclos de calendário, congela fechamento/vencimento
 nas compras de crédito e torna o fechamento/abertura do próximo ciclo uma operação transacional.
@@ -188,6 +194,12 @@ pública e a implementação original da RPC de fechamento e exige que cartões,
 mensais pertençam ao mesmo domicílio de seus lançamentos. Também adiciona índices para esses
 caminhos. Se encontrar uma relação
 legada inválida, a migração para com a contagem por relação, sem corrigir ou apagar dados sozinha.
+
+As migrações de rotina financeira devem ser aplicadas por último. A primeira persiste o tipo de
+renda e a regra de virada; a segunda alinha o ciclo inicial somente quando a casa ainda não possui
+gastos, rendas ou snapshots. Casas com atividade financeira preservam integralmente o ciclo já
+aberto. `supabase_invoice_closing_competence.sql` mantém o fechamento da fatura como data de
+competência e deve permanecer depois da migração de integridade.
 
 ## Engenharia e manutenção
 

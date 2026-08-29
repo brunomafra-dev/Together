@@ -139,10 +139,18 @@ export function Settings() {
   const coupleName = [partner1, partner2].filter(Boolean).join(" & ") || profile?.name || "Perfil";
   const accountEmail = profile?.email || user?.email || "";
   const plannedIncome = parseFloat(monthlyIncome) || 0;
-  const hasSettingsChanges =
+  const hasProfileFieldChanges =
     plannedIncome !== settings.monthlyIncome ||
     partner1.trim() !== settings.partnerNames[0].trim() ||
     partner2.trim() !== settings.partnerNames[1].trim();
+  const hasRoutineChanges = Boolean(
+    household &&
+    (financialRoutine.incomeMode !== household.incomeMode ||
+      financialRoutine.primaryIncomeDay !== household.primaryIncomeDay ||
+      financialRoutine.cycleMode !== household.cycleMode ||
+      financialRoutine.cycleCloseDay !== household.cycleCloseDay),
+  );
+  const hasSettingsChanges = hasProfileFieldChanges || hasRoutineChanges;
   const fixedExpensesTotal = fixedExpenses.reduce((sum, expense) => sum + expense.amount, 0);
   const creditCardCount = paymentMethods.filter((method) => method.type === "credit_card").length;
   const initials =
@@ -306,25 +314,42 @@ export function Settings() {
   };
 
   const handleSaveSettings = async () => {
-    if (settingsSaving) return;
+    if (settingsSaving || routineSaving) return;
     if (!partner1.trim()) {
       setSettingsError("Informe pelo menos o primeiro nome do perfil.");
       return;
     }
-    if (!partner2.trim()) {
-      setSettingsError("Informe o nome do Parceiro 2 antes de salvar.");
+    const dayIsValid = (day: number | null) => day !== null && day >= 1 && day <= 31;
+    if (
+      financialRoutine.cycleMode === "payment_day" &&
+      !dayIsValid(financialRoutine.primaryIncomeDay)
+    ) {
+      setRoutineError("Informe um dia de recebimento entre 1 e 31.");
+      setSettingsError("Revise a configuração da rotina financeira.");
+      return;
+    }
+    if (
+      financialRoutine.cycleMode === "custom_day" &&
+      !dayIsValid(financialRoutine.cycleCloseDay)
+    ) {
+      setRoutineError("Informe um dia de virada entre 1 e 31.");
+      setSettingsError("Revise a configuração da rotina financeira.");
       return;
     }
 
     setSettingsSaving(true);
     setSettingsError(null);
+    setRoutineError(null);
     setSaved(false);
 
     try {
-      await updateSettings({
-        monthlyIncome: parseFloat(monthlyIncome) || 0,
-        partnerNames: [partner1.trim(), partner2.trim()],
-      });
+      if (hasProfileFieldChanges) {
+        await updateSettings({
+          monthlyIncome: parseFloat(monthlyIncome) || 0,
+          partnerNames: [partner1.trim(), partner2.trim()],
+        });
+      }
+      if (hasRoutineChanges) await updateFinancialRoutine(financialRoutine);
       hasEditedSettingsRef.current = false;
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2000);
@@ -369,38 +394,6 @@ export function Settings() {
     await signOut();
   };
 
-  const handleSaveFinancialRoutine = async () => {
-    if (routineSaving) return;
-    const dayIsValid = (day: number | null) => day !== null && day >= 1 && day <= 31;
-    if (
-      financialRoutine.cycleMode === "payment_day" &&
-      !dayIsValid(financialRoutine.primaryIncomeDay)
-    ) {
-      setRoutineError("Informe um dia de recebimento entre 1 e 31.");
-      return;
-    }
-    if (
-      financialRoutine.cycleMode === "custom_day" &&
-      !dayIsValid(financialRoutine.cycleCloseDay)
-    ) {
-      setRoutineError("Informe um dia de virada entre 1 e 31.");
-      return;
-    }
-
-    setRoutineSaving(true);
-    setRoutineError(null);
-    try {
-      await updateFinancialRoutine(financialRoutine);
-      toast.success("Rotina financeira salva.");
-    } catch (error) {
-      setRoutineError(
-        error instanceof Error ? error.message : "Não foi possível salvar a rotina financeira.",
-      );
-    } finally {
-      setRoutineSaving(false);
-    }
-  };
-
   const handleRestartGuide = async () => {
     if (routineSaving) return;
     setRoutineSaving(true);
@@ -427,7 +420,7 @@ export function Settings() {
           <button
             type="button"
             onClick={() => void handleSaveSettings()}
-            disabled={settingsSaving || !hasSettingsChanges}
+            disabled={settingsSaving || routineSaving || !hasSettingsChanges}
             aria-busy={settingsSaving}
             className="flex w-full items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 font-medium text-white transition-colors hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
           >
@@ -526,7 +519,7 @@ export function Settings() {
                   hasEditedSettingsRef.current = true;
                   setPartner2(e.target.value);
                 }}
-                required
+                placeholder="Opcional"
                 className="w-full px-4 py-3 border border-stone-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500"
               />
             </div>
@@ -682,7 +675,7 @@ export function Settings() {
               </p>
             )}
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+            <div className="flex flex-col gap-3 sm:flex-row">
               <button
                 type="button"
                 onClick={() => void handleRestartGuide()}
@@ -690,15 +683,6 @@ export function Settings() {
                 className="rounded-xl border border-stone-200 px-4 py-3 text-sm font-medium text-stone-700 hover:bg-stone-50 disabled:opacity-60"
               >
                 Refazer guia inicial
-              </button>
-              <button
-                type="button"
-                onClick={() => void handleSaveFinancialRoutine()}
-                disabled={routineSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-4 py-3 text-sm font-medium text-white hover:bg-emerald-700 disabled:opacity-60"
-              >
-                <Save className="h-4 w-4" />
-                {routineSaving ? "Salvando..." : "Salvar rotina"}
               </button>
             </div>
           </div>

@@ -13,6 +13,7 @@ import {
   openCycleReferenceEnd,
 } from "../utils/financialCycles";
 import { isOutstandingCommitment } from "../utils/financialCommitments";
+import { openFinancialCycleReferenceEnd } from "../utils/financialRoutine";
 import { summarizeCategorySpending } from "../utils/categoryBudgetLinks";
 
 type GoalTone = "stone" | "emerald" | "cyan" | "amber" | "indigo";
@@ -227,7 +228,9 @@ export function Goals() {
   const planCards = snapshot.planCards;
   const financialData = useMemo(() => {
     const today = formatLocalDate(new Date());
-    const cycleEndDate = openCycleReferenceEnd(activeCycle.startDate, today);
+    const cycleEndDate = household
+      ? openFinancialCycleReferenceEnd(activeCycle.startDate, today, household)
+      : openCycleReferenceEnd(activeCycle.startDate, today);
     const referenceDate = today < activeCycle.startDate ? activeCycle.startDate : today;
     const monthExpenses = expenses.filter((expense) => {
       const effectiveDate = getExpenseCycleDate(expense);
@@ -323,6 +326,7 @@ export function Goals() {
     financialCommitments,
     fixedExpenseMonthlyValues,
     fixedExpenses,
+    household,
     income,
     incomeEntries,
   ]);
