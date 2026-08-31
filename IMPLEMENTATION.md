@@ -21,6 +21,8 @@ não possuem lançamentos e vinculadas a uma divisão do planejamento. As catego
 criadas somente para uma casa ainda vazia e antes da conclusão do onboarding; uma categoria apagada
 pelo usuário não é recriada posteriormente.
 
+Cada divisão do planejamento pode acompanhar um percentual da renda ou manter um valor mensal exato.
+
 ## Ciclos e cartões
 
 - O fechamento do ciclo é sempre confirmado pelo usuário.

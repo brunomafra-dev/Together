@@ -111,6 +111,7 @@ export interface GoalPlanItemModel {
   name: string;
   share: string;
   amount: number;
+  allocationMode: "percentage" | "fixed";
   tone: "stone" | "emerald" | "cyan" | "amber" | "indigo";
 }
 
@@ -456,6 +457,7 @@ const mapGoalPlanItemRow = (row: GoalPlanItemRow): GoalPlanItemModel => ({
   name: toString(row.name),
   share: toString(row.share),
   amount: toNumber(row.amount),
+  allocationMode: row.allocation_mode === "fixed" ? "fixed" : "percentage",
   tone: (toString(row.tone) as GoalPlanItemModel["tone"]) || "stone",
 });
 
@@ -1122,10 +1124,20 @@ export async function addGoalPlanItem(
       name: item.name,
       share: item.share,
       amount: item.amount,
+      allocation_mode: item.allocationMode,
       tone: item.tone,
     })
     .select("*")
     .single();
+  if (
+    error &&
+    (String(error.message || "").includes("allocation_mode") ||
+      String(error.message || "").includes("schema cache"))
+  ) {
+    throw new Error(
+      "Para usar valores exatos no planejamento, rode o SQL supabase_goal_plan_allocation_modes.sql no Supabase.",
+    );
+  }
   throwIfError(error);
   return mapGoalPlanItemRow(data as GoalPlanItemRow);
 }
@@ -1140,11 +1152,21 @@ export async function updateGoalPlanItem(
       name: changes.name,
       share: changes.share,
       amount: changes.amount,
+      allocation_mode: changes.allocationMode,
       tone: changes.tone,
     })
     .eq("id", id)
     .select("*")
     .single();
+  if (
+    error &&
+    (String(error.message || "").includes("allocation_mode") ||
+      String(error.message || "").includes("schema cache"))
+  ) {
+    throw new Error(
+      "Para usar valores exatos no planejamento, rode o SQL supabase_goal_plan_allocation_modes.sql no Supabase.",
+    );
+  }
   throwIfError(error);
   return mapGoalPlanItemRow(data as GoalPlanItemRow);
 }

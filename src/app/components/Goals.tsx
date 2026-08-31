@@ -15,6 +15,13 @@ import {
 import { isOutstandingCommitment } from "../utils/financialCommitments";
 import { openFinancialCycleReferenceEnd } from "../utils/financialRoutine";
 import { summarizeCategorySpending } from "../utils/categoryBudgetLinks";
+import {
+  allocationFromInput,
+  allocationStorage,
+  formatAllocationPercent,
+  resolveStoredAllocation,
+  type GoalPlanAllocationMode,
+} from "../utils/goalPlanAllocations";
 
 type GoalTone = "stone" | "emerald" | "cyan" | "amber" | "indigo";
 
@@ -23,6 +30,7 @@ type PlanCard = {
   localId?: string;
   name: string;
   share: string;
+  mode: GoalPlanAllocationMode;
   percent: number;
   amount: number;
   currentAmount: number;
@@ -92,6 +100,7 @@ function emptyGoal(income: number): GoalSnapshot {
     planCards: DEFAULT_ALLOCATIONS.map((item) => ({
       name: item.name,
       share: item.share,
+      mode: "percentage",
       percent: item.percent,
       amount: income * (item.percent / 100),
       currentAmount: 0,
@@ -118,7 +127,7 @@ function emptyGoal(income: number): GoalSnapshot {
     ],
     suggestion: {
       title: "Sugestão de divisão editável",
-      note: "A base inicial vem de práticas comuns de organização financeira e serve só como ponto de partida. Vocês podem alterar percentuais, adicionar categorias ou remover o que não fizer sentido.",
+      note: "A base inicial vem de práticas comuns de organização financeira e serve só como ponto de partida. Vocês podem usar percentuais ou valores exatos, adicionar categorias e remover o que não fizer sentido.",
       allocations: DEFAULT_ALLOCATIONS,
     },
   };
@@ -128,6 +137,7 @@ function buildSuggestedPlan(income: number): PlanCard[] {
   return DEFAULT_ALLOCATIONS.map((item) => ({
     name: item.name,
     share: item.share,
+    mode: "percentage",
     percent: item.percent,
     amount: income * (item.percent / 100),
     currentAmount: 0,
@@ -191,11 +201,31 @@ function ProgressBar({ percent }: { percent: number }) {
 }
 
 function buildPercentText(percent: number) {
-  const normalized = Math.max(0, Number(percent) || 0);
-  const text = Number.isInteger(normalized)
-    ? String(normalized)
-    : normalized.toFixed(2).replace(/\.?0+$/, "");
-  return `${text}%`;
+  return formatAllocationPercent(percent);
+}
+
+function planCardFromStored(
+  item: {
+    id: string;
+    name: string;
+    share: string;
+    amount: number;
+    allocationMode: GoalPlanAllocationMode;
+    tone: GoalTone;
+  },
+  income: number,
+): PlanCard {
+  const allocation = resolveStoredAllocation(item.allocationMode, item.share, item.amount, income);
+  return {
+    id: item.id,
+    name: item.name,
+    share: allocation.mode === "fixed" ? "Valor fixo" : formatAllocationPercent(allocation.percent),
+    mode: allocation.mode,
+    percent: allocation.percent,
+    amount: allocation.amount,
+    currentAmount: 0,
+    tone: item.tone,
+  };
 }
 
 export function Goals() {
@@ -347,6 +377,10 @@ export function Goals() {
     (sum, item) => sum + (Number(item.percent) || 0),
     0,
   );
+  const planningTotalAmount = planningAllocations.reduce(
+    (sum, item) => sum + (Number(item.amount) || 0),
+    0,
+  );
 
   useEffect(() => {
     const state = location.state as { openContribution?: "main" } | null;
@@ -376,15 +410,7 @@ export function Goals() {
       const planItems = await financeService.fetchGoalPlanItems(currentGoal.id);
       const rows = await financeService.fetchGoalProgressRows(currentGoal.id);
       const resolvedPlanCards = planItems.length
-        ? planItems.map((item) => ({
-            id: item.id,
-            name: item.name,
-            share: item.share,
-            percent: Number(item.share.replace("%", "")) || 0,
-            amount: item.amount,
-            currentAmount: 0,
-            tone: item.tone,
-          }))
+        ? planItems.map((item) => planCardFromStored(item, income))
         : buildSuggestedPlan(income);
 
       setGoal({
@@ -512,15 +538,7 @@ export function Goals() {
     const planItems = await financeService.fetchGoalPlanItems(savedGoal.id);
     const rows = await financeService.fetchGoalProgressRows(savedGoal.id);
     const resolvedPlanCards = planItems.length
-      ? planItems.map((item) => ({
-          id: item.id,
-          name: item.name,
-          share: item.share,
-          percent: Number(item.share.replace("%", "")) || 0,
-          amount: item.amount,
-          currentAmount: 0,
-          tone: item.tone,
-        }))
+      ? planItems.map((item) => planCardFromStored(item, income))
       : buildSuggestedPlan(income);
     const resolvedProgressRows = rows.map((row) => ({
       id: row.id,
@@ -745,6 +763,7 @@ export function Goals() {
         localId,
         name: "",
         share: "0%",
+        mode: "percentage",
         percent: 0,
         amount: 0,
         currentAmount: 0,
@@ -764,10 +783,13 @@ export function Goals() {
       if (!savedGoal) return;
       const normalizedAllocations = planningAllocations.map((item, index) => ({
         ...item,
+        ...allocationFromInput(
+          item.mode,
+          item.mode === "fixed" ? Number(item.amount) || 0 : Number(item.percent) || 0,
+          income,
+        ),
         name: item.name.trim() || `Categoria ${index + 1}`,
-        percent: Number(item.percent) || 0,
-        share: buildPercentText(Number(item.percent) || 0),
-        amount: income * ((Number(item.percent) || 0) / 100),
+        share: item.mode === "fixed" ? "Valor fixo" : buildPercentText(Number(item.percent) || 0),
         tone: item.tone || nextPlanTone(index),
       }));
 
@@ -776,10 +798,12 @@ export function Goals() {
         normalizedAllocations.flatMap((item) => (item.id ? [item.id] : [])),
       );
       for (const item of normalizedAllocations) {
+        const storedAllocation = allocationStorage(item.mode, item.percent, item.amount);
         const payload = {
           name: item.name,
-          share: buildPercentText(item.percent),
-          amount: income * (item.percent / 100),
+          share: storedAllocation.share,
+          amount: storedAllocation.amount,
+          allocationMode: storedAllocation.allocationMode,
           tone: item.tone,
         };
         if (item.id) {
@@ -805,15 +829,7 @@ export function Goals() {
 
       const planItems = await financeService.fetchGoalPlanItems(savedGoal.id);
       const resolvedPlanCards = planItems.length
-        ? planItems.map((item) => ({
-            id: item.id,
-            name: item.name,
-            share: item.share,
-            percent: Number(item.share.replace("%", "")) || 0,
-            amount: item.amount,
-            currentAmount: 0,
-            tone: item.tone,
-          }))
+        ? planItems.map((item) => planCardFromStored(item, income))
         : buildSuggestedPlan(income);
 
       setGoal((prev) => ({
@@ -988,7 +1004,7 @@ export function Goals() {
 
         <ExpandableSection
           title="Planejamento do casal"
-          summary={`${planCards.length} categorias · ${buildPercentText(planCards.reduce((sum, item) => sum + item.percent, 0))} da renda`}
+          summary={`${planCards.length} categorias · ${formatBRL(planCards.reduce((sum, item) => sum + item.amount, 0))} planejados`}
           actions={
             <button
               type="button"
@@ -1056,8 +1072,8 @@ export function Goals() {
             <p className="mt-2 text-sm leading-6 text-emerald-800">
               Essa base inicial é inspirada em práticas comuns de organização financeira e soma{" "}
               {buildPercentText(planCards.reduce((sum, item) => sum + item.percent, 0))} da renda
-              mensal. Ela é só um ponto de partida: vocês podem editar percentuais, adicionar
-              categorias ou remover itens conforme a realidade do casal.
+              mensal. Ela é só um ponto de partida: vocês podem usar percentuais ou valores exatos,
+              adicionar categorias e remover itens conforme a realidade do casal.
             </p>
           </div>
         </ExpandableSection>
@@ -1464,7 +1480,8 @@ export function Goals() {
                       Distribuição definida por vocês com base na renda mensal: {formatBRL(income)}
                     </p>
                     <p className="mt-1 text-xs text-stone-500">
-                      Total informado: {buildPercentText(planningTotalPercent)}
+                      Total informado: {formatBRL(planningTotalAmount)} · equivalente a{" "}
+                      {buildPercentText(planningTotalPercent)} da renda
                     </p>
                   </div>
                   <button
@@ -1495,7 +1512,8 @@ export function Goals() {
                             Categoria {index + 1}
                           </p>
                           <p className="mt-1 text-sm text-stone-600">
-                            {formatBRL(income * ((Number(item.percent) || 0) / 100))} planejados
+                            {formatBRL(item.amount)} planejados ·{" "}
+                            {item.mode === "fixed" ? "valor exato" : buildPercentText(item.percent)}
                           </p>
                         </div>
                         <button
@@ -1510,7 +1528,7 @@ export function Goals() {
                         </button>
                       </div>
 
-                      <div className="grid gap-3 sm:grid-cols-[1fr_140px_180px] sm:items-end">
+                      <div className="grid gap-3 sm:grid-cols-[1fr_150px_180px] sm:items-end">
                         <label className="block">
                           <span className="mb-1.5 block text-xs uppercase tracking-wider text-stone-500">
                             Nome
@@ -1530,37 +1548,65 @@ export function Goals() {
                         </label>
                         <label className="block">
                           <span className="mb-1.5 block text-xs uppercase tracking-wider text-stone-500">
-                            Percentual
+                            Formato
                           </span>
-                          <input
-                            type="number"
-                            value={item.percent}
+                          <select
+                            value={item.mode}
                             onChange={(e) =>
                               setPlanningAllocations((prev) =>
                                 prev.map((row, i) =>
                                   i === index
                                     ? {
                                         ...row,
-                                        percent: Number(e.target.value) || 0,
-                                        share: buildPercentText(Number(e.target.value) || 0),
-                                        amount: income * ((Number(e.target.value) || 0) / 100),
+                                        ...allocationFromInput(
+                                          e.target.value as GoalPlanAllocationMode,
+                                          e.target.value === "fixed" ? row.amount : row.percent,
+                                          income,
+                                        ),
+                                        share:
+                                          e.target.value === "fixed"
+                                            ? "Valor fixo"
+                                            : buildPercentText(row.percent),
                                       }
                                     : row,
                                 ),
                               )
                             }
-                            placeholder="%"
+                            className="w-full min-w-0 rounded-xl border border-stone-200 bg-white px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                          >
+                            <option value="percentage">Percentual</option>
+                            <option value="fixed">Valor exato</option>
+                          </select>
+                        </label>
+                        <label className="block">
+                          <span className="mb-1.5 block text-xs uppercase tracking-wider text-stone-500">
+                            {item.mode === "fixed" ? "Valor mensal (R$)" : "Percentual (%)"}
+                          </span>
+                          <input
+                            type="number"
+                            min="0"
+                            step={item.mode === "fixed" ? "0.01" : "0.1"}
+                            value={item.mode === "fixed" ? item.amount : item.percent}
+                            onChange={(e) => {
+                              const value = Number(e.target.value) || 0;
+                              setPlanningAllocations((prev) =>
+                                prev.map((row, i) => {
+                                  if (i !== index) return row;
+                                  const allocation = allocationFromInput(row.mode, value, income);
+                                  return {
+                                    ...row,
+                                    ...allocation,
+                                    share:
+                                      row.mode === "fixed"
+                                        ? "Valor fixo"
+                                        : buildPercentText(allocation.percent),
+                                  };
+                                }),
+                              );
+                            }}
                             className="w-full min-w-0 rounded-xl border border-stone-200 px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500"
                           />
                         </label>
-                        <div
-                          className={`min-w-0 break-words rounded-xl border px-3 py-2.5 text-sm ${toneClass(item.tone)}`}
-                        >
-                          <span className="block text-xs opacity-70">Valor mensal</span>
-                          <span className="font-semibold">
-                            {formatBRL(income * ((Number(item.percent) || 0) / 100))}
-                          </span>
-                        </div>
                       </div>
                     </div>
                   );

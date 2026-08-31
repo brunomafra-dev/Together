@@ -187,6 +187,10 @@ export function Installments() {
     (sum, commitment) => sum + currentCommitmentDue(commitment),
     0,
   );
+  const monthlyInstallmentTotal = commitments.reduce(
+    (sum, commitment) => sum + currentCommitmentDue(commitment),
+    0,
+  );
   const activeInstallments = commitments.filter(isOutstandingCommitment).length;
   const totalRemainingInstallments = commitments.reduce(
     (sum, commitment) => sum + remainingInstallments(commitment),
@@ -245,17 +249,21 @@ export function Installments() {
             value={String(activeInstallments)}
           />
           <SummaryCard
-            icon={CalendarCheck}
-            label="Parcelas restantes"
-            value={String(totalRemainingInstallments)}
+            icon={Wallet}
+            label="Parcelas do ciclo"
+            value={formatBRL(monthlyInstallmentTotal)}
           />
-          <SummaryCard icon={Wallet} label="Faturas do ciclo" value={formatBRL(currentBillTotal)} />
+          <SummaryCard
+            icon={CalendarCheck}
+            label="Faturas dos cartões"
+            value={formatBRL(currentBillTotal)}
+          />
           <SummaryCard icon={Clock3} label="Término estimado" value={estimatedEndDate} capitalize />
         </div>
 
         <ExpandableSection
           title="Resumo geral"
-          summary={`${buckets.length} cartões · ${formatBRL(currentBillTotal)} no ciclo · ${formatBRL(availableLimit)} livre`}
+          summary={`${formatBRL(monthlyInstallmentTotal)} em parcelas neste ciclo · ${totalRemainingInstallments} restantes`}
           defaultOpen
         >
           <div className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -436,10 +444,11 @@ function CardSummary({
               : ""}
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[520px] xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:min-w-[650px] xl:grid-cols-5">
           <MiniMetric label="Limite" value={formatBRL(bucket.totalLimit)} />
           <MiniMetric label="Compras" value={formatBRL(bucket.expenseLimitUsed)} />
-          <MiniMetric label="Parcelas" value={formatBRL(bucket.commitmentLimitUsed)} />
+          <MiniMetric label="Parcela do ciclo" value={formatBRL(bucket.billInstallments)} />
+          <MiniMetric label="Saldo parcelado" value={formatBRL(bucket.commitmentLimitUsed)} />
           <MiniMetric label="Disponível" value={formatBRL(available)} />
         </div>
       </div>

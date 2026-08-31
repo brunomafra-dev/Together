@@ -149,6 +149,7 @@ export interface GoalPlanItem extends TimestampedRow {
   name: string | null;
   share: string | null;
   amount: number | null;
+  allocation_mode: "percentage" | "fixed" | null;
   tone: string | null;
 }
 

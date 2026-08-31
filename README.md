@@ -156,6 +156,7 @@ supabase_fixed_expense_amount_type.sql
 supabase_fixed_expense_monthly_values.sql
 supabase_income_entries.sql
 supabase_goals_commitments.sql
+supabase_goal_plan_allocation_modes.sql
 supabase_financial_commitments_category.sql
 supabase_category_budget_links.sql
 supabase_expense_recurring_monthly.sql
