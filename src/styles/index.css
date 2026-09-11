@@ -62,6 +62,10 @@ body,
   color: var(--together-text);
 }
 
+.bg-stone-50:not(.together-shell) {
+  background-color: var(--together-surface-subtle);
+}
+
 body {
   background-image:
     linear-gradient(rgba(75, 40, 95, 0.025) 1px, transparent 1px),
@@ -90,6 +94,7 @@ body {
 }
 
 .bg-stone-100,
+.bg-stone-200,
 .bg-stone-50\/70 {
   background-color: var(--together-surface-muted);
 }
@@ -121,7 +126,9 @@ body {
 }
 
 .bg-emerald-50,
+.bg-emerald-50\/60,
 .bg-emerald-50\/70,
+.bg-emerald-50\/80,
 .bg-emerald-100 {
   background-color: var(--together-accent-soft);
 }
@@ -129,7 +136,8 @@ body {
 .text-emerald-600,
 .text-emerald-700,
 .text-emerald-800,
-.text-emerald-900 {
+.text-emerald-900,
+.text-emerald-950 {
   color: var(--together-accent-strong);
 }
 
@@ -169,12 +177,21 @@ body {
     var(--tw-gradient-to);
 }
 
+.via-emerald-50\/40 {
+  --tw-gradient-to: color-mix(in srgb, var(--together-accent-soft) 0%, transparent)
+    var(--tw-gradient-to-position);
+  --tw-gradient-stops:
+    var(--tw-gradient-from), var(--together-accent-soft) var(--tw-gradient-via-position),
+    var(--tw-gradient-to);
+}
+
 .to-emerald-50 {
   --tw-gradient-to: var(--together-accent-soft) var(--tw-gradient-to-position);
 }
 
 .from-emerald-400,
-.from-emerald-500 {
+.from-emerald-500,
+.from-emerald-600 {
   --tw-gradient-from: var(--together-primary) var(--tw-gradient-from-position);
   --tw-gradient-to: color-mix(in srgb, var(--together-primary) 0%, transparent)
     var(--tw-gradient-to-position);
@@ -182,16 +199,21 @@ body {
 }
 
 .to-teal-500,
-.to-teal-600 {
+.to-teal-600,
+.to-teal-700 {
   --tw-gradient-to: var(--together-accent) var(--tw-gradient-to-position);
 }
 
 .bg-teal-50,
 .bg-teal-50\/80,
 .bg-sky-50,
+.bg-sky-50\/80,
 .bg-blue-50,
 .bg-cyan-50,
-.bg-indigo-50 {
+.bg-indigo-50,
+.bg-indigo-50\/80,
+.bg-violet-50,
+.bg-violet-50\/60 {
   background-color: var(--together-primary-soft);
 }
 
@@ -203,16 +225,25 @@ body {
 .text-sky-700,
 .text-sky-800,
 .text-sky-900,
+.text-sky-950,
 .text-blue-600,
 .text-blue-700,
 .text-blue-800,
 .text-blue-900,
+.text-cyan-600,
 .text-cyan-700,
+.text-cyan-800,
 .text-cyan-900,
+.text-cyan-950,
 .text-indigo-600,
 .text-indigo-700,
 .text-indigo-800,
-.text-indigo-900 {
+.text-indigo-900,
+.text-violet-600,
+.text-violet-700,
+.text-violet-800,
+.text-violet-900,
+.text-violet-950 {
   color: var(--together-primary);
 }
 
@@ -225,7 +256,10 @@ body {
 .border-cyan-100,
 .border-cyan-200,
 .border-indigo-100,
-.border-indigo-200 {
+.border-indigo-200,
+.border-violet-100,
+.border-violet-200,
+.divide-violet-100 > :not(:last-child) {
   border-color: color-mix(in srgb, var(--together-primary) 28%, var(--together-border));
 }
 
@@ -241,8 +275,28 @@ body {
   --tw-gradient-to: var(--together-primary-soft) var(--tw-gradient-to-position);
 }
 
+.from-sky-50,
+.from-white {
+  --tw-gradient-from: var(--together-surface) var(--tw-gradient-from-position);
+  --tw-gradient-to: color-mix(in srgb, var(--together-surface) 0%, transparent)
+    var(--tw-gradient-to-position);
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to);
+}
+
+.to-cyan-50,
+.to-sky-50 {
+  --tw-gradient-to: var(--together-primary-soft) var(--tw-gradient-to-position);
+}
+
+.to-white {
+  --tw-gradient-to: var(--together-surface) var(--tw-gradient-to-position);
+}
+
 .bg-amber-50,
-.bg-yellow-50 {
+.bg-amber-50\/80,
+.bg-amber-100,
+.bg-yellow-50,
+.bg-yellow-50\/80 {
   background-color: var(--together-planning-soft);
 }
 
@@ -250,6 +304,7 @@ body {
 .text-amber-700,
 .text-amber-800,
 .text-amber-900,
+.text-amber-950,
 .text-yellow-600,
 .text-yellow-700,
 .text-yellow-800,
@@ -273,7 +328,10 @@ body {
 }
 
 .bg-rose-50,
-.bg-pink-50 {
+.bg-rose-50\/80,
+.bg-rose-100,
+.bg-pink-50,
+.bg-pink-50\/80 {
   background-color: var(--together-danger-soft);
 }
 
@@ -281,6 +339,7 @@ body {
 .text-rose-700,
 .text-rose-800,
 .text-rose-900,
+.text-rose-950,
 .text-pink-600,
 .text-pink-700,
 .text-pink-800,
@@ -868,23 +927,31 @@ section.rounded-2xl,
 
 .dark .dark\:bg-emerald-950,
 .dark .dark\:bg-emerald-950\/55,
+.dark .dark\:bg-emerald-950\/60,
 .dark .dark\:bg-emerald-950\/70,
 .dark .dark\:\!bg-emerald-950\/70 {
   background-color: var(--together-accent-soft) !important;
 }
 
 .dark .dark\:bg-indigo-950\/55,
+.dark .dark\:bg-indigo-950\/60,
+.dark .dark\:bg-sky-950\/60,
+.dark .dark\:bg-teal-950\/60,
 .dark .dark\:\!bg-indigo-950\/70,
 .dark .dark\:\!bg-sky-950\/70,
 .dark .dark\:\!bg-teal-950\/70 {
   background-color: var(--together-primary-soft) !important;
 }
 
+.dark .dark\:bg-amber-950\/60,
+.dark .dark\:bg-yellow-950\/60,
 .dark .dark\:\!bg-amber-950\/70,
 .dark .dark\:\!bg-yellow-950\/70 {
   background-color: var(--together-planning-soft) !important;
 }
 
+.dark .dark\:bg-rose-950\/60,
+.dark .dark\:bg-pink-950\/60,
 .dark .dark\:\!bg-rose-950\/70,
 .dark .dark\:\!bg-pink-950\/70 {
   background-color: var(--together-danger-soft) !important;
@@ -896,24 +963,78 @@ section.rounded-2xl,
   color: var(--together-accent-strong) !important;
 }
 
+.dark .dark\:text-indigo-200,
 .dark .dark\:text-indigo-100,
 .dark .dark\:text-sky-100,
 .dark .dark\:text-sky-200,
 .dark .dark\:text-teal-100,
+.dark .dark\:text-teal-200,
 .dark .dark\:\!text-indigo-100,
 .dark .dark\:\!text-sky-100,
 .dark .dark\:\!text-teal-100 {
   color: var(--together-primary) !important;
 }
 
+.dark .dark\:text-amber-200,
+.dark .dark\:text-yellow-200,
 .dark .dark\:\!text-amber-100,
 .dark .dark\:\!text-yellow-100 {
   color: var(--together-planning-strong) !important;
 }
 
+.dark .dark\:text-rose-200,
+.dark .dark\:text-pink-200,
 .dark .dark\:\!text-rose-100,
 .dark .dark\:\!text-pink-100 {
   color: var(--together-danger) !important;
+}
+
+.dark .dark\:border-emerald-500\/35 {
+  border-color: color-mix(in srgb, var(--together-accent) 42%, var(--together-border)) !important;
+}
+
+.dark .dark\:border-indigo-500\/35,
+.dark .dark\:border-sky-500\/35,
+.dark .dark\:border-teal-500\/35 {
+  border-color: color-mix(in srgb, var(--together-primary) 42%, var(--together-border)) !important;
+}
+
+.dark .dark\:border-amber-500\/35,
+.dark .dark\:border-yellow-500\/35 {
+  border-color: color-mix(in srgb, var(--together-planning) 42%, var(--together-border)) !important;
+}
+
+.dark .dark\:border-rose-500\/35,
+.dark .dark\:border-pink-500\/35 {
+  border-color: color-mix(in srgb, var(--together-danger) 42%, var(--together-border)) !important;
+}
+
+.dark .dark\:from-emerald-950\/70 {
+  --tw-gradient-from: var(--together-accent-soft) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: color-mix(in srgb, var(--together-accent-soft) 0%, transparent)
+    var(--tw-gradient-to-position) !important;
+}
+
+.dark .dark\:to-emerald-950\/45 {
+  --tw-gradient-to: var(--together-accent-soft) var(--tw-gradient-to-position) !important;
+}
+
+.dark .dark\:from-sky-950\/70 {
+  --tw-gradient-from: var(--together-primary-soft) var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: color-mix(in srgb, var(--together-primary-soft) 0%, transparent)
+    var(--tw-gradient-to-position) !important;
+}
+
+.dark .dark\:to-sky-950\/45 {
+  --tw-gradient-to: var(--together-primary-soft) var(--tw-gradient-to-position) !important;
+}
+
+.dark .dark\:via-stone-950 {
+  --tw-gradient-to: color-mix(in srgb, var(--together-surface) 0%, transparent)
+    var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops:
+    var(--tw-gradient-from), var(--together-surface) var(--tw-gradient-via-position),
+    var(--tw-gradient-to) !important;
 }
 
 .dark .bg-black\/50,
