@@ -429,6 +429,19 @@ section.rounded-2xl,
   }
 }
 
+@media (display-mode: standalone) and (max-width: 1023px) {
+  .together-topbar {
+    padding-top: max(env(safe-area-inset-top, 0px), 1.75rem);
+  }
+}
+
+@media (display-mode: standalone) and (max-width: 639px) {
+  .fixed.inset-0.flex,
+  .fixed.inset-0.overflow-y-auto {
+    padding-top: max(env(safe-area-inset-top, 0px), 1.75rem) !important;
+  }
+}
+
 @media (min-width: 640px) and (max-width: 1023px) {
   .together-topbar-inner {
     padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
