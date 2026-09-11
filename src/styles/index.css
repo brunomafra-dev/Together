@@ -3,54 +3,54 @@
 @import "./theme.css";
 
 :root {
-  --together-bg: #f3f5f6;
-  --together-surface: #ffffff;
-  --together-surface-muted: #e9eef1;
-  --together-surface-subtle: #f8fafb;
-  --together-primary: #214e6d;
-  --together-primary-hover: #183e58;
-  --together-primary-soft: #e7eff4;
-  --together-accent: #159a8c;
-  --together-accent-strong: #0b7168;
-  --together-accent-hover: #0d8075;
+  --together-bg: #eee9f1;
+  --together-surface: #fcfafd;
+  --together-surface-muted: #e6deea;
+  --together-surface-subtle: #f6f1f7;
+  --together-primary: #4b285f;
+  --together-primary-hover: #391d49;
+  --together-primary-soft: #ebe1ef;
+  --together-accent: #117f74;
+  --together-accent-strong: #09675f;
+  --together-accent-hover: #0d7168;
   --together-accent-soft: #e2f4f1;
   --together-planning: #c28a42;
   --together-planning-strong: #80571f;
   --together-planning-soft: #f7efe3;
-  --together-text: #18232d;
-  --together-muted: #5d6a73;
-  --together-faint: #87949d;
+  --together-text: #241d29;
+  --together-muted: #675d6c;
+  --together-faint: #8c8292;
   --together-danger: #a9444d;
   --together-danger-soft: #faeaec;
-  --together-border: #d5dee3;
-  --together-border-strong: #bccbd3;
-  --together-shadow: 0 1px 2px rgba(24, 35, 45, 0.035), 0 8px 24px rgba(24, 35, 45, 0.045);
-  --together-shadow-raised: 0 12px 32px rgba(24, 35, 45, 0.1);
+  --together-border: #d5c9da;
+  --together-border-strong: #beaec6;
+  --together-shadow: 0 1px 2px rgba(75, 40, 95, 0.035), 0 8px 24px rgba(75, 40, 95, 0.05);
+  --together-shadow-raised: 0 12px 32px rgba(75, 40, 95, 0.11);
 }
 
 .dark {
   color-scheme: dark;
-  --together-bg: #0b1420;
-  --together-surface: #111e2b;
-  --together-surface-muted: #172838;
-  --together-surface-subtle: #132332;
-  --together-primary: #72a9c5;
-  --together-primary-hover: #8bbbd1;
-  --together-primary-soft: #193247;
-  --together-accent: #4bc3b5;
+  --together-bg: #110c16;
+  --together-surface: #1a1320;
+  --together-surface-muted: #261b2e;
+  --together-surface-subtle: #201727;
+  --together-primary: #b58bcb;
+  --together-primary-hover: #c39bd6;
+  --together-primary-soft: #30213a;
+  --together-accent: #56c9bc;
   --together-accent-strong: #76d8cd;
   --together-accent-hover: #62d0c3;
-  --together-accent-soft: #173a3c;
+  --together-accent-soft: #173937;
   --together-planning: #d8a65e;
   --together-planning-strong: #ebc27f;
   --together-planning-soft: #3a2e22;
-  --together-text: #edf3f6;
-  --together-muted: #9baab4;
-  --together-faint: #788b98;
+  --together-text: #f4eff6;
+  --together-muted: #b3a6b9;
+  --together-faint: #877a8f;
   --together-danger: #e08a90;
   --together-danger-soft: #3a242b;
-  --together-border: #2a3c4b;
-  --together-border-strong: #3d5363;
+  --together-border: #3a2c43;
+  --together-border-strong: #564061;
   --together-shadow: 0 1px 2px rgba(0, 0, 0, 0.14), 0 10px 26px rgba(0, 0, 0, 0.16);
   --together-shadow-raised: 0 18px 45px rgba(0, 0, 0, 0.3);
 }
@@ -64,16 +64,16 @@ body,
 
 body {
   background-image:
-    linear-gradient(rgba(33, 78, 109, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(33, 78, 109, 0.025) 1px, transparent 1px);
+    linear-gradient(rgba(75, 40, 95, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(75, 40, 95, 0.025) 1px, transparent 1px);
   background-size: 32px 32px;
   background-attachment: fixed;
 }
 
 .dark body {
   background-image:
-    linear-gradient(rgba(114, 169, 197, 0.025) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(114, 169, 197, 0.025) 1px, transparent 1px);
+    linear-gradient(rgba(181, 139, 203, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(181, 139, 203, 0.025) 1px, transparent 1px);
 }
 
 ::selection {
@@ -458,9 +458,9 @@ section.rounded-2xl,
 }
 
 .together-brand-mark {
-  background: linear-gradient(145deg, var(--together-primary), #2d6c86 58%, var(--together-accent));
+  background: linear-gradient(145deg, var(--together-primary), #653579 58%, #84516f);
   border-radius: 0.75rem;
-  box-shadow: 0 5px 12px rgba(33, 78, 109, 0.16);
+  box-shadow: 0 5px 12px rgba(75, 40, 95, 0.18);
 }
 
 .together-household {
@@ -512,8 +512,73 @@ section.rounded-2xl,
   box-shadow: none;
 }
 
+:root:not(.dark) .together-topbar {
+  background: linear-gradient(112deg, #3a1d49 0%, #4b285f 58%, #593268 100%);
+  border-color: #32183f;
+  box-shadow: 0 8px 24px rgba(58, 29, 73, 0.16);
+}
+
+:root:not(.dark) .together-topbar .together-brand-mark {
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: linear-gradient(145deg, #704284, #8a597b);
+  box-shadow: none;
+}
+
+:root:not(.dark) .together-topbar .together-household {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+:root:not(.dark) .together-topbar .together-household:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+:root:not(.dark) .together-topbar .together-household span,
+:root:not(.dark) .together-topbar .text-stone-900 {
+  color: #fff;
+}
+
+:root:not(.dark) .together-topbar .together-desktop-nav-item {
+  color: rgba(255, 255, 255, 0.72);
+}
+
+:root:not(.dark) .together-topbar .together-desktop-nav-item:hover,
+:root:not(.dark) .together-topbar .together-desktop-nav-item.bg-stone-100 {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+:root:not(.dark) .together-topbar .together-nav-glyph {
+  border-color: rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.76);
+}
+
+:root:not(.dark) .together-topbar .together-desktop-nav-item:hover .together-nav-glyph {
+  border-color: rgba(255, 255, 255, 0.34);
+  color: #fff;
+}
+
+:root:not(.dark) .together-topbar .together-desktop-nav-item.bg-stone-100 .together-nav-glyph {
+  border-color: #fff;
+  background: #fff;
+  color: var(--together-primary);
+}
+
+:root:not(.dark) .together-topbar .together-theme-toggle {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+}
+
+:root:not(.dark) .together-topbar .together-theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
 .together-bottom-nav {
-  background: color-mix(in srgb, var(--together-surface) 96%, transparent);
+  background: color-mix(in srgb, var(--together-surface) 88%, var(--together-primary-soft));
   border-color: var(--together-border);
   box-shadow: 0 -8px 24px rgba(24, 35, 45, 0.065);
 }
@@ -558,7 +623,13 @@ section.rounded-2xl,
 
 .together-page-heading {
   border-left: 3px solid var(--together-primary);
-  padding-left: 1rem;
+  border-radius: 0 0.875rem 0.875rem 0;
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--together-primary-soft) 82%, var(--together-surface)),
+    color-mix(in srgb, var(--together-surface) 35%, transparent)
+  );
+  padding: 0.8rem 1rem;
 }
 
 .together-page-heading > div > p:first-child {
@@ -675,8 +746,8 @@ section.rounded-2xl,
 
 .together-auth-shell {
   background:
-    linear-gradient(90deg, rgba(33, 78, 109, 0.035) 1px, transparent 1px),
-    linear-gradient(rgba(33, 78, 109, 0.035) 1px, transparent 1px), var(--together-bg);
+    linear-gradient(90deg, rgba(75, 40, 95, 0.035) 1px, transparent 1px),
+    linear-gradient(rgba(75, 40, 95, 0.035) 1px, transparent 1px), var(--together-bg);
   background-size: 32px 32px;
   color: var(--together-text);
 }
@@ -691,9 +762,9 @@ section.rounded-2xl,
 }
 
 .together-auth-mark {
-  background: linear-gradient(145deg, var(--together-primary), #2d6c86 58%, var(--together-accent));
+  background: linear-gradient(145deg, var(--together-primary), #653579 58%, #84516f);
   border-radius: 0.875rem;
-  box-shadow: 0 10px 24px rgba(33, 78, 109, 0.18);
+  box-shadow: 0 10px 24px rgba(75, 40, 95, 0.2);
 }
 
 .together-auth-card {

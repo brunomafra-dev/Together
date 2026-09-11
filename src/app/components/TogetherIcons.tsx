@@ -22,10 +22,8 @@ function IconFrame({ children, ...props }: PropsWithChildren<TogetherIconProps>)
 
 export function TogetherMarkIcon(props: TogetherIconProps) {
   return (
-    <IconFrame {...props}>
-      <path d="m4 10.25 8-6.5 8 6.5" />
-      <path d="M5.75 8.85V20h12.5V8.85" />
-      <path d="M9 16.5v-3M12 16.5V11M15 16.5v-8" />
+    <IconFrame fill="currentColor" stroke="none" {...props}>
+      <path d="M5.4 4.25h3.75c.48 0 .94.17 1.29.5L12 6.18l1.56-1.43c.35-.33.81-.5 1.29-.5h3.75a1.9 1.9 0 0 1 1.9 1.9v.45a1.9 1.9 0 0 1-1.9 1.9h-4.15v9.3a2.45 2.45 0 0 1-4.9 0V8.5H5.4a1.9 1.9 0 0 1-1.9-1.9v-.45a1.9 1.9 0 0 1 1.9-1.9Z" />
     </IconFrame>
   );
 }

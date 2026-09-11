@@ -7,14 +7,14 @@ autenticação, rotas, textos funcionais e fluxos permanecem inalterados.
 
 | Papel                 | Claro     | Escuro    | Uso                                       |
 | --------------------- | --------- | --------- | ----------------------------------------- |
-| Fundo                 | `#F3F5F6` | `#0B1420` | base calma, com grade editorial sutil     |
-| Superfície            | `#FFFFFF` | `#111E2B` | cartões, modais e navegação               |
-| Superfície secundária | `#E9EEF1` | `#172838` | agrupamentos e campos                     |
-| Estrutura             | `#214E6D` | `#72A9C5` | ciclos, navegação ativa e hierarquia      |
-| Confirmação           | `#159A8C` | `#4BC3B5` | progresso, sucesso e ações confirmatórias |
+| Fundo                 | `#EEE9F1` | `#110C16` | base calma, com grade editorial sutil     |
+| Superfície            | `#FCFAFD` | `#1A1320` | cartões, modais e navegação               |
+| Superfície secundária | `#E6DEEA` | `#261B2E` | agrupamentos e campos                     |
+| Estrutura             | `#4B285F` | `#B58BCB` | ciclos, navegação ativa e hierarquia      |
+| Confirmação           | `#117F74` | `#56C9BC` | progresso, sucesso e ações confirmatórias |
 | Planejamento          | `#C28A42` | `#D8A65E` | atenção e valores reservados              |
-| Texto                 | `#18232D` | `#EDF3F6` | conteúdo principal                        |
-| Texto secundário      | `#5D6A73` | `#9BAAB4` | explicações e metadados                   |
+| Texto                 | `#241D29` | `#F4EFF6` | conteúdo principal                        |
+| Texto secundário      | `#675D6C` | `#B3A6B9` | explicações e metadados                   |
 | Perigo                | `#A9444D` | `#E08A90` | erros e projeções negativas               |
 
 Os tons fortes de confirmação, planejamento e perigo são usados quando a cor precisa carregar
@@ -25,7 +25,8 @@ manter contraste.
 
 - `stone` passou a representar texto, bordas e superfícies neutras.
 - `emerald` passou a representar confirmação, sucesso e progresso.
-- `teal`, `sky`, `blue`, `cyan` e `indigo` foram normalizados para a estrutura azul-petróleo.
+- `sky`, `blue`, `cyan` e `indigo` foram normalizados para a estrutura roxo-ameixa.
+- `teal` permanece reservado a confirmação, sucesso e progresso.
 - `amber` e `yellow` passaram a representar planejamento e atenção.
 - `rose` e `pink` foram consolidados como perigo.
 - raios grandes foram limitados a `16px`, com até `18px` em destaques e modais.
@@ -38,15 +39,15 @@ Relações principais, calculadas segundo WCAG:
 
 | Par                                            |   Relação |
 | ---------------------------------------------- | --------: |
-| Texto / fundo claro                            | `14.58:1` |
+| Texto / fundo claro                            | `13.69:1` |
 | Texto secundário / superfície secundária clara |  `4.76:1` |
-| Azul-petróleo / branco                         |  `8.84:1` |
-| Teal forte / branco                            |  `5.87:1` |
+| Roxo-ameixa / superfície clara                 | `11.44:1` |
+| Teal / branco                                  |  `4.87:1` |
 | Planejamento forte / branco                    |  `6.36:1` |
 | Perigo / branco                                |  `5.80:1` |
-| Texto / fundo escuro                           | `16.52:1` |
-| Texto secundário / fundo escuro                |  `7.75:1` |
-| Azul claro / fundo escuro                      |  `7.22:1` |
+| Texto / fundo escuro                           | `17.03:1` |
+| Texto secundário / fundo escuro                |  `8.34:1` |
+| Roxo claro / fundo escuro                      |  `6.91:1` |
 
 ## Capturas de revisão
 
