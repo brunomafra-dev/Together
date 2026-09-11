@@ -265,7 +265,7 @@ export function FutureCommitments() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div>
+        <div className="together-page-heading">
           <h1 className="text-2xl font-semibold text-stone-900">Impacto futuro</h1>
           <p className="text-sm text-stone-600 mt-1">
             O que já está comprometido nos próximos meses

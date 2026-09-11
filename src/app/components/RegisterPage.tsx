@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ArrowRight, Heart, Lock, Mail, ShieldQuestion, User } from "lucide-react";
+import { ArrowRight, ChartNoAxesCombined, Lock, Mail, ShieldQuestion, User } from "lucide-react";
 import { Link, Navigate, useNavigate } from "react-router";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
@@ -28,9 +28,9 @@ export function RegisterPage() {
 
   return (
     <AuthLayout>
-      <div className="w-full max-w-[455px] text-center">
-        <div className="mx-auto mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#00b88a] shadow-[0_16px_28px_rgba(0,184,138,0.18)]">
-          <Heart className="h-7 w-7 fill-white text-white" strokeWidth={1.8} />
+      <div className="together-auth-page w-full max-w-[455px] text-center">
+        <div className="together-auth-mark mx-auto mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#00b88a] shadow-[0_16px_28px_rgba(0,184,138,0.18)]">
+          <ChartNoAxesCombined className="h-7 w-7 text-white" strokeWidth={1.8} />
         </div>
 
         <h1 className="mx-auto max-w-[18ch] text-[2.25rem] font-medium leading-[1.08] tracking-[-0.04em] text-[#111827] sm:text-[3rem]">
@@ -41,7 +41,7 @@ export function RegisterPage() {
           Um espaço simples e acolhedor para organizar a vida financeira em casal.
         </p>
 
-        <section className="mt-10 overflow-hidden rounded-[2rem] border border-[#e6e2dd] bg-white shadow-[0_22px_60px_rgba(15,23,42,0.07)]">
+        <section className="together-auth-card mt-10 overflow-hidden rounded-[2rem] border border-[#e6e2dd] bg-white shadow-[0_22px_60px_rgba(15,23,42,0.07)]">
           <div className="px-6 pb-6 pt-9 sm:px-8">
             <form className="space-y-5 text-left" onSubmit={handleSubmit}>
               <div className="space-y-2">
@@ -137,7 +137,7 @@ export function RegisterPage() {
               <Button
                 type="submit"
                 disabled={loading || !passwordsMatch}
-                className="h-[48px] w-full rounded-2xl bg-[#00a56f] text-[1.02rem] font-semibold text-white shadow-[0_14px_28px_rgba(0,165,111,0.24)] hover:bg-[#0b9a69] disabled:cursor-not-allowed disabled:opacity-70"
+                className="together-auth-submit h-[48px] w-full rounded-2xl bg-[#00a56f] text-[1.02rem] font-semibold text-white shadow-[0_14px_28px_rgba(0,165,111,0.24)] hover:bg-[#0b9a69] disabled:cursor-not-allowed disabled:opacity-70"
               >
                 {loading ? "Criando..." : "Criar conta"}
                 <ArrowRight className="h-4 w-4" />
@@ -159,7 +159,7 @@ export function RegisterPage() {
       <button
         type="button"
         aria-label="Ajuda"
-        className="fixed bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full border border-[#dedad5] bg-white text-[#6b7280] shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:text-[#111827]"
+        className="together-auth-help fixed bottom-4 right-4 flex h-10 w-10 items-center justify-center rounded-full border border-[#dedad5] bg-white text-[#6b7280] shadow-[0_10px_24px_rgba(15,23,42,0.12)] transition hover:-translate-y-0.5 hover:text-[#111827]"
       >
         <ShieldQuestion className="h-5 w-5" />
       </button>

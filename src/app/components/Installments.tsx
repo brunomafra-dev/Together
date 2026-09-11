@@ -226,7 +226,7 @@ export function Installments() {
   return (
     <Layout>
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="together-page-heading flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold text-stone-900">Cartões e parcelas</h1>
             <p className="mt-1 text-sm text-stone-600">

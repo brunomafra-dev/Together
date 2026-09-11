@@ -854,7 +854,7 @@ export function Goals() {
   return (
     <Layout>
       <div className="space-y-5 sm:space-y-7">
-        <header className="space-y-1.5 sm:space-y-2">
+        <header className="together-page-heading space-y-1.5 sm:space-y-2">
           <h1 className="text-2xl font-semibold tracking-tight text-stone-950 sm:text-3xl">
             Metas
           </h1>
