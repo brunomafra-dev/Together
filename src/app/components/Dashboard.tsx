@@ -369,7 +369,7 @@ export function Dashboard() {
       )}
 
       <div className="space-y-6">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="together-page-heading flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="min-w-0">
             <p className="text-xs uppercase tracking-wider text-stone-500">{monthLabel}</p>
             <p className="mt-1 text-xs text-stone-500">Ciclo financeiro: {cycleRangeLabel}</p>
@@ -403,7 +403,7 @@ export function Dashboard() {
         </div>
 
         <div className={`grid gap-4 ${showSetupRoadmap ? "lg:grid-cols-2" : ""}`}>
-          <div className="rounded-2xl border border-teal-100 bg-teal-50/80 p-4">
+          <div className="together-routine rounded-2xl border border-teal-100 bg-teal-50/80 p-4">
             <div className="flex items-start gap-3">
               <CalendarCheck className="mt-0.5 h-5 w-5 shrink-0 text-teal-700" />
               <div className="min-w-0 flex-1">
@@ -461,7 +461,7 @@ export function Dashboard() {
           )}
         </div>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="together-quick-actions grid grid-cols-3 gap-3">
           <QuickActionCard
             icon={Plus}
             label="Novo gasto"
@@ -485,12 +485,12 @@ export function Dashboard() {
           />
         </div>
 
-        <div className="rounded-[1.75rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4 shadow-sm sm:rounded-3xl sm:p-8">
+        <div className="together-financial-hero rounded-[1.75rem] border border-emerald-100 bg-gradient-to-br from-emerald-50 via-white to-teal-50 p-4 shadow-sm sm:rounded-3xl sm:p-8">
           <div className="flex items-start justify-between gap-3 sm:block">
             <div className="min-w-0">
               <p className="mb-1 text-xs text-stone-600 sm:mb-2 sm:text-sm">Livre para gastar</p>
               <h2
-                className={`break-words text-3xl font-semibold leading-tight sm:text-5xl lg:text-6xl ${availableColor}`}
+                className={`together-financial-value break-words text-3xl font-semibold leading-tight sm:text-5xl lg:text-6xl ${availableColor}`}
               >
                 {formatBRL(data.available)}
               </h2>
@@ -910,7 +910,7 @@ function QuickActionCard({
     <button
       type="button"
       onClick={onClick}
-      className={`flex min-h-[11.5rem] flex-col items-center justify-start rounded-[1.65rem] border px-2.5 pb-4 pt-5 text-center shadow-sm transition-transform active:scale-[0.98] ${toneMap[tone].card}`}
+      className={`together-quick-action flex min-h-[11.5rem] flex-col items-center justify-start rounded-[1.65rem] border px-2.5 pb-4 pt-5 text-center shadow-sm transition-transform active:scale-[0.98] ${toneMap[tone].card}`}
     >
       <span className="mb-5 flex h-16 w-16 items-center justify-center rounded-full border border-stone-100 bg-white shadow-[0_10px_24px_rgba(28,25,23,0.08)] dark:border-white/10 dark:bg-white/10">
         <Icon className={`h-8 w-8 ${toneMap[tone].icon} dark:text-stone-100`} strokeWidth={1.8} />
@@ -945,25 +945,21 @@ function SummaryShortcutCard({
   onClick: () => void;
 }) {
   const toneMap = {
-    emerald:
-      "border-emerald-100 bg-emerald-50 text-emerald-700 dark:!border-emerald-500/40 dark:!bg-emerald-950/70 dark:!text-emerald-100",
-    indigo:
-      "border-indigo-100 bg-indigo-50 text-indigo-700 dark:!border-indigo-500/40 dark:!bg-indigo-950/70 dark:!text-indigo-100",
-    amber:
-      "border-amber-100 bg-amber-50 text-amber-700 dark:!border-amber-500/40 dark:!bg-amber-950/70 dark:!text-amber-100",
-    blue: "border-sky-100 bg-sky-50 text-sky-700 dark:!border-sky-500/40 dark:!bg-sky-950/70 dark:!text-sky-100",
-    rose: "border-rose-100 bg-rose-50 text-rose-700 dark:!border-rose-500/40 dark:!bg-rose-950/70 dark:!text-rose-100",
-    yellow:
-      "border-yellow-100 bg-yellow-50 text-yellow-700 dark:!border-yellow-500/40 dark:!bg-yellow-950/70 dark:!text-yellow-100",
-    teal: "border-teal-100 bg-teal-50 text-teal-700 dark:!border-teal-500/40 dark:!bg-teal-950/70 dark:!text-teal-100",
-    pink: "border-pink-100 bg-pink-50 text-pink-700 dark:!border-pink-500/40 dark:!bg-pink-950/70 dark:!text-pink-100",
+    emerald: "border-emerald-100 bg-emerald-50 text-emerald-700",
+    indigo: "border-indigo-100 bg-indigo-50 text-indigo-700",
+    amber: "border-amber-100 bg-amber-50 text-amber-700",
+    blue: "border-sky-100 bg-sky-50 text-sky-700",
+    rose: "border-rose-100 bg-rose-50 text-rose-700",
+    yellow: "border-yellow-100 bg-yellow-50 text-yellow-700",
+    teal: "border-teal-100 bg-teal-50 text-teal-700",
+    pink: "border-pink-100 bg-pink-50 text-pink-700",
   } as const;
 
   return (
     <button
       type="button"
       onClick={onClick}
-      className={`group flex min-h-[10rem] flex-col justify-between rounded-[1.5rem] border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99] ${toneMap[tone]} ${active ? "ring-2 ring-stone-900/10" : ""}`}
+      className={`together-summary-card group flex min-h-[10rem] flex-col justify-between rounded-[1.5rem] border p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:scale-[0.99] ${toneMap[tone]} ${active ? "ring-2 ring-stone-900/10" : ""}`}
     >
       <span className="flex items-start justify-between gap-2">
         <span className="flex min-w-0 items-center gap-2">
