@@ -99,6 +99,10 @@ body {
   background-color: var(--together-surface-muted);
 }
 
+.bg-gray-100 {
+  background-color: var(--together-surface-muted);
+}
+
 .text-stone-950,
 .text-stone-900,
 .text-stone-800,
@@ -886,6 +890,11 @@ section.rounded-2xl,
   box-shadow: var(--together-shadow);
 }
 
+.together-onboarding .text-emerald-100,
+.together-onboarding .text-emerald-50 {
+  color: rgba(255, 255, 255, 0.82);
+}
+
 .dark .bg-white,
 .dark .bg-white\/80,
 .dark .bg-white\/85,
@@ -897,6 +906,18 @@ section.rounded-2xl,
 .dark .dark\:bg-stone-950\/95,
 .dark .dark\:\!bg-stone-950 {
   background-color: var(--together-surface) !important;
+}
+
+.dark .bg-white\/75 {
+  background-color: color-mix(in srgb, var(--together-surface) 75%, transparent) !important;
+}
+
+.dark .border-white\/80 {
+  border-color: color-mix(in srgb, var(--together-text) 28%, var(--together-border)) !important;
+}
+
+.dark .bg-gray-100 {
+  background-color: var(--together-surface-muted) !important;
 }
 
 .dark .dark\:bg-stone-900,
@@ -926,6 +947,7 @@ section.rounded-2xl,
 }
 
 .dark .dark\:bg-emerald-950,
+.dark .dark\:bg-emerald-900,
 .dark .dark\:bg-emerald-950\/55,
 .dark .dark\:bg-emerald-950\/60,
 .dark .dark\:bg-emerald-950\/70,

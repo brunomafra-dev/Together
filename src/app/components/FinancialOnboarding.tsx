@@ -79,7 +79,7 @@ export function FinancialOnboarding() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="financial-onboarding-title"
-      className="fixed inset-0 z-[80] overflow-y-auto bg-stone-950/55 p-3 backdrop-blur-sm sm:p-6"
+      className="together-onboarding fixed inset-0 z-[80] overflow-y-auto bg-stone-950/55 p-3 backdrop-blur-sm sm:p-6"
     >
       <div className="mx-auto my-4 w-full max-w-2xl overflow-hidden rounded-3xl bg-white shadow-2xl sm:my-10">
         <div className="bg-gradient-to-br from-emerald-600 to-teal-700 px-6 py-6 text-white sm:px-8">
