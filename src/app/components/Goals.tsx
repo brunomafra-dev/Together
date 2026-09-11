@@ -12,7 +12,7 @@ import {
   isDateWithinCycle,
   openCycleReferenceEnd,
 } from "../utils/financialCycles";
-import { isOutstandingCommitment } from "../utils/financialCommitments";
+import { commitmentAmountInCycle } from "../utils/financialCommitments";
 import { openFinancialCycleReferenceEnd } from "../utils/financialRoutine";
 import { summarizeCategorySpending } from "../utils/categoryBudgetLinks";
 import {
@@ -240,6 +240,7 @@ export function Goals() {
     fixedExpenseMonthlyValues,
     financialCommitments,
     categories,
+    paymentMethods,
     updateCategory,
     activeCycle,
   } = useFinance();
@@ -269,6 +270,16 @@ export function Goals() {
     const monthIncomeEntries = incomeEntries.filter((entry) =>
       isDateWithinCycle(entry.date, activeCycle.startDate, cycleEndDate),
     );
+    const paymentMethodsById = new Map(paymentMethods.map((method) => [method.id, method]));
+    const cycleCommitments = financialCommitments.flatMap((commitment) => {
+      const amount = commitmentAmountInCycle(
+        commitment,
+        activeCycle.startDate,
+        cycleEndDate,
+        commitment.paymentMethodId ? paymentMethodsById.get(commitment.paymentMethodId) : null,
+      );
+      return amount > 0 ? [{ commitment, amount }] : [];
+    });
     const fixedExpenseAmount = (expense: (typeof fixedExpenses)[number]) => {
       const monthlyValue = fixedExpenseMonthlyValues.find(
         (value) =>
@@ -282,9 +293,7 @@ export function Goals() {
     };
     const variableSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const fixedSpent = fixedExpenses.reduce((sum, expense) => sum + fixedExpenseAmount(expense), 0);
-    const installmentSpent = financialCommitments
-      .filter(isOutstandingCommitment)
-      .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
+    const installmentSpent = cycleCommitments.reduce((sum, item) => sum + item.amount, 0);
     const totalSpent = fixedSpent + variableSpent + installmentSpent;
     const extraIncome = monthIncomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
     const realIncome = income + extraIncome;
@@ -310,10 +319,10 @@ export function Goals() {
         fallbackName: expense.category,
         amount: fixedExpenseAmount(expense),
       })),
-      ...financialCommitments.filter(isOutstandingCommitment).map((commitment) => ({
+      ...cycleCommitments.map(({ commitment, amount }) => ({
         categoryId: commitment.categoryId,
         fallbackName: "Parcelas",
-        amount: commitment.installmentValue,
+        amount,
       })),
     ]);
     const sortedCategories = spendingSummary.categoryTotals;
@@ -359,6 +368,7 @@ export function Goals() {
     household,
     income,
     incomeEntries,
+    paymentMethods,
   ]);
 
   const [title, setTitle] = useState(snapshot.title);

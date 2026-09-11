@@ -398,6 +398,103 @@ grant execute on function public.initialize_financial_cycle_state(
   date
 ) to authenticated;
 
+-- Resolve the contractual due date for one installment. On credit cards,
+-- started_at is the purchase date; outside a card it is the first due date.
+create or replace function public.calculate_financial_commitment_due_date(
+  p_started_at date,
+  p_installment_offset integer,
+  p_card_type text,
+  p_closing_day integer,
+  p_due_day integer
+)
+returns date
+language plpgsql
+immutable
+set search_path = pg_catalog, public, pg_temp
+as $$
+declare
+  purchase_month_start date;
+  closing_month_start date;
+  closing_date date;
+  due_month_start date;
+  first_due_date date;
+begin
+  if p_started_at is null then
+    raise exception 'Commitment start date cannot be null' using errcode = '22004';
+  end if;
+
+  if p_installment_offset is null or p_installment_offset < 0 then
+    raise exception 'Installment offset must be zero or greater' using errcode = '22023';
+  end if;
+
+  if p_card_type is distinct from 'credit_card'
+    or p_closing_day is null
+    or p_due_day is null then
+    first_due_date := p_started_at;
+  else
+    if p_closing_day not between 1 and 31 or p_due_day not between 1 and 31 then
+      raise exception 'Card closing and due days must be between 1 and 31'
+        using errcode = '22023';
+    end if;
+
+    purchase_month_start := date_trunc('month', p_started_at)::date;
+    closing_month_start := purchase_month_start;
+    closing_date := closing_month_start + (
+      least(
+        p_closing_day,
+        extract(day from (closing_month_start + interval '1 month - 1 day'))::integer
+      ) - 1
+    );
+
+    if p_started_at > closing_date then
+      closing_month_start := (purchase_month_start + interval '1 month')::date;
+      closing_date := closing_month_start + (
+        least(
+          p_closing_day,
+          extract(day from (closing_month_start + interval '1 month - 1 day'))::integer
+        ) - 1
+      );
+    end if;
+
+    due_month_start := date_trunc('month', closing_date)::date;
+    first_due_date := due_month_start + (
+      least(
+        p_due_day,
+        extract(day from (due_month_start + interval '1 month - 1 day'))::integer
+      ) - 1
+    );
+
+    if first_due_date <= closing_date then
+      due_month_start := (due_month_start + interval '1 month')::date;
+      first_due_date := due_month_start + (
+        least(
+          p_due_day,
+          extract(day from (due_month_start + interval '1 month - 1 day'))::integer
+        ) - 1
+      );
+    end if;
+  end if;
+
+  return (first_due_date + make_interval(months => p_installment_offset))::date;
+end;
+$$;
+
+revoke all on function public.calculate_financial_commitment_due_date(
+  date,
+  integer,
+  text,
+  integer,
+  integer
+) from public;
+
+grant execute on function public.calculate_financial_commitment_due_date(
+  date,
+  integer,
+  text,
+  integer,
+  integer
+) to authenticated;
+
 -- Close the current cycle and open the next one in the same database
 -- transaction. The unique snapshot constraint protects against double-clicks
 -- and simultaneous closes by both partners.
@@ -671,10 +768,24 @@ begin
   select coalesce(sum(commitment.installment_value), 0)
   into database_installment_total
   from public.financial_commitments as commitment
+  left join public.cards as card
+    on card.id = commitment.payment_method_id
+    and card.household_id = commitment.household_id
+  cross join lateral generate_series(
+    greatest(coalesce(commitment.current_installment, 0), 0),
+    coalesce(commitment.total_installments, 1) - 1
+  ) as installment(month_offset)
   where commitment.household_id = p_household_id
     and commitment.status <> 'finished'
     and coalesce(commitment.current_installment, 0)
-      < coalesce(commitment.total_installments, 1);
+      < coalesce(commitment.total_installments, 1)
+    and public.calculate_financial_commitment_due_date(
+      commitment.started_at,
+      installment.month_offset,
+      card.type,
+      card.closing_day,
+      card.due_day
+    ) between p_cycle_start_date and p_cycle_end_date;
 
   if round(coalesce(p_monthly_income, 0), 2) <> round(database_monthly_income, 2)
     or round(coalesce(p_fixed_expenses_total, 0), 2) <> round(database_fixed_total, 2)
@@ -732,10 +843,24 @@ begin
     left join public.categories as category
       on category.id = commitment.category_id
       and category.household_id = commitment.household_id
+    left join public.cards as card
+      on card.id = commitment.payment_method_id
+      and card.household_id = commitment.household_id
+    cross join lateral generate_series(
+      greatest(coalesce(commitment.current_installment, 0), 0),
+      coalesce(commitment.total_installments, 1) - 1
+    ) as installment(month_offset)
     where commitment.household_id = p_household_id
       and commitment.status <> 'finished'
       and coalesce(commitment.current_installment, 0)
         < coalesce(commitment.total_installments, 1)
+      and public.calculate_financial_commitment_due_date(
+        commitment.started_at,
+        installment.month_offset,
+        card.type,
+        card.closing_day,
+        card.due_day
+      ) between p_cycle_start_date and p_cycle_end_date
   ), grouped_categories as (
     select name, sum(amount) as amount
     from category_amounts

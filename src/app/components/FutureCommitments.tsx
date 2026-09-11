@@ -31,6 +31,7 @@ import {
 } from "../utils/recurringExpenses";
 import { plannedFinancialCycleEnd, projectedFinancialCycle } from "../utils/financialRoutine";
 import { summarizeCycleBudget } from "../utils/cycleBudget";
+import { commitmentAmountInCycle } from "../utils/financialCommitments";
 
 export function FutureCommitments() {
   const {
@@ -70,6 +71,10 @@ export function FutureCommitments() {
   const activeRecurringPurchases = useMemo(
     () => recurringTemplates.filter((expense) => !subscriptionCategoryIds.has(expense.category)),
     [recurringTemplates, subscriptionCategoryIds],
+  );
+  const paymentMethodsById = useMemo(
+    () => new Map(paymentMethods.map((method) => [method.id, method])),
+    [paymentMethods],
   );
   const subscriptionTotal = useMemo(
     () => activeSubscriptions.reduce((sum, expense) => sum + expense.amount, 0),
@@ -164,18 +169,21 @@ export function FutureCommitments() {
     let cycleStartDate = firstFutureCycleStartDate;
 
     for (let index = 0; index < 6; index++) {
-      const futureCycleNumber = index + 1;
       const cycleEndDate = household
         ? projectedFinancialCycle(cycleStartDate, household).endDate
         : defaultCycleEnd(cycleStartDate);
       const monthDate = parseLocalDate(cycleStartDate);
-      const monthCommitments = commitments
-        .filter(
-          (commitment) =>
-            commitment.status !== "finished" &&
-            commitment.totalInstallments - commitment.currentInstallment >= futureCycleNumber,
-        )
-        .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
+      const monthCommitments = commitments.reduce(
+        (sum, commitment) =>
+          sum +
+          commitmentAmountInCycle(
+            commitment,
+            cycleStartDate,
+            cycleEndDate,
+            commitment.paymentMethodId ? paymentMethodsById.get(commitment.paymentMethodId) : null,
+          ),
+        0,
+      );
       const monthFixed = fixedExpenses.reduce((sum, expense) => {
         const monthlyValue = fixedExpenseMonthlyValues.find(
           (value) =>
@@ -253,6 +261,7 @@ export function FutureCommitments() {
     firstFutureCycleStartDate,
     household,
     incomeEntries,
+    paymentMethodsById,
     settings.monthlyIncome,
   ]);
   const nextCyclePreview = futureMonths[0] ?? null;

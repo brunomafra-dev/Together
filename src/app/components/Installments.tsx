@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { addMonths, format } from "date-fns";
+import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { CalendarCheck, Clock3, Layers3, Pencil, Plus, Trash2, Wallet, X } from "lucide-react";
 import { toast } from "sonner";
@@ -16,6 +16,9 @@ import {
   parseLocalDate,
 } from "../utils/financialCycles";
 import {
+  commitmentAmountInCycle,
+  commitmentDueDatesInCycle,
+  commitmentLastDueDate,
   isOutstandingCommitment,
   normalizedCommitmentStatus,
   remainingInstallmentCount,
@@ -36,6 +39,8 @@ type Commitment = {
   status: "active" | "finished" | "late";
 };
 
+type PaymentMethod = ReturnType<typeof useFinance>["paymentMethods"][number];
+
 type PaymentMethodBucket = {
   id: string;
   name: string;
@@ -48,6 +53,7 @@ type PaymentMethodBucket = {
   dueDay: number | null;
   billDueDates: string[];
   commitments: Commitment[];
+  paymentMethod: PaymentMethod;
 };
 
 function statusTone(status: Commitment["status"]) {
@@ -76,15 +82,20 @@ function remainingCommitmentAmount(commitment: Commitment) {
   return commitment.installmentValue * remainingInstallments(commitment);
 }
 
-function currentCommitmentDue(commitment: Commitment) {
-  return remainingInstallments(commitment) > 0 ? commitment.installmentValue : 0;
+function currentCommitmentDue(
+  commitment: Commitment,
+  cycleStartDate: string,
+  cycleEndDate: string,
+  paymentMethod?: PaymentMethod | null,
+) {
+  return commitmentAmountInCycle(commitment, cycleStartDate, cycleEndDate, paymentMethod);
 }
 
-function commitmentEndDate(commitment: Commitment, nextBillDate: Date) {
-  const remaining = remainingInstallments(commitment);
-  if (remaining === 0) return "Concluído";
+function commitmentEndDate(commitment: Commitment, paymentMethod?: PaymentMethod | null) {
+  const lastDueDate = commitmentLastDueDate(commitment, paymentMethod);
+  if (!lastDueDate) return "Concluído";
 
-  return format(addMonths(nextBillDate, remaining - 1), "MMM/yyyy", {
+  return format(parseLocalDate(lastDueDate), "MMM/yyyy", {
     locale: ptBR,
   });
 }
@@ -107,8 +118,11 @@ export function Installments() {
     () => paymentMethods.filter((method) => method.type === "credit_card"),
     [paymentMethods],
   );
+  const paymentMethodsById = useMemo(
+    () => new Map(paymentMethods.map((method) => [method.id, method])),
+    [paymentMethods],
+  );
   const activeMonthDate = parseLocalDate(activeCycle.startDate);
-  const nextBillDate = activeMonthDate;
   const cycleEndDate = useMemo(
     () =>
       household
@@ -142,7 +156,8 @@ export function Installments() {
         totalLimit: method.limitAmount ?? 0,
         billExpenses: cycleBillExpenses.reduce((sum, expense) => sum + expense.amount, 0),
         billInstallments: methodCommitments.reduce(
-          (sum, commitment) => sum + currentCommitmentDue(commitment),
+          (sum, commitment) =>
+            sum + currentCommitmentDue(commitment, activeCycle.startDate, cycleEndDate, method),
           0,
         ),
         expenseLimitUsed: methodExpenses
@@ -155,13 +170,17 @@ export function Installments() {
         closingDay: method.closingDay,
         dueDay: method.dueDay,
         billDueDates: Array.from(
-          new Set(
-            cycleBillExpenses.flatMap((expense) =>
+          new Set([
+            ...cycleBillExpenses.flatMap((expense) =>
               isLocalDateString(expense.invoiceDueDate) ? [expense.invoiceDueDate] : [],
             ),
-          ),
+            ...methodCommitments.flatMap((commitment) =>
+              commitmentDueDatesInCycle(commitment, activeCycle.startDate, cycleEndDate, method),
+            ),
+          ]),
         ).sort(),
         commitments: methodCommitments,
+        paymentMethod: method,
       };
     });
   }, [activeCycle.startDate, commitments, creditCardMethods, cycleEndDate, expenses]);
@@ -184,11 +203,19 @@ export function Installments() {
     0,
   );
   const noCardMonthlyTotal = noCardCommitments.reduce(
-    (sum, commitment) => sum + currentCommitmentDue(commitment),
+    (sum, commitment) =>
+      sum + currentCommitmentDue(commitment, activeCycle.startDate, cycleEndDate),
     0,
   );
   const monthlyInstallmentTotal = commitments.reduce(
-    (sum, commitment) => sum + currentCommitmentDue(commitment),
+    (sum, commitment) =>
+      sum +
+      currentCommitmentDue(
+        commitment,
+        activeCycle.startDate,
+        cycleEndDate,
+        commitment.paymentMethodId ? paymentMethodsById.get(commitment.paymentMethodId) : null,
+      ),
     0,
   );
   const activeInstallments = commitments.filter(isOutstandingCommitment).length;
@@ -196,16 +223,19 @@ export function Installments() {
     (sum, commitment) => sum + remainingInstallments(commitment),
     0,
   );
-  const maxRemainingInstallments = Math.max(
-    ...commitments.map((commitment) => remainingInstallments(commitment)),
-    0,
-  );
-  const estimatedEndDate =
-    maxRemainingInstallments > 0
-      ? format(addMonths(activeMonthDate, maxRemainingInstallments - 1), "MMMM 'de' yyyy", {
-          locale: ptBR,
-        })
-      : "Sem parcelas abertas";
+  const commitmentEndDates = commitments
+    .flatMap((commitment) => {
+      const dueDate = commitmentLastDueDate(
+        commitment,
+        commitment.paymentMethodId ? paymentMethodsById.get(commitment.paymentMethodId) : null,
+      );
+      return dueDate ? [dueDate] : [];
+    })
+    .sort();
+  const lastCommitmentDueDate = commitmentEndDates[commitmentEndDates.length - 1];
+  const estimatedEndDate = lastCommitmentDueDate
+    ? format(parseLocalDate(lastCommitmentDueDate), "MMMM 'de' yyyy", { locale: ptBR })
+    : "Sem parcelas abertas";
 
   const handleDeleteCommitment = async (id: string) => {
     if (!window.confirm("Excluir este parcelamento?")) return;
@@ -290,9 +320,10 @@ export function Installments() {
                   deletingId={deletingId}
                   onDelete={handleDeleteCommitment}
                   onEdit={setEditingCommitment}
-                  nextBillDate={nextBillDate}
                   categories={categories}
                   cycleLabel={cycleLabel}
+                  cycleStartDate={activeCycle.startDate}
+                  cycleEndDate={cycleEndDate}
                 />
               ))
             )}
@@ -319,10 +350,11 @@ export function Installments() {
                   key={commitment.id}
                   commitment={commitment}
                   deletingId={deletingId}
-                  nextBillDate={nextBillDate}
                   categories={categories}
                   onEdit={setEditingCommitment}
                   onDelete={handleDeleteCommitment}
+                  cycleStartDate={activeCycle.startDate}
+                  cycleEndDate={cycleEndDate}
                 />
               ))
             )}
@@ -408,17 +440,19 @@ function CardSummary({
   deletingId,
   onEdit,
   onDelete,
-  nextBillDate,
   categories,
   cycleLabel,
+  cycleStartDate,
+  cycleEndDate,
 }: {
   bucket: PaymentMethodBucket;
   deletingId: string | null;
   onEdit: (commitment: Commitment) => void;
   onDelete: (id: string) => Promise<void>;
-  nextBillDate: Date;
   categories: ReturnType<typeof useFinance>["categories"];
   cycleLabel: string;
+  cycleStartDate: string;
+  cycleEndDate: string;
 }) {
   const used = bucket.expenseLimitUsed + bucket.commitmentLimitUsed;
   const available = Math.max(bucket.totalLimit - used, 0);
@@ -478,10 +512,12 @@ function CardSummary({
                 key={commitment.id}
                 commitment={commitment}
                 deletingId={deletingId}
-                nextBillDate={nextBillDate}
                 categories={categories}
                 onEdit={onEdit}
                 onDelete={onDelete}
+                paymentMethod={bucket.paymentMethod}
+                cycleStartDate={cycleStartDate}
+                cycleEndDate={cycleEndDate}
               />
             ))
           )}
@@ -494,17 +530,21 @@ function CardSummary({
 function CommitmentRow({
   commitment,
   deletingId,
-  nextBillDate,
   categories,
   onEdit,
   onDelete,
+  paymentMethod,
+  cycleStartDate,
+  cycleEndDate,
 }: {
   commitment: Commitment;
   deletingId: string | null;
-  nextBillDate: Date;
   categories: ReturnType<typeof useFinance>["categories"];
   onEdit: (commitment: Commitment) => void;
   onDelete: (id: string) => Promise<void>;
+  paymentMethod?: PaymentMethod | null;
+  cycleStartDate: string;
+  cycleEndDate: string;
 }) {
   const remaining = remainingInstallments(commitment);
   const remainingAmount = remainingCommitmentAmount(commitment);
@@ -563,9 +603,14 @@ function CommitmentRow({
 
       <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         <MiniMetric label="Valor da parcela" value={formatBRL(commitment.installmentValue)} />
-        <MiniMetric label="Parcela do ciclo" value={formatBRL(currentCommitmentDue(commitment))} />
+        <MiniMetric
+          label="Parcela do ciclo"
+          value={formatBRL(
+            currentCommitmentDue(commitment, cycleStartDate, cycleEndDate, paymentMethod),
+          )}
+        />
         <MiniMetric label="Saldo em aberto" value={formatBRL(remainingAmount)} />
-        <MiniMetric label="Termina em" value={commitmentEndDate(commitment, nextBillDate)} />
+        <MiniMetric label="Termina em" value={commitmentEndDate(commitment, paymentMethod)} />
         <MiniMetric label="Responsável" value={commitment.responsiblePerson || "Sem responsável"} />
       </div>
 
@@ -606,6 +651,7 @@ function AddCommitmentModal({
     commitment?.responsiblePerson ?? household?.partnerNames[0] ?? "",
   );
   const [notes, setNotes] = useState(commitment?.notes ?? "");
+  const [startedAt, setStartedAt] = useState(commitment?.startedAt ?? formatLocalDate(new Date()));
   const [saving, setSaving] = useState(false);
 
   const partnerOptions = useMemo(
@@ -624,7 +670,14 @@ function AddCommitmentModal({
     const amount = parseFloat(installmentValue.replace(",", "."));
     const total = parseInt(totalInstallments, 10) || 1;
     const current = Math.min(Math.max(parseInt(currentInstallment, 10) || 0, 0), total);
-    if (!itemName.trim() || !Number.isFinite(amount) || amount <= 0 || saving) return;
+    if (
+      !itemName.trim() ||
+      !Number.isFinite(amount) ||
+      amount <= 0 ||
+      !isLocalDateString(startedAt) ||
+      saving
+    )
+      return;
 
     setSaving(true);
     try {
@@ -637,7 +690,7 @@ function AddCommitmentModal({
         totalInstallments: total,
         responsiblePerson: responsiblePerson.trim() || "Sem responsável",
         notes: notes.trim(),
-        startedAt: commitment?.startedAt ?? new Date().toISOString().split("T")[0],
+        startedAt,
         status: normalizedCommitmentStatus({
           status: commitment?.status ?? "active",
           currentInstallment: current,
@@ -744,6 +797,18 @@ function AddCommitmentModal({
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">
+                {paymentMethodId ? "Data da compra" : "Primeiro vencimento"}
+              </label>
+              <input
+                value={startedAt}
+                onChange={(e) => setStartedAt(e.target.value)}
+                type="date"
+                required
+                className="w-full rounded-xl border border-stone-200 px-4 py-3 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+              />
             </div>
             <div>
               <label className="mb-2 block text-xs uppercase tracking-[0.16em] text-stone-500">

@@ -41,7 +41,7 @@ import {
   parseLocalDate,
   previousLocalDate,
 } from "../utils/financialCycles";
-import { isOutstandingCommitment } from "../utils/financialCommitments";
+import { commitmentAmountInCycle } from "../utils/financialCommitments";
 import { buildCycleClosingSummary } from "../utils/cycleClosingSummary";
 import { summarizeCycleBudget } from "../utils/cycleBudget";
 import {
@@ -133,6 +133,7 @@ export function Dashboard() {
   const data = useMemo(() => {
     const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
     const paymentMethodNames = new Map(paymentMethods.map((method) => [method.id, method.name]));
+    const paymentMethodsById = new Map(paymentMethods.map((method) => [method.id, method]));
     const householdNames = household?.partnerNames ?? settings.partnerNames.filter(Boolean);
     const householdMembers = new Map(
       (household?.partnerIds ?? ["", ""])
@@ -171,12 +172,23 @@ export function Dashboard() {
       category: expense.category || "Sem categoria",
       amount: fixedExpenseAmount(expense),
     }));
-    const commitmentCategoryExpenses = financialCommitments
-      .filter(isOutstandingCommitment)
-      .map((commitment) => ({
-        category: categoryNames.get(commitment.categoryId) || commitment.categoryId || "Parcelas",
-        amount: commitment.installmentValue,
-      }));
+    const commitmentCategoryExpenses = financialCommitments.flatMap((commitment) => {
+      const amount = commitmentAmountInCycle(
+        commitment,
+        activeCycle.startDate,
+        cycleEndDate,
+        commitment.paymentMethodId ? paymentMethodsById.get(commitment.paymentMethodId) : null,
+      );
+      return amount > 0
+        ? [
+            {
+              category:
+                categoryNames.get(commitment.categoryId) || commitment.categoryId || "Parcelas",
+              amount,
+            },
+          ]
+        : [];
+    });
     const nonVariableCategoryExpenses = [...fixedCategoryExpenses, ...commitmentCategoryExpenses];
     const categoryExpenses = [
       ...monthExpenses.map((expense) => ({ category: expense.category, amount: expense.amount })),
@@ -186,9 +198,10 @@ export function Dashboard() {
     const variableSpent = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const fixedTotal = fixedExpenses.reduce((sum, expense) => sum + fixedExpenseAmount(expense), 0);
     const categorySpent = categoryExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const commitmentsTotal = financialCommitments
-      .filter(isOutstandingCommitment)
-      .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
+    const commitmentsTotal = commitmentCategoryExpenses.reduce(
+      (sum, commitment) => sum + commitment.amount,
+      0,
+    );
     const baseIncome = settings.monthlyIncome;
     const extraIncome = monthIncomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
     const budget = summarizeCycleBudget({

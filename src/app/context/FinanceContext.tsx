@@ -20,7 +20,7 @@ import {
   parseLocalDate,
   previousLocalDate,
 } from "../utils/financialCycles";
-import { isOutstandingCommitment } from "../utils/financialCommitments";
+import { commitmentAmountInCycle } from "../utils/financialCommitments";
 import { suggestedFinancialCycle } from "../utils/financialRoutine";
 import type {
   CategoryModel,
@@ -1033,6 +1033,16 @@ function FinanceProviderState({
     const categoryTotals = new Map<string, number>();
     const categoryNames = new Map(categories.map((category) => [category.id, category.name]));
     const cardNames = new Map(paymentMethods.map((method) => [method.id, method.name]));
+    const paymentMethodsById = new Map(paymentMethods.map((method) => [method.id, method]));
+    const cycleCommitments = financialCommitments.flatMap((commitment) => {
+      const amount = commitmentAmountInCycle(
+        commitment,
+        cycleStartDate,
+        cycleEndDate,
+        commitment.paymentMethodId ? paymentMethodsById.get(commitment.paymentMethodId) : null,
+      );
+      return amount > 0 ? [{ commitment, amount }] : [];
+    });
 
     for (const expense of monthExpenses) {
       const categoryName =
@@ -1049,13 +1059,10 @@ function FinanceProviderState({
       );
     }
 
-    for (const commitment of financialCommitments.filter(isOutstandingCommitment)) {
+    for (const { commitment, amount } of cycleCommitments) {
       const categoryName =
         categoryNames.get(commitment.categoryId) || commitment.categoryId || "Parcelas";
-      categoryTotals.set(
-        categoryName,
-        (categoryTotals.get(categoryName) || 0) + commitment.installmentValue,
-      );
+      categoryTotals.set(categoryName, (categoryTotals.get(categoryName) || 0) + amount);
     }
 
     const fixedTotal = fixedExpenses.reduce(
@@ -1066,9 +1073,7 @@ function FinanceProviderState({
     const variableTotal = monthExpenses.reduce((sum, expense) => sum + expense.amount, 0);
     const extraIncomeTotal = monthIncomeEntries.reduce((sum, entry) => sum + entry.amount, 0);
     const realIncome = settings.monthlyIncome + extraIncomeTotal;
-    const installmentTotal = financialCommitments
-      .filter(isOutstandingCommitment)
-      .reduce((sum, commitment) => sum + commitment.installmentValue, 0);
+    const installmentTotal = cycleCommitments.reduce((sum, item) => sum + item.amount, 0);
     const totalExpenses = variableTotal + fixedTotal + installmentTotal;
     const goalRows = await financeService.fetchGoals(household.id);
 
