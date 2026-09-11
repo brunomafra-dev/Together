@@ -414,6 +414,28 @@ section.rounded-2xl,
   box-shadow: 0 1px 0 rgba(24, 35, 45, 0.02);
 }
 
+@media (max-width: 1023px) {
+  .together-topbar {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+
+  .together-topbar-inner {
+    padding-left: max(1rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1rem, env(safe-area-inset-right, 0px));
+  }
+
+  .together-household {
+    max-width: min(100%, 13rem);
+  }
+}
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .together-topbar-inner {
+    padding-left: max(1.5rem, env(safe-area-inset-left, 0px));
+    padding-right: max(1.5rem, env(safe-area-inset-right, 0px));
+  }
+}
+
 .together-brand-mark {
   background: linear-gradient(145deg, var(--together-primary), #2d6c86 58%, var(--together-accent));
   border-radius: 0.75rem;

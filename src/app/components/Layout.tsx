@@ -59,13 +59,16 @@ export function Layout({ children }: LayoutProps) {
         ].join(":")}
       />
       <nav className="together-topbar sticky top-0 z-10 border-b border-stone-200 bg-white/85 backdrop-blur dark:border-stone-800 dark:bg-stone-950/85">
-        <div className="max-w-5xl mx-auto px-4 sm:px-6">
-          <div className="grid h-20 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 lg:flex lg:h-16 lg:justify-between">
-            <Link to="/" className="flex min-w-0 shrink-0 items-center gap-2">
+        <div className="together-topbar-inner mx-auto max-w-5xl px-4 sm:px-6">
+          <div className="together-header-row grid h-20 grid-cols-[2.5rem_minmax(0,1fr)_2.5rem] items-center gap-2 lg:flex lg:h-16 lg:justify-between">
+            <Link
+              to="/"
+              className="col-start-1 flex min-w-0 shrink-0 items-center gap-2 lg:col-auto"
+            >
               <div className="together-brand-mark flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 shadow-sm lg:h-8 lg:w-8 lg:rounded-xl">
                 <TogetherMarkIcon className="h-5 w-5 text-white lg:h-[18px] lg:w-[18px]" />
               </div>
-              <span className="hidden text-base font-semibold text-stone-900 dark:text-white min-[390px]:inline lg:text-sm">
+              <span className="hidden text-sm font-semibold text-stone-900 dark:text-white lg:inline">
                 Together
               </span>
             </Link>
@@ -73,7 +76,7 @@ export function Layout({ children }: LayoutProps) {
             {coupleName ? (
               <Link
                 to="/settings"
-                className="together-household mx-auto flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-stone-200 bg-white px-1.5 py-1 shadow-sm transition-colors hover:bg-stone-50 dark:!border-stone-700 dark:!bg-stone-950 dark:hover:!bg-stone-900 lg:max-w-[250px]"
+                className="together-household col-start-2 mx-auto flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-stone-200 bg-white px-1.5 py-1 shadow-sm transition-colors hover:bg-stone-50 dark:!border-stone-700 dark:!bg-stone-950 dark:hover:!bg-stone-900 lg:col-auto lg:max-w-[250px]"
                 aria-label="Abrir perfil do casal"
               >
                 <div className="flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-full bg-emerald-100 text-xs font-semibold text-emerald-700 dark:bg-emerald-900 dark:text-emerald-100 lg:h-8 lg:w-8">
@@ -93,7 +96,7 @@ export function Layout({ children }: LayoutProps) {
               </Link>
             ) : null}
 
-            <div className="flex items-center gap-2">
+            <div className="col-start-3 flex items-center gap-2 lg:col-auto">
               <div className="hidden gap-1 lg:flex">
                 {navItems.map(({ to, label, icon: Icon }) => (
                   <Link
