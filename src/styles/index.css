@@ -440,6 +440,14 @@ section.rounded-2xl,
   .fixed.inset-0.overflow-y-auto {
     padding-top: max(env(safe-area-inset-top, 0px), 1.75rem) !important;
   }
+
+  .together-expense-overlay {
+    padding-bottom: max(env(safe-area-inset-bottom, 0px), 1rem) !important;
+  }
+
+  .together-expense-dialog {
+    max-height: calc(100dvh - 3.75rem);
+  }
 }
 
 @media (min-width: 640px) and (max-width: 1023px) {
