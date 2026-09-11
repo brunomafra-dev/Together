@@ -1,13 +1,15 @@
-<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+<svg width="512" height="512" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
   <defs>
-    <linearGradient id="together-gradient" x1="88" y1="64" x2="424" y2="448" gradientUnits="userSpaceOnUse">
+    <linearGradient id="together-gradient" x1="4" y1="3" x2="20" y2="21" gradientUnits="userSpaceOnUse">
       <stop stop-color="#214E6D"/>
       <stop offset="0.58" stop-color="#2D6C86"/>
       <stop offset="1" stop-color="#159A8C"/>
     </linearGradient>
   </defs>
-  <rect width="512" height="512" rx="82" fill="url(#together-gradient)"/>
-  <path d="M139 249L256 151L373 249" stroke="white" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M170 231V361H342V231" stroke="white" stroke-width="25" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M215 322V283M256 322V244M297 322V207" stroke="white" stroke-width="22" stroke-linecap="round"/>
+  <rect width="24" height="24" fill="url(#together-gradient)"/>
+  <g stroke="white" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m4 10.25 8-6.5 8 6.5"/>
+    <path d="M5.75 8.85V20h12.5V8.85"/>
+    <path d="M9 16.5v-3M12 16.5V11M15 16.5v-8"/>
+  </g>
 </svg>

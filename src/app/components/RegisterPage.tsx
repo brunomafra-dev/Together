@@ -1,10 +1,11 @@
 import { useState } from "react";
-import { ArrowRight, ChartNoAxesCombined, Lock, Mail, ShieldQuestion, User } from "lucide-react";
+import { ArrowRight, Lock, Mail, ShieldQuestion, User } from "lucide-react";
 import { Link, Navigate, useNavigate } from "react-router";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { useAuth } from "../context/AuthContext";
 import { AuthLayout } from "./AuthLayout";
+import { TogetherMarkIcon } from "./TogetherIcons";
 
 export function RegisterPage() {
   const [name, setName] = useState("");
@@ -30,7 +31,7 @@ export function RegisterPage() {
     <AuthLayout>
       <div className="together-auth-page w-full max-w-[455px] text-center">
         <div className="together-auth-mark mx-auto mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#00b88a] shadow-[0_16px_28px_rgba(0,184,138,0.18)]">
-          <ChartNoAxesCombined className="h-7 w-7 text-white" strokeWidth={1.8} />
+          <TogetherMarkIcon className="h-8 w-8 text-white" />
         </div>
 
         <h1 className="mx-auto max-w-[18ch] text-[2.25rem] font-medium leading-[1.08] tracking-[-0.04em] text-[#111827] sm:text-[3rem]">

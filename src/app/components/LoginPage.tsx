@@ -1,10 +1,11 @@
 import { useMemo, useState } from "react";
-import { ArrowRight, Check, ChartNoAxesCombined, Lock, Mail, ShieldQuestion } from "lucide-react";
+import { ArrowRight, Check, Lock, Mail, ShieldQuestion } from "lucide-react";
 import { Link, Navigate, useLocation, useNavigate } from "react-router";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { useAuth } from "../context/AuthContext";
 import { AuthLayout } from "./AuthLayout";
+import { TogetherMarkIcon } from "./TogetherIcons";
 
 const highlights = ["Gastos compartilhados", "Controle de parcelas", "Projeção financeira do mês"];
 
@@ -34,7 +35,7 @@ export function LoginPage() {
     <AuthLayout>
       <div className="together-auth-page w-full max-w-[455px] text-center">
         <div className="together-auth-mark mx-auto mb-8 flex h-14 w-14 items-center justify-center rounded-2xl bg-[#00b88a] shadow-[0_16px_28px_rgba(0,184,138,0.18)]">
-          <ChartNoAxesCombined className="h-7 w-7 text-white" strokeWidth={1.8} />
+          <TogetherMarkIcon className="h-8 w-8 text-white" />
         </div>
 
         <h1 className="mx-auto max-w-[18ch] text-[2.25rem] font-medium leading-[1.08] tracking-[-0.04em] text-[#111827] sm:text-[3rem]">

@@ -431,9 +431,37 @@ section.rounded-2xl,
 }
 
 .together-desktop-nav-item.bg-stone-100 {
-  background: var(--together-primary-soft);
+  background: transparent;
   color: var(--together-primary);
-  box-shadow: inset 0 -2px 0 var(--together-primary);
+  box-shadow: none;
+}
+
+.together-nav-glyph {
+  display: inline-grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 1px solid color-mix(in srgb, var(--together-primary) 14%, var(--together-border));
+  border-radius: 0.5rem;
+  background: var(--together-surface);
+  color: var(--together-muted);
+  transition:
+    color 160ms ease,
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.together-desktop-nav-item:hover .together-nav-glyph {
+  border-color: color-mix(in srgb, var(--together-primary) 34%, var(--together-border));
+  color: var(--together-primary);
+}
+
+.together-desktop-nav-item.bg-stone-100 .together-nav-glyph {
+  border-color: var(--together-primary);
+  background: var(--together-primary);
+  color: #fff;
 }
 
 .together-theme-toggle {
@@ -453,8 +481,26 @@ section.rounded-2xl,
 }
 
 .together-bottom-nav-item.bg-emerald-50 {
-  background: var(--together-primary-soft);
+  background: transparent;
   color: var(--together-primary);
+}
+
+.together-bottom-nav-item .together-nav-glyph {
+  width: 2rem;
+  height: 1.75rem;
+  border-color: transparent;
+  background: transparent;
+}
+
+.together-bottom-nav-item:hover .together-nav-glyph {
+  background: var(--together-surface-muted);
+  color: var(--together-primary);
+}
+
+.together-bottom-nav-item.bg-emerald-50 .together-nav-glyph {
+  border-color: var(--together-primary);
+  background: var(--together-primary);
+  color: #fff;
 }
 
 .together-bottom-nav-item.bg-emerald-50::before {
@@ -801,8 +847,15 @@ section.rounded-2xl,
 
 .dark .together-desktop-nav-item.bg-stone-100,
 .dark .together-bottom-nav-item.bg-emerald-50 {
-  background: var(--together-primary-soft) !important;
+  background: transparent !important;
   color: var(--together-primary) !important;
+}
+
+.dark .together-desktop-nav-item.bg-stone-100 .together-nav-glyph,
+.dark .together-bottom-nav-item.bg-emerald-50 .together-nav-glyph {
+  border-color: var(--together-primary);
+  background: var(--together-primary);
+  color: #071019;
 }
 
 .dark .together-summary-card {

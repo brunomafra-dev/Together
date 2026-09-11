@@ -1,17 +1,16 @@
 import { ReactNode, useEffect, useState } from "react";
 import { Link, useLocation } from "react-router";
-import {
-  Home,
-  CreditCard,
-  Calendar,
-  UserCircle,
-  ChartNoAxesCombined,
-  Target,
-  Moon,
-  Sun,
-} from "lucide-react";
+import { Moon, Sun } from "lucide-react";
 import { useFinance } from "../context/FinanceContext";
 import { FinancialOnboarding } from "./FinancialOnboarding";
+import {
+  CommitmentsIcon,
+  CurrentCycleIcon,
+  HouseholdIcon,
+  MilestonesIcon,
+  ProjectionIcon,
+  TogetherMarkIcon,
+} from "./TogetherIcons";
 
 interface LayoutProps {
   children: ReactNode;
@@ -40,11 +39,11 @@ export function Layout({ children }: LayoutProps) {
   }, [darkMode]);
 
   const navItems = [
-    { to: "/", label: "Hoje", icon: Home },
-    { to: "/goals", label: "Metas", icon: Target },
-    { to: "/installments", label: "Cartões e parcelas", icon: CreditCard },
-    { to: "/future", label: "Impacto futuro", icon: Calendar },
-    { to: "/settings", label: "Perfil", icon: UserCircle },
+    { to: "/", label: "Hoje", icon: CurrentCycleIcon },
+    { to: "/goals", label: "Metas", icon: MilestonesIcon },
+    { to: "/installments", label: "Cartões e parcelas", icon: CommitmentsIcon },
+    { to: "/future", label: "Impacto futuro", icon: ProjectionIcon },
+    { to: "/settings", label: "Perfil", icon: HouseholdIcon },
   ];
 
   return (
@@ -64,7 +63,7 @@ export function Layout({ children }: LayoutProps) {
           <div className="grid h-20 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 lg:flex lg:h-16 lg:justify-between">
             <Link to="/" className="flex min-w-0 shrink-0 items-center gap-2">
               <div className="together-brand-mark flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-emerald-400 to-teal-600 shadow-sm lg:h-8 lg:w-8 lg:rounded-xl">
-                <ChartNoAxesCombined className="h-5 w-5 text-white lg:h-4 lg:w-4" />
+                <TogetherMarkIcon className="h-5 w-5 text-white lg:h-[18px] lg:w-[18px]" />
               </div>
               <span className="hidden text-base font-semibold text-stone-900 dark:text-white min-[390px]:inline lg:text-sm">
                 Together
@@ -100,13 +99,15 @@ export function Layout({ children }: LayoutProps) {
                   <Link
                     key={to}
                     to={to}
-                    className={`together-desktop-nav-item px-3 py-2 rounded-lg text-sm transition-colors ${
+                    className={`together-desktop-nav-item inline-flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-sm transition-colors ${
                       isActive(to)
                         ? "bg-stone-100 text-stone-900"
                         : "text-stone-600 hover:text-stone-900 hover:bg-stone-50 dark:text-stone-300 dark:hover:bg-stone-800 dark:hover:text-white"
                     }`}
                   >
-                    <Icon className="w-4 h-4 inline mr-1.5" />
+                    <span className="together-nav-glyph">
+                      <Icon className="h-[17px] w-[17px]" />
+                    </span>
                     <span className="hidden sm:inline">{label}</span>
                   </Link>
                 ))}
@@ -138,7 +139,9 @@ export function Layout({ children }: LayoutProps) {
                   : "text-stone-500 hover:bg-stone-50 hover:text-stone-900 dark:text-stone-400 dark:hover:bg-stone-900 dark:hover:text-white"
               }`}
             >
-              <Icon className="h-5 w-5" />
+              <span className="together-nav-glyph">
+                <Icon className="h-5 w-5" />
+              </span>
               <span className="max-w-full truncate">
                 {label === "Impacto futuro"
                   ? "Futuro"
