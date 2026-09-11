@@ -529,12 +529,6 @@ section.rounded-2xl,
   letter-spacing: -0.03em;
 }
 
-.together-routine {
-  background: var(--together-primary-soft);
-  border-color: color-mix(in srgb, var(--together-primary) 28%, var(--together-border));
-  box-shadow: inset 3px 0 0 var(--together-primary);
-}
-
 .together-quick-action {
   min-width: 0;
   min-height: 10.5rem;

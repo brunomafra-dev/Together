@@ -45,9 +45,7 @@ import { isOutstandingCommitment } from "../utils/financialCommitments";
 import { buildCycleClosingSummary } from "../utils/cycleClosingSummary";
 import { summarizeCycleBudget } from "../utils/cycleBudget";
 import {
-  CYCLE_MODE_LABELS,
   openFinancialCycleReferenceEnd,
-  suggestedFinancialCycle,
   suggestedNextCycleStartForClosing,
 } from "../utils/financialRoutine";
 
@@ -317,7 +315,6 @@ export function Dashboard() {
       : data.peopleTotals[0]
         ? `${data.peopleTotals[0].name} ${formatBRL(data.peopleTotals[0].amount)}`
         : "Nenhum gasto real";
-  const routinePreview = household ? suggestedFinancialCycle(todayDate, household) : null;
   const routineNextCycleStart = household
     ? suggestedNextCycleStartForClosing(activeCycle.startDate, todayDate, household)
     : null;
@@ -402,64 +399,36 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className={`grid gap-4 ${showSetupRoadmap ? "lg:grid-cols-2" : ""}`}>
-          <div className="together-routine rounded-2xl border border-teal-100 bg-teal-50/80 p-4">
-            <div className="flex items-start gap-3">
-              <CalendarCheck className="mt-0.5 h-5 w-5 shrink-0 text-teal-700" />
-              <div className="min-w-0 flex-1">
-                <p className="text-sm font-semibold text-teal-950">Sua rotina financeira</p>
-                <p className="mt-1 text-sm leading-5 text-teal-800">
-                  {routinePreview
-                    ? `A configuração sugere um ciclo de ${parseLocalDate(routinePreview.startDate).toLocaleDateString("pt-BR")} a ${parseLocalDate(routinePreview.endDate).toLocaleDateString("pt-BR")}.`
-                    : household
-                      ? `${CYCLE_MODE_LABELS[household.cycleMode]}. Você escolhe a data ao fechar.`
-                      : "Configure como seu mês financeiro funciona."}
-                </p>
-                <p className="mt-1 text-xs text-teal-700">
-                  O ciclo ativo continua {cycleRangeLabel}; nenhuma virada acontece sem sua
-                  confirmação.
-                </p>
+        {showSetupRoadmap && (
+          <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <BookOpen className="h-5 w-5 text-emerald-600" />
+                <div>
+                  <p className="text-sm font-semibold text-stone-900">Primeiros passos</p>
+                  <p className="text-xs text-stone-500">
+                    {completedSetupItems} de {setupItems.length} concluídos
+                  </p>
+                </div>
               </div>
-              <Link
-                to="/settings"
-                className="shrink-0 text-xs font-medium text-teal-800 underline underline-offset-4"
-              >
-                Ajustar
+              <Link to="/settings" className="text-xs font-medium text-emerald-700">
+                Continuar
               </Link>
             </div>
-          </div>
-
-          {showSetupRoadmap && (
-            <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-2">
-                  <BookOpen className="h-5 w-5 text-emerald-600" />
-                  <div>
-                    <p className="text-sm font-semibold text-stone-900">Primeiros passos</p>
-                    <p className="text-xs text-stone-500">
-                      {completedSetupItems} de {setupItems.length} concluídos
-                    </p>
-                  </div>
+            <div className="mt-3 grid gap-2 sm:grid-cols-2">
+              {setupItems.map((item) => (
+                <div key={item.label} className="flex items-center gap-2 text-xs text-stone-600">
+                  {item.done ? (
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
+                  ) : (
+                    <Circle className="h-4 w-4 shrink-0 text-stone-300" />
+                  )}
+                  <span className={item.done ? "line-through opacity-60" : ""}>{item.label}</span>
                 </div>
-                <Link to="/settings" className="text-xs font-medium text-emerald-700">
-                  Continuar
-                </Link>
-              </div>
-              <div className="mt-3 grid gap-2 sm:grid-cols-2">
-                {setupItems.map((item) => (
-                  <div key={item.label} className="flex items-center gap-2 text-xs text-stone-600">
-                    {item.done ? (
-                      <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" />
-                    ) : (
-                      <Circle className="h-4 w-4 shrink-0 text-stone-300" />
-                    )}
-                    <span className={item.done ? "line-through opacity-60" : ""}>{item.label}</span>
-                  </div>
-                ))}
-              </div>
+              ))}
             </div>
-          )}
-        </div>
+          </div>
+        )}
 
         <div className="together-quick-actions grid grid-cols-3 gap-3">
           <QuickActionCard
